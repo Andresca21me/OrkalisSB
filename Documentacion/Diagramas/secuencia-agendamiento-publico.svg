@@ -1,0 +1,73 @@
+<svg viewBox="0 0 1210 1140" width="1210" height="1140" xmlns="http://www.w3.org/2000/svg"><rect width="1210" height="1140" fill="#FFFFFF"/><defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 z" fill="#52677A"/></marker></defs><text x="605.0" y="34" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="middle">Orkalis · Secuencia del agendamiento público (cliente sin cuenta)</text>
+<rect x="22.0" y="60" width="176" height="46" rx="8" fill="#08427B" stroke="#0A2A45"/>
+<text x="110" y="80" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Cliente final</text>
+<text x="110" y="96" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[Persona]</text>
+<line x1="110" y1="112" x2="110" y2="1100" stroke="#9AAABA" stroke-width="1.2" stroke-dasharray="4,4"/>
+<rect x="262.0" y="60" width="176" height="46" rx="8" fill="#438DD5" stroke="#0A2A45"/>
+<text x="350" y="80" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Enlace Público</text>
+<text x="350" y="96" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[React]</text>
+<line x1="350" y1="112" x2="350" y2="1100" stroke="#9AAABA" stroke-width="1.2" stroke-dasharray="4,4"/>
+<rect x="512.0" y="60" width="176" height="46" rx="8" fill="#438DD5" stroke="#0A2A45"/>
+<text x="600" y="80" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">API</text>
+<text x="600" y="96" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[NestJS]</text>
+<line x1="600" y1="112" x2="600" y2="1100" stroke="#9AAABA" stroke-width="1.2" stroke-dasharray="4,4"/>
+<rect x="762.0" y="60" width="176" height="46" rx="8" fill="#2E6DA4" stroke="#0A2A45"/>
+<text x="850" y="80" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">PostgreSQL</text>
+<text x="850" y="96" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[RLS]</text>
+<line x1="850" y1="112" x2="850" y2="1100" stroke="#9AAABA" stroke-width="1.2" stroke-dasharray="4,4"/>
+<rect x="992.0" y="60" width="176" height="46" rx="8" fill="#8A8A8A" stroke="#0A2A45"/>
+<text x="1080" y="80" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Notificaciones</text>
+<text x="1080" y="96" font-family="Helvetica, Arial, sans-serif" font-size="10" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[SMS]</text>
+<line x1="1080" y1="112" x2="1080" y2="1100" stroke="#9AAABA" stroke-width="1.2" stroke-dasharray="4,4"/>
+<line x1="110" y1="150" x2="350" y2="150" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="230.0" y="143" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Abre enlace · elige especialista, servicio y fecha</text>
+<line x1="350" y1="190" x2="600" y2="190" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="475.0" y="183" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">GET disponibilidad</text>
+<line x1="600" y1="230" x2="850" y2="230" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="725.0" y="223" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Consulta franjas libres (exclusión + retenciones)</text>
+<line x1="850" y1="270" x2="600" y2="270" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)" stroke-dasharray="6,4"/>
+<text x="725.0" y="263" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Franjas libres</text>
+<line x1="600" y1="310" x2="350" y2="310" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)" stroke-dasharray="6,4"/>
+<text x="475.0" y="303" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Franjas disponibles</text>
+<line x1="110" y1="350" x2="350" y2="350" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="230.0" y="343" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Selecciona franja + ingresa teléfono</text>
+<line x1="350" y1="390" x2="600" y2="390" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="475.0" y="383" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Reservar franja (retención)</text>
+<line x1="600" y1="430" x2="850" y2="430" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="725.0" y="423" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Crear retención TTL (restricción de exclusión)</text>
+<line x1="850" y1="470" x2="600" y2="470" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)" stroke-dasharray="6,4"/>
+<text x="725.0" y="463" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Conflicto de exclusión</text>
+<line x1="600" y1="510" x2="350" y2="510" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)" stroke-dasharray="6,4"/>
+<text x="475.0" y="503" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Franja no disponible + alternativas</text>
+<line x1="850" y1="550" x2="600" y2="550" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)" stroke-dasharray="6,4"/>
+<text x="725.0" y="543" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Retención OK</text>
+<line x1="600" y1="590" x2="1080" y2="590" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="840.0" y="583" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Enviar OTP (SMS)</text>
+<line x1="1080" y1="630" x2="110" y2="630" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="595.0" y="623" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">SMS con código</text>
+<line x1="110" y1="670" x2="350" y2="670" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="230.0" y="663" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Ingresa código</text>
+<line x1="350" y1="710" x2="600" y2="710" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="475.0" y="703" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Verificar OTP + confirmar</text>
+<path d="M600,750 h46 v22 h-46" fill="none" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="654" y="764" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">Valida OTP · get_or_create cliente (teléfono)</text>
+<line x1="600" y1="798" x2="850" y2="798" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="725.0" y="791" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Confirmar cita → estado Confirmada (auto)</text>
+<line x1="850" y1="838" x2="600" y2="838" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)" stroke-dasharray="6,4"/>
+<text x="725.0" y="831" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Cita creada</text>
+<line x1="600" y1="878" x2="350" y2="878" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)" stroke-dasharray="6,4"/>
+<text x="475.0" y="871" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Cita confirmada</text>
+<line x1="600" y1="918" x2="1080" y2="918" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="840.0" y="911" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Encolar confirmación + recordatorio</text>
+<line x1="1080" y1="958" x2="110" y2="958" stroke="#52677A" stroke-width="1.6" marker-end="url(#ah)" stroke-dasharray="6,4"/>
+<text x="595.0" y="951" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Confirmación</text>
+<rect x="70" y="448" width="1050" height="528" fill="none" stroke="#C0392B" stroke-width="1.2"/>
+<path d="M70,448 h70 v18 l-12,10 h-58 z" fill="#C0392B"/>
+<text x="100" y="461" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">alt</text>
+<text x="156" y="461" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#C0392B" font-weight="normal" font-style="italic" text-anchor="start">[ franja ya tomada (concurrencia) ]</text>
+<line x1="70" y1="528" x2="1120" y2="528" stroke="#C0392B" stroke-width="1" stroke-dasharray="5,4"/>
+<text x="156" y="522" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#C0392B" font-weight="normal" font-style="italic" text-anchor="start">[ else  franja libre ]</text>
+<rect x="120" y="1004" width="900" height="44" rx="8" fill="#F6F8FB" stroke="#C7D3DF"/>
+<text x="135" y="1023" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">Nota: la cita aparece en la agenda del especialista sin aceptación manual (ADR-005).</text>
+<text x="135" y="1040" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">Confirmación y recordatorios se envían de forma asíncrona vía cola/workers (ADR-007).</text>
+</svg>

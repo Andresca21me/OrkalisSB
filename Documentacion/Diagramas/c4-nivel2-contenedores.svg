@@ -1,0 +1,84 @@
+<svg viewBox="0 0 1120 900" width="1120" height="900" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="1120" height="900" fill="#FFFFFF"/><defs><marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 z" fill="#5A6B7B"/></marker></defs><text x="560.0" y="34" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="middle">Orkalis · C4 Nivel 2 — Diagrama de Contenedores</text>
+<rect x="40" y="200" width="1040" height="560" rx="10" fill="none" stroke="#3C5870" stroke-width="1.4" stroke-dasharray="7,5"/><text x="52" y="220" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#3C5870" font-weight="bold" font-style="normal" text-anchor="start">Orkalis  ·  [Límite del sistema]</text>
+<circle cx="195.0" cy="59" r="13" fill="#08427B" stroke="#0A2A45" stroke-width="1"/>
+<rect x="70" y="70" width="250" height="96" rx="8" ry="8" fill="#08427B" stroke="#0A2A45" stroke-width="1"/>
+<text x="195.0" y="96" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Usuarios internos</text>
+<text x="195.0" y="112" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[Personas]</text>
+<text x="195.0" y="130" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">Admin, Especialista,</text>
+<text x="195.0" y="144" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">Recepción</text>
+<circle cx="925.0" cy="59" r="13" fill="#686868" stroke="#0A2A45" stroke-width="1"/>
+<rect x="800" y="70" width="250" height="96" rx="8" ry="8" fill="#686868" stroke="#0A2A45" stroke-width="1"/>
+<text x="925.0" y="96" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Cliente final</text>
+<text x="925.0" y="112" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[Persona externa]</text>
+<text x="925.0" y="130" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">Sin cuenta</text>
+<rect x="80" y="250" width="260" height="112" rx="8" ry="8" fill="#438DD5" stroke="#0A2A45" stroke-width="1"/>
+<text x="210.0" y="276" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">App Web Interna</text>
+<text x="210.0" y="292" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[React + TypeScript]</text>
+<text x="210.0" y="310" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">Panel admin, app</text>
+<text x="210.0" y="324" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">especialista, recepción</text>
+<rect x="760" y="250" width="260" height="112" rx="8" ry="8" fill="#438DD5" stroke="#0A2A45" stroke-width="1"/>
+<text x="890.0" y="276" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Enlace Público Reservas</text>
+<text x="890.0" y="292" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[React + TypeScript]</text>
+<text x="890.0" y="310" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">Reserva sin</text>
+<text x="890.0" y="324" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">autenticación</text>
+<rect x="410" y="420" width="300" height="124" rx="8" ry="8" fill="#438DD5" stroke="#0A2A45" stroke-width="1"/>
+<text x="560.0" y="446" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">API</text>
+<text x="560.0" y="462" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[NestJS + TypeScript]</text>
+<text x="560.0" y="480" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">Auth/RBAC, agendamiento,</text>
+<text x="560.0" y="494" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">config, finanzas, operación</text>
+<rect x="800" y="430" width="240" height="96" rx="4" ry="4" fill="#438DD5" stroke="#0A2A45" stroke-width="1"/>
+<line x1="1026" y1="430" x2="1026" y2="526" stroke="#0A2A45" stroke-width="1"/>
+<text x="920.0" y="456" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Cola de Trabajos</text>
+<text x="920.0" y="472" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[Cola gestionada]</text>
+<text x="920.0" y="490" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">Jobs en</text>
+<text x="920.0" y="504" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">segundo plano</text>
+<rect x="80" y="560" width="260" height="104" rx="8" ry="8" fill="#438DD5" stroke="#0A2A45" stroke-width="1"/>
+<text x="210.0" y="586" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Workers</text>
+<text x="210.0" y="602" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[NestJS + Node]</text>
+<text x="210.0" y="620" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">PDF, reportes,</text>
+<text x="210.0" y="634" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">notificaciones</text>
+<path d="M440,624 a130.0,14 0 0 1 260,0 v92 a130.0,14 0 0 1 -260,0 z" fill="#438DD5" stroke="#0A2A45" stroke-width="1"/>
+<path d="M440,624 a130.0,14 0 0 0 260,0" fill="none" stroke="#0A2A45" stroke-width="1"/>
+<text x="570.0" y="636" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Base de Datos</text>
+<text x="570.0" y="652" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[PostgreSQL + RLS]</text>
+<text x="570.0" y="670" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">Multi-tenant por</text>
+<text x="570.0" y="684" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">negocio_id / sucursal_id</text>
+<rect x="300" y="800" width="250" height="84" rx="8" ry="8" fill="#8A8A8A" stroke="#0A2A45" stroke-width="1"/>
+<text x="425.0" y="826" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Proveedor Notificaciones</text>
+<text x="425.0" y="842" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[Sistema externo]</text>
+<text x="425.0" y="860" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">SMS / Email</text>
+<rect x="640" y="800" width="250" height="84" rx="8" ry="8" fill="#8A8A8A" stroke="#0A2A45" stroke-width="1"/>
+<text x="765.0" y="826" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">Pasarela de Pagos</text>
+<text x="765.0" y="842" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#FFFFFF" font-weight="normal" font-style="italic" text-anchor="middle">[Sistema externo]</text>
+<text x="765.0" y="860" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#FFFFFF" font-weight="normal" font-style="normal" text-anchor="middle">Suscripción</text>
+<line x1="195.0" y1="166" x2="210.0" y2="250" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="182.0" y="201" width="46" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="205" y="213" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">HTTPS</text>
+<line x1="925.0" y1="166" x2="890.0" y2="250" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="902.0" y="201" width="46" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="925" y="213" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">HTTPS</text>
+<line x1="210.0" y1="362" x2="485.0" y2="420" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="247.0" y="383" width="106.0" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="300" y="395" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">JSON/HTTPS · JWT</text>
+<line x1="890.0" y1="362" x2="650.0" y2="420" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="767.0" y="383" width="106.0" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="820" y="395" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">JSON/HTTPS · OTP</text>
+<line x1="530.0" y1="544" x2="557.0" y2="610" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="508.0" y="571" width="64.0" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="540" y="583" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">SQL · RLS</text>
+<line x1="710" y1="482.0" x2="800" y2="478.0" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="732.0" y="473" width="46" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="755" y="485" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Encola</text>
+<line x1="920.0" y1="526" x2="301.0" y2="560" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="519.0" y="691" width="82.0" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="560" y="703" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Entrega jobs</text>
+<line x1="210.0" y1="664" x2="440" y2="670.0" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="347.0" y="639" width="46" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="370" y="651" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">SQL</text>
+<line x1="210.0" y1="664" x2="425.0" y2="800" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="207.0" y="726" width="46" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="230" y="738" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Envía</text>
+<line x1="665.0" y1="544" x2="727.5" y2="800" stroke="#5A6B7B" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="697.0" y="691" width="46" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="720" y="703" font-family="Helvetica, Arial, sans-serif" font-size="10.5" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="middle">Cobra</text>
+</svg>

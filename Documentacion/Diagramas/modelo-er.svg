@@ -1,0 +1,203 @@
+<svg viewBox="0 0 1380 980" width="1380" height="980" xmlns="http://www.w3.org/2000/svg"><rect width="1380" height="980" fill="#FFFFFF"/><text x="690.0" y="34" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="middle">Orkalis · Modelo de dominio (entidad-relación)</text>
+<line x1="133.5" y1="180" x2="144.0" y2="300" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="134.89467120449456" y="192.9390994799378" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="142.60532879550544" y="281.0609005200622" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">N</text>
+<line x1="270" y1="143.0" x2="320" y2="151.5" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="285.7736935467171" y="142.6815279029419" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="304.2263064532829" y="145.8184720970581" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<line x1="270" y1="582.4" x2="320" y2="606.0" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="284.4692196320027" y="586.2294716663052" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="305.5307803679973" y="596.1705283336947" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">N</text>
+<line x1="207.0" y1="400" x2="414.5" y2="560" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="219.67062519495914" y="406.77012063225766" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="401.82937480504086" y="547.2298793677423" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">N</text>
+<line x1="664.0" y1="417" x2="623.0" y2="500" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="656.9137996284362" y="428.3452348985316" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="630.0862003715638" y="482.6547651014684" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">N</text>
+<line x1="270" y1="553.28" x2="560" y2="533.1" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="285.96140219692614" y="549.1693065643656" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="544.0385978030739" y="531.2106934356344" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">N</text>
+<line x1="770" y1="554.4" x2="860" y2="575.6" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="785.5737664549874" y="555.0684872093971" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="844.4262335450126" y="568.9315127906029" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">N</text>
+<line x1="945.0" y1="434" x2="986.0" y2="520" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="951.8854554337161" y="445.44266261706304" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="979.1145445662839" y="502.55733738293696" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">N</text>
+<line x1="644.0" y1="668" x2="644.0" y2="760" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="644.0" y="681.0" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="644.0" y="741.0" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<line x1="770" y1="836.0" x2="860" y2="842.4" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="785.9596984620791" y="834.1349118906368" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="844.0403015379209" y="838.2650881093632" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">N</text>
+<line x1="1110" y1="829.2" x2="1070" y2="851.5" stroke="#5A6B7B" stroke-width="1.4"/>
+<text x="1096.0250349340638" y="833.9910430242595" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">1</text>
+<text x="1083.9749650659362" y="840.7089569757405" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#1B3A57" font-weight="bold" font-style="normal" text-anchor="middle">N</text>
+<rect x="60" y="720" width="430" height="186" rx="10" fill="#F6F8FB" stroke="#C7D3DF"/>
+<text x="74" y="744" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">Convenciones y notas</text>
+<text x="74" y="766" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">PK  clave primaria (subrayada)</text>
+<text x="74" y="784" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">FK  clave foránea (naranja)</text>
+<text x="74" y="804" font-family="Helvetica, Arial, sans-serif" font-size="10.6" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">• Toda entidad incluye negocio_id (tenant); las operativas,</text>
+<text x="74" y="818" font-family="Helvetica, Arial, sans-serif" font-size="10.6" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">   además sucursal_id — aislamiento de dos niveles (ADR-001).</text>
+<text x="74" y="832" font-family="Helvetica, Arial, sans-serif" font-size="10.6" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">• atencion, venta_producto y liquidacion referencian</text>
+<text x="74" y="846" font-family="Helvetica, Arial, sans-serif" font-size="10.6" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">   especialista_id (comisiones / liquidación).</text>
+<text x="74" y="860" font-family="Helvetica, Arial, sans-serif" font-size="10.6" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">• configuracion: overrides dispersos por nivel (ADR-002).</text>
+<text x="74" y="874" font-family="Helvetica, Arial, sans-serif" font-size="10.6" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">• atencion guarda snapshot de parámetros aplicados (ADR-006).</text>
+<text x="74" y="888" font-family="Helvetica, Arial, sans-serif" font-size="10.6" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">• Soporte de agendamiento (no mostrado): disponibilidad y</text>
+<text x="74" y="902" font-family="Helvetica, Arial, sans-serif" font-size="10.6" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">   retención_franja (TTL + restricción de exclusión, ADR-005).</text>
+<rect x="60" y="80" width="210" height="100" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M60,106 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="165.0" y="97" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">negocio</text>
+<text x="70" y="119" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="70" y1="121" x2="82" y2="121" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="70" y="136" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">nombre</text>
+<text x="70" y="153" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">perfil (salón|barbería)</text>
+<text x="70" y="170" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">estado_suscripción</text>
+<rect x="320" y="80" width="210" height="117" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M320,106 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="425.0" y="97" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">suscripcion</text>
+<text x="330" y="119" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="330" y1="121" x2="342" y2="121" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="330" y="136" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">negocio_id</text>
+<text x="330" y="153" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">plan</text>
+<text x="330" y="170" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">num_sucursales</text>
+<text x="330" y="187" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">estado</text>
+<rect x="580" y="80" width="210" height="117" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M580,106 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="685.0" y="97" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">usuario</text>
+<text x="590" y="119" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="590" y1="121" x2="602" y2="121" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="590" y="136" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">negocio_id</text>
+<text x="590" y="153" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">nombre</text>
+<text x="590" y="170" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">rol</text>
+<text x="590" y="187" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">activo</text>
+<rect x="840" y="80" width="210" height="134" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M840,106 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="945.0" y="97" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">liquidacion</text>
+<text x="850" y="119" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="850" y1="121" x2="862" y2="121" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="850" y="136" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">sucursal_id</text>
+<text x="850" y="153" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">especialista_id</text>
+<text x="850" y="170" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">periodo</text>
+<text x="850" y="187" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">neto</text>
+<text x="850" y="204" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">pagado</text>
+<rect x="1110" y="80" width="210" height="134" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M1110,106 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="1215.0" y="97" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">configuracion</text>
+<text x="1120" y="119" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="1120" y1="121" x2="1132" y2="121" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="1120" y="136" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">negocio_id</text>
+<text x="1120" y="153" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">nivel</text>
+<text x="1120" y="170" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">ambito_id</text>
+<text x="1120" y="187" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">clave</text>
+<text x="1120" y="204" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">valor</text>
+<rect x="60" y="300" width="210" height="100" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M60,326 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="165.0" y="317" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">sucursal</text>
+<text x="70" y="339" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="70" y1="341" x2="82" y2="341" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="70" y="356" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">negocio_id</text>
+<text x="70" y="373" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">nombre</text>
+<text x="70" y="390" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">activa</text>
+<rect x="580" y="300" width="210" height="117" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M580,326 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="685.0" y="317" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">cliente</text>
+<text x="590" y="339" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="590" y1="341" x2="602" y2="341" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="590" y="356" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">negocio_id</text>
+<text x="590" y="373" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">nombre</text>
+<text x="590" y="390" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">teléfono</text>
+<text x="590" y="407" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">activo</text>
+<rect x="840" y="300" width="210" height="134" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M840,326 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="945.0" y="317" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">servicio</text>
+<text x="850" y="339" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="850" y1="341" x2="862" y2="341" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="850" y="356" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">negocio_id</text>
+<text x="850" y="373" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">nombre</text>
+<text x="850" y="390" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">precio</text>
+<text x="850" y="407" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">duración</text>
+<text x="850" y="424" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">split_type</text>
+<rect x="1110" y="300" width="210" height="134" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M1110,326 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="1215.0" y="317" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">gasto</text>
+<text x="1120" y="339" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="1120" y1="341" x2="1132" y2="341" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="1120" y="356" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">negocio_id</text>
+<text x="1120" y="373" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">sucursal_id</text>
+<text x="1120" y="390" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">tipo (fijo|var)</text>
+<text x="1120" y="407" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">categoría</text>
+<text x="1120" y="424" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">monto</text>
+<rect x="60" y="520" width="210" height="117" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M60,546 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="165.0" y="537" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">especialista</text>
+<text x="70" y="559" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="70" y1="561" x2="82" y2="561" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="70" y="576" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">negocio_id</text>
+<text x="70" y="593" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">nombre</text>
+<text x="70" y="610" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">especialidad</text>
+<text x="70" y="627" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">disponible</text>
+<rect x="320" y="560" width="210" height="66" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M320,586 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="425.0" y="577" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">especialista_sucursal</text>
+<text x="330" y="599" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">especialista_id</text>
+<text x="330" y="616" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">sucursal_id</text>
+<rect x="560" y="500" width="210" height="168" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M560,526 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="665.0" y="517" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">cita</text>
+<text x="570" y="539" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="570" y1="541" x2="582" y2="541" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="570" y="556" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">sucursal_id</text>
+<text x="570" y="573" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">cliente_id</text>
+<text x="570" y="590" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">especialista_id</text>
+<text x="570" y="607" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">inicio / fin</text>
+<text x="570" y="624" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">estado</text>
+<text x="570" y="641" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">origen</text>
+<text x="570" y="658" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">precio_est</text>
+<rect x="860" y="520" width="210" height="100" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M860,546 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="965.0" y="537" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">cita_servicio</text>
+<text x="870" y="559" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="870" y1="561" x2="882" y2="561" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="870" y="576" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">cita_id</text>
+<text x="870" y="593" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">servicio_id</text>
+<text x="870" y="610" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">precio_aplicado</text>
+<rect x="1110" y="500" width="210" height="117" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M1110,526 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="1215.0" y="517" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">venta_producto</text>
+<text x="1120" y="539" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="1120" y1="541" x2="1132" y2="541" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="1120" y="556" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">sucursal_id</text>
+<text x="1120" y="573" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">especialista_id</text>
+<text x="1120" y="590" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">total</text>
+<text x="1120" y="607" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">comisión_prof</text>
+<rect x="560" y="760" width="210" height="151" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M560,786 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="665.0" y="777" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">atencion</text>
+<text x="570" y="799" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="570" y1="801" x2="582" y2="801" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="570" y="816" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">cita_id</text>
+<text x="570" y="833" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">especialista_id</text>
+<text x="570" y="850" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">total</text>
+<text x="570" y="867" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">gan_prof / gan_salón</text>
+<text x="570" y="884" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">snapshot_parám</text>
+<text x="570" y="901" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">método_pago</text>
+<rect x="860" y="780" width="210" height="117" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M860,806 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="965.0" y="797" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">atencion_producto</text>
+<text x="870" y="819" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="870" y1="821" x2="882" y2="821" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="870" y="836" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">atencion_id</text>
+<text x="870" y="853" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">producto_id</text>
+<text x="870" y="870" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">cantidad</text>
+<text x="870" y="887" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">valor</text>
+<rect x="1110" y="760" width="210" height="134" rx="6" fill="#FFFFFF" stroke="#2E6DA4" stroke-width="1.5"/>
+<path d="M1110,786 v-20 a6,6 0 0 1 6,-6 h198 a6,6 0 0 1 6,6 v20 z" fill="#2E6DA4"/>
+<text x="1215.0" y="777" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#FFFFFF" font-weight="bold" font-style="normal" text-anchor="middle">producto</text>
+<text x="1120" y="799" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#0B1F33" font-weight="bold" font-style="normal" text-anchor="start">id</text>
+<line x1="1120" y1="801" x2="1132" y2="801" stroke="#0B1F33" stroke-width="0.6"/>
+<text x="1120" y="816" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#B06A00" font-weight="normal" font-style="normal" text-anchor="start">sucursal_id</text>
+<text x="1120" y="833" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">nombre</text>
+<text x="1120" y="850" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">tipo (serv|venta)</text>
+<text x="1120" y="867" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">cantidad</text>
+<text x="1120" y="884" font-family="Helvetica, Arial, sans-serif" font-size="10.7" fill="#33475B" font-weight="normal" font-style="normal" text-anchor="start">stock_mín</text>
+</svg>
