@@ -45,7 +45,7 @@ function pasosTour(setVista: (v: string) => void): TourStep[] {
     {
       target: '[data-tour="sucursal"]',
       title: 'Tu sede activa',
-      body: 'Elige aquí la sucursal en la que estás trabajando, o “Todo el negocio” para ver todas tus sedes consolidadas.',
+      body: 'Cambia la sucursal en la que estás trabajando, o “Todo el negocio” para ver todas tus sedes consolidadas.',
       onEnter: () => setVista('panel'),
     },
     {
@@ -81,13 +81,13 @@ function pasosTour(setVista: (v: string) => void): TourStep[] {
     {
       target: '[data-tour="usermenu"]',
       title: 'Configuración y Suscripción',
-      body: 'En este menú están la Configuración (módulos, reglas y tu enlace de reservas) y tu Suscripción (plan y facturación).',
+      body: 'Desde tu menú de usuario abres la Configuración (módulos, reglas y tu enlace de reservas) y tu Suscripción (plan y facturación).',
       onEnter: () => setVista('panel'),
     },
     {
       target: '[data-tour="ayuda"]',
       title: '¿Dudas más adelante?',
-      body: 'Vuelve a abrir este tutorial desde este botón cuando quieras. ¡Ahora sí, a operar tu negocio!',
+      body: 'Puedes reabrir este tutorial cuando quieras desde el botón de ayuda (?). ¡Ahora sí, a operar tu negocio!',
       nextLabel: '¡Empezar!',
       onEnter: () => setVista('panel'),
     },

@@ -37,6 +37,19 @@ export function Tour({
   const [rect, setRect] = useState<DOMRect | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [cardH, setCardH] = useState(200);
+  // En móvil el nav de escritorio está oculto (Shell, ≤920px): no hay elementos
+  // que resaltar, así que el tour se muestra como una secuencia de tarjetas
+  // centradas (sin spotlight), legible a pantalla completa.
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 920px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 920px)');
+    const on = () => setIsMobile(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
 
   const last = i >= steps.length - 1;
   const step = steps[i];
@@ -48,6 +61,9 @@ export function Tour({
   useLayoutEffect(() => {
     if (!open || !step) return;
     step.onEnter?.();
+    // Móvil: sin objetivo que resaltar → tarjeta centrada. No medimos ni hacemos
+    // scroll a elementos del nav de escritorio (que están ocultos).
+    if (isMobile) { setRect(null); return; }
     let raf = 0;
     let tries = 0;
     // Rect visible: descarta objetivos ocultos (display:none → 0×0), p. ej. el nav
@@ -75,7 +91,7 @@ export function Tour({
       window.removeEventListener('resize', onMove);
       window.removeEventListener('scroll', onMove, true);
     };
-  }, [i, open]);
+  }, [i, open, isMobile]);
 
   // Mide la altura de la tarjeta para ubicarla arriba/abajo del objetivo.
   useLayoutEffect(() => { if (cardRef.current) setCardH(cardRef.current.offsetHeight); }, [i, rect]);
@@ -142,6 +158,8 @@ export function Tour({
           position: 'fixed',
           width: CARD_W,
           maxWidth: 'calc(100vw - 28px)',
+          maxHeight: 'calc(100vh - 28px)',
+          overflowY: 'auto',
           background: 'var(--surface-card)',
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border-subtle)',
