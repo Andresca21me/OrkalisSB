@@ -10,7 +10,7 @@ import { Icon } from './ui';
 /** Columna móvil centrada (máx. 480px) que ocupa el alto completo. */
 export function MobileFrame({ children }: { children: ReactNode }) {
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--surface-sunken)', display: 'flex', justifyContent: 'center' }}>
+    <div className="ork-appframe-bg" style={{ background: 'var(--surface-sunken)', display: 'flex', justifyContent: 'center' }}>
       <div
         className="ork-appframe"
         style={{

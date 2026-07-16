@@ -91,11 +91,15 @@ a:hover { color: var(--brand-hover); }
    a la barra de URL; `100vh` es el fallback para navegadores
    sin dvh.
    ============================================================ */
+.ork-appframe-bg,
 .ork-appframe {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
 }
+/* El fondo exterior también se fija al viewport: si fuera más alto que el
+   marco interior (p. ej. 100vh vs 100dvh en móvil), el documento scrollearía
+   ese sobrante y la barra inferior parecería "despegarse" con el scroll. */
 
 /* ── Alerta de días de prueba: versión compacta en móvil ──────────────────── */
 @media (max-width: 560px) {
@@ -134,4 +138,40 @@ a:hover { color: var(--brand-hover); }
     flex: 0 0 auto !important;
     white-space: nowrap;
   }
+}
+
+/* Pista de scroll lateral del nav de Configuración: degradados con chevron en
+   los bordes que aparecen cuando hay más secciones fuera de vista. */
+.ork-confignav-scroll { position: relative; }
+.ork-confignav-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 38px;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  color: var(--brand);
+  z-index: 2;
+}
+.ork-confignav-fade.left {
+  left: 0;
+  justify-content: flex-start;
+  padding-left: 2px;
+  background: linear-gradient(to right, var(--surface-card) 40%, transparent);
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+.ork-confignav-fade.right {
+  right: 0;
+  justify-content: flex-end;
+  padding-right: 2px;
+  background: linear-gradient(to left, var(--surface-card) 40%, transparent);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+.ork-confignav-fade.show { opacity: 1; }
+/* En escritorio el nav es una columna vertical: nunca mostramos las pistas. */
+@media (min-width: 721px) {
+  .ork-confignav-fade { display: none; }
 }

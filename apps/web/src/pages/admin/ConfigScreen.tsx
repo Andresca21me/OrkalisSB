@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { useAuth } from '../../lib/auth';
@@ -60,18 +60,7 @@ export function ConfigScreen() {
 
   return (
     <div className="ork-config-body">
-      <Card padding={8} className="ork-confignav" style={{ position: 'sticky', top: 88 }}>
-        <div className="ork-confignav-list" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {SECCIONES.map((s) => {
-            const on = s.id === section;
-            return (
-              <button key={s.id} type="button" onClick={() => setSection(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer', textAlign: 'left', background: on ? 'var(--brand-tint)' : 'transparent', color: on ? 'var(--brand)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                <Icon name={s.icon} size={17} color={on ? 'var(--brand)' : 'var(--text-tertiary)'} />{s.label}
-              </button>
-            );
-          })}
-        </div>
-      </Card>
+      <ConfigNav section={section} onSelect={setSection} />
 
       <div>
         {META[section] && (
@@ -111,6 +100,60 @@ export function ConfigScreen() {
         {section === 'developer' && <ConfigDeveloper />}
       </div>
     </div>
+  );
+}
+
+/**
+ * Nav interno de Configuración. En escritorio es una columna sticky; en móvil
+ * (≤720px, vía CSS) es una tira horizontal deslizable. Como el scroll lateral
+ * no es obvio, mostramos degradados con chevron en los bordes cuando quedan
+ * secciones fuera de vista, y desplazamos la activa a la vista al cambiar.
+ */
+function ConfigNav({ section, onSelect }: { section: string; onSelect: (id: string) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [hint, setHint] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      setHint({
+        left: el.scrollLeft > 4,
+        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+      });
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', update);
+      ro.disconnect();
+    };
+  }, []);
+
+  // Al cambiar de sección, trae la activa a la vista (útil en la tira horizontal).
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [section]);
+
+  return (
+    <Card padding={8} className="ork-confignav" style={{ position: 'sticky', top: 88 }}>
+      <div className="ork-confignav-scroll">
+        <div ref={ref} className="ork-confignav-list" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {SECCIONES.map((s) => {
+            const on = s.id === section;
+            return (
+              <button key={s.id} type="button" data-active={on} onClick={() => onSelect(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer', textAlign: 'left', background: on ? 'var(--brand-tint)' : 'transparent', color: on ? 'var(--brand)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                <Icon name={s.icon} size={17} color={on ? 'var(--brand)' : 'var(--text-tertiary)'} />{s.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className={`ork-confignav-fade left${hint.left ? ' show' : ''}`} aria-hidden="true"><Icon name="chevron-left" size={16} color="var(--brand)" /></div>
+        <div className={`ork-confignav-fade right${hint.right ? ' show' : ''}`} aria-hidden="true"><Icon name="chevron-right" size={16} color="var(--brand)" /></div>
+      </div>
+    </Card>
   );
 }
 
@@ -215,14 +258,14 @@ function AgendaNumeros({ data, scope, onSave, onOverride, onInherit }: { data: C
 
   return (
     <ConfigCard title="Tiempos y ventanas" desc="Valores que rigen recordatorios, retención y antelación." pad={22}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 28px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '20px 28px' }}>
         {AGENDA_NUM.map((f) => {
           const ef = efectivoDe(data, f.clave);
           const dim = scope === 'sucursal' && ef?.procedencia !== 'sucursal';
           return (
             <ProvField key={f.clave} label={f.title} hint={f.hint}
               prov={ef && <ProvControl scope={scope} procedencia={ef.procedencia} onOverride={() => onOverride(f.clave, Number(ef.valor))} onInherit={() => onInherit(f.clave)} />}>
-              <div style={{ display: 'flex', gap: 8, opacity: dim ? 0.5 : 1, pointerEvents: dim ? 'none' : 'auto' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, opacity: dim ? 0.5 : 1, pointerEvents: dim ? 'none' : 'auto' }}>
                 <GNumber value={draft[f.clave] ?? 0} onChange={(v) => setDraft((d) => ({ ...d, [f.clave]: v }))} suffix={f.suffix} step={f.step} min={0} />
                 <Button variant="secondary" size="sm" onClick={() => onSave(f.clave, draft[f.clave] ?? 0)}>Guardar</Button>
               </div>
