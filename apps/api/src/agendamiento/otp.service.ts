@@ -4,14 +4,16 @@ import * as argon2 from 'argon2';
 import { and, desc, eq } from 'drizzle-orm';
 import type { DrizzleTx } from '../db/tx';
 import { otpCodigo } from '../db/schema';
+import { mensajeriaSimulada } from '../notificaciones/messaging-mode';
 
 const TTL_MIN = 5;
 const MAX_INTENTOS = 5;
 
 /**
  * OTP por SMS para identificar al cliente final sin cuenta (FASE-08, ADR-003).
- * El envío real (Twilio) es FASE-11; en desarrollo se loguea y se retorna el
- * código para poder probar el flujo (NUNCA en producción).
+ * El envío real (Twilio) es FASE-11. Mientras la mensajería esté SIMULADA (sin
+ * claves Twilio, ver messaging-mode.ts) se loguea y se retorna el código para
+ * poder probar el flujo; con Twilio real, el código nunca se expone.
  */
 @Injectable()
 export class OtpService {
@@ -27,8 +29,8 @@ export class OtpService {
       codigoHash,
       expiraEn: new Date(Date.now() + TTL_MIN * 60_000),
     });
-    if (process.env.NODE_ENV !== 'production') {
-      this.logger.log(`OTP para ${telefono}: ${codigo} (dev)`);
+    if (mensajeriaSimulada()) {
+      this.logger.log(`OTP para ${telefono}: ${codigo} (simulado, sin Twilio)`);
     }
     return codigo;
   }
