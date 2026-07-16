@@ -135,13 +135,27 @@ export function AnimatedBackground({
     handleRef.current?.setOptions(buildOptions(variant, intensity, speed, colorA, colorB, colorC, baseColor));
   }, [variant, intensity, speed, colorA, colorB, colorC, baseColor]);
 
+  // Re-resuelve los colores cuando cambia el tema. Las props de color son
+  // NOMBRES de token (`--brand`…) que no cambian al cambiar de vertical, así que
+  // sin esto el shader se quedaría con el color anterior hasta remontar. Observa
+  // `data-vertical`/`class` en <html> y vuelve a aplicar (el estático es CSS y
+  // se re-tematiza solo).
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      handleRef.current?.setOptions(buildOptions(variant, intensity, speed, colorA, colorB, colorC, baseColor));
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-vertical', 'class'] });
+    return () => obs.disconnect();
+  }, [variant, intensity, speed, colorA, colorB, colorC, baseColor]);
+
   const fadeStart = typeof fadeBottom === 'number' ? fadeBottom : 56;
   const mask = fadeBottom ? `linear-gradient(to bottom, #000 ${fadeStart}%, transparent 100%)` : undefined;
 
   return (
     <div ref={containerRef} aria-hidden="true" className={className} style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0, WebkitMaskImage: mask, maskImage: mask, ...style }}>
-      {/* Fallback estático (primer paint, reduced-motion, móvil, sin WebGL). Azul. */}
-      <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(58% 72% at 78% 12%, var(--info-tint), transparent 62%), radial-gradient(64% 80% at 16% 24%, var(--brand-tint), transparent 66%), radial-gradient(90% 90% at 50% 118%, var(--info-tint), transparent 60%), ${cssVarOrColor(baseColor)}` }} />
+      {/* Fallback estático (primer paint, reduced-motion, móvil, sin WebGL).
+          Usa tints de marca → se re-tematiza solo (azul/rosa según vertical). */}
+      <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(58% 72% at 78% 12%, var(--brand-glow-soft), transparent 62%), radial-gradient(64% 80% at 16% 24%, var(--brand-tint), transparent 66%), radial-gradient(90% 90% at 50% 118%, var(--brand-tint), transparent 60%), ${cssVarOrColor(baseColor)}` }} />
       {/* Canvas WebGL (encima del estático, aparece con fade al cargar). */}
       <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', opacity: 0, transition: 'opacity 600ms ease' }} />
       {/* Scrim: garantiza contraste AA del texto del hero. */}

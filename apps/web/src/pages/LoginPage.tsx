@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth, type MotivoBloqueo } from '../lib/auth';
 import { ApiError } from '../lib/api';
 import { Button, Icon, Logo, Spinner } from '../ui/ui';
@@ -11,6 +12,7 @@ type EstadoLogin = 'normal' | 'suspendida' | 'bloqueo';
  * cargando, cuenta suspendida y bloqueo por intentos.
  */
 export function LoginPage() {
+  const navigate = useNavigate();
   const { login, cuentaSuspendida, motivoBloqueo } = useAuth();
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
@@ -66,14 +68,16 @@ export function LoginPage() {
           dangerouslySetInnerHTML={{ __html: '<svg width="380" height="380" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="2.5" width="19" height="19" rx="6.5" stroke="#fff" stroke-width="1"/><circle cx="14.5" cy="14.5" r="4.2" stroke="#fff" stroke-width="1"/></svg>' }}
         />
         <div style={{ position: 'relative' }}>
-          <Logo color="#fff" />
+          <button type="button" onClick={() => navigate('/')} aria-label="Volver al inicio" style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'inline-flex' }}>
+            <Logo color="#fff" />
+          </button>
         </div>
         <div style={{ position: 'relative' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 11px', borderRadius: 'var(--radius-pill)', background: 'rgba(255,255,255,0.10)', marginBottom: 20 }}>
             <Icon name="store" size={14} color="var(--accent)" />
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.82)' }}>Panel de administración</span>
           </div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 40, letterSpacing: '-0.03em', lineHeight: 1.06, margin: 0 }}>Tu negocio, bajo control</h1>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 40, letterSpacing: '-0.03em', lineHeight: 1.06, margin: 0, color: '#fff' }}>Tu negocio, bajo control</h1>
           <p style={{ fontSize: 'var(--text-md)', color: 'rgba(255,255,255,0.72)', margin: '14px 0 0', maxWidth: 380, lineHeight: 1.5 }}>
             Gestiona tu agenda, tu equipo y tus finanzas desde un solo lugar.
           </p>
@@ -87,9 +91,12 @@ export function LoginPage() {
       {/* ── Tarjeta de ingreso ── */}
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
         <div style={{ width: '100%', maxWidth: 400 }}>
-          <div className="ork-mobilelogo" style={{ display: 'none', marginBottom: 28 }}>
+          <button type="button" onClick={() => navigate('/')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, marginBottom: 22, fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            <Icon name="chevron-left" size={16} color="var(--text-secondary)" /> Volver al inicio
+          </button>
+          <button type="button" className="ork-mobilelogo" onClick={() => navigate('/')} aria-label="Volver al inicio" style={{ display: 'none', marginBottom: 28, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
             <Logo />
-          </div>
+          </button>
 
           {vista === 'suspendida' ? (
             <SuspendedNotice motivo={motivoBloqueo} onVolver={() => window.location.reload()} />
