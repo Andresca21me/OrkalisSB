@@ -4,7 +4,7 @@
 # Las variables VITE_* se HORNEAN en el build (no se leen en runtime): Railway
 # inyecta las variables del servicio como build args, así que hay un build por
 # entorno (staging/prod). El estático final se sirve con Caddy (fallback SPA).
-FROM node:20-slim AS base
+FROM node:22-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable

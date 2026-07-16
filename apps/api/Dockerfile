@@ -1,7 +1,7 @@
 # Orkalis API — imagen de producción (FASE-14, ADR-008).
 # Build multi-stage desde la raíz del monorepo:
 #   docker build -f apps/api/Dockerfile -t orkalis-api .
-FROM node:20-slim AS base
+FROM node:22-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -25,7 +25,7 @@ RUN pnpm --filter @orkalis/shared build \
   && pnpm --filter api deploy --legacy --prod /export
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 # Artefactos compilados + dependencias de producción.
