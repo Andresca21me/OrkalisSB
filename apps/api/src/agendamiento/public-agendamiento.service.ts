@@ -23,7 +23,9 @@ import type { TenantContext } from '../db/tenant-context';
 import { ConfigResolverService } from '../config-module/config-resolver.service';
 import { DisponibilidadService, type FranjaPublica } from './disponibilidad.service';
 import { OtpService } from './otp.service';
+import { HorarioService } from './horario.service';
 import { ValidadorFactory } from './validators/validador.factory';
+import { bogotaParts } from './validators/validador-cita.port';
 import { transicionar } from './cita-state-machine';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { mensajeriaSimulada } from '../notificaciones/messaging-mode';
@@ -46,6 +48,7 @@ export class PublicAgendamientoService {
     private readonly validadores: ValidadorFactory,
     private readonly notificaciones: NotificacionesService,
     private readonly metrics: MetricsService,
+    private readonly horario: HorarioService,
   ) {}
 
   /** Resuelve el negocio de la sucursal (slug) y arma un contexto de sistema. */
@@ -59,13 +62,15 @@ export class PublicAgendamientoService {
     return { negocioId: suc.negocioId, sucursalIds: [sucursalId], rol: 'public' };
   }
 
-  /** Info pública de la sucursal: negocio, perfil, sede y otras sedes. */
+  /** Info pública de la sucursal: negocio, perfil, sede, otras sedes y horario. */
   async info(sucursalId: string): Promise<{
     sucursalId: string;
     sucursalNombre: string;
     negocioNombre: string;
     perfil: PerfilNegocio;
     sucursales: { id: string; nombre: string }[];
+    diasLaborables: boolean[];
+    serviciosDia: Record<string, boolean[]>;
   }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
     return runInTenantTx(ctx, async (tx) => {
@@ -79,12 +84,15 @@ export class PublicAgendamientoService {
         .from(sucursal)
         .where(eq(sucursal.activa, true));
       const actual = sucs.find((s) => s.id === sucursalId);
+      const { diasLaborables, serviciosDia } = await this.horario.infoPublica(tx, sucursalId);
       return {
         sucursalId,
         sucursalNombre: actual?.nombre ?? '',
         negocioNombre: neg?.nombre ?? '',
         perfil: (neg?.perfil ?? PerfilNegocio.Salon) as PerfilNegocio,
         sucursales: sucs,
+        diasLaborables,
+        serviciosDia,
       };
     });
   }
@@ -275,6 +283,17 @@ export class PublicAgendamientoService {
 
       const inicio = new Date(ret.ini);
       const fin = new Date(ret.fin);
+
+      // Regla de negocio (D-horario): el cliente NO puede reservar en un día que
+      // el negocio marcó como cerrado, ni un servicio desactivado ese día.
+      const weekday = bogotaParts(inicio).weekday;
+      if (!(await this.horario.esDiaLaborable(tx, sucursalId, weekday))) {
+        throw new BadRequestException('Ese día el negocio no atiende. Por favor elige otro día.');
+      }
+      const inactivos = await this.horario.serviciosInactivosEnDia(tx, weekday, input.servicioIds);
+      if (inactivos.size > 0) {
+        throw new BadRequestException('Alguno de los servicios elegidos no está disponible ese día.');
+      }
 
       await this.validadores
         .paraOrigen(OrigenCita.AgendamientoPublico)

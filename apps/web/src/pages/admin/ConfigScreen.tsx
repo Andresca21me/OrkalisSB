@@ -26,6 +26,7 @@ const SECCIONES = [
   { id: 'modulos', label: 'Módulos', icon: 'layout-grid', scoped: true },
   { id: 'financieros', label: 'Financieros', icon: 'percent', scoped: true },
   { id: 'agenda', label: 'Agenda', icon: 'calendar', scoped: true },
+  { id: 'horario', label: 'Días laborables', icon: 'calendar', scoped: false },
   { id: 'notif', label: 'Notificaciones', icon: 'bell', scoped: false },
   { id: 'sucursales', label: 'Sucursales', icon: 'store', scoped: false },
   { id: 'reservas', label: 'Reservas', icon: 'link', scoped: false },
@@ -38,6 +39,7 @@ const META: Record<string, { title: string; desc: string }> = {
   modulos: { title: 'Módulos', desc: 'Enciende o apaga funcionalidades por negocio o por sucursal.' },
   financieros: { title: 'Parámetros financieros', desc: 'Reparto, comisiones y deducciones. El reparto profesional y del negocio debe sumar 100%.' },
   agenda: { title: 'Reglas de agendamiento', desc: 'Cómo se confirman, recuerdan y cancelan las citas.' },
+  horario: { title: 'Días laborables y servicios', desc: 'Marca los días que abre cada sucursal y activa o desactiva servicios por día. En los días cerrados el cliente no puede reservar.' },
   reservas: { title: 'Enlaces y QR de reserva', desc: 'Comparte el enlace o imprime el código QR de cada sucursal para que tus clientes reserven.' },
 };
 
@@ -99,6 +101,7 @@ export function ConfigScreen() {
 
         {section === 'modulos' && <ConfigClaves seccion="modulos" scope={scope} nivel={scope} ambitoId={ambitoId} sucursalIdParam={sucursalIdParam} />}
         {section === 'agenda' && <ConfigClaves seccion="agenda" scope={scope} nivel={scope} ambitoId={ambitoId} sucursalIdParam={sucursalIdParam} />}
+        {section === 'horario' && <ConfigHorario />}
         {section === 'financieros' && <ConfigFinancieros scope={scope} nivel={scope} ambitoId={ambitoId} sucursalIdParam={sucursalIdParam} />}
         {section === 'notif' && <ConfigNotif />}
         {section === 'sucursales' && <ConfigSucursales sucursales={sucs.data ?? []} onChanged={() => void sucs.recargar()} />}
@@ -306,6 +309,103 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
         <Button variant="primary" iconLeft="check" loading={guardando} onClick={guardar}>Guardar cambios</Button>
       </div>
       {scope === 'sucursal' && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', textAlign: 'right', marginTop: 8 }}>Se guarda como override de esta sucursal.</p>}
+    </>
+  );
+}
+
+// ── Días laborables y servicios por día ──────────────────────────────────────
+
+interface HorarioRow { id: string; nombre: string; dias: boolean[] }
+interface HorarioCfg { sucursales: HorarioRow[]; servicios: HorarioRow[] }
+
+/** Etiquetas de día, índice 0=domingo … 6=sábado (convención del backend). */
+const DIAS_LBL = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+/** Fila de 7 píldoras (un día cada una); on = trabaja/activo. */
+function DiasRow({ dias, onToggle }: { dias: boolean[]; onToggle: (dia: number) => void }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {DIAS_LBL.map((lbl, i) => {
+        const on = dias[i];
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onToggle(i)}
+            aria-pressed={on}
+            title={on ? 'Abierto — clic para cerrar' : 'Cerrado — clic para abrir'}
+            style={{
+              minWidth: 46, height: 34, padding: '0 10px', borderRadius: 999, cursor: 'pointer',
+              border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`,
+              background: on ? 'var(--brand-tint)' : 'var(--surface-card)',
+              color: on ? 'var(--brand)' : 'var(--text-tertiary)',
+              fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 'var(--text-xs)',
+              textDecoration: on ? 'none' : 'line-through',
+            }}
+          >
+            {lbl}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ConfigHorario() {
+  const toast = useToast();
+  const { data, cargando, error, recargar } = useApi<HorarioCfg>(() => api.get('/agenda/horario'));
+  const [sucs, setSucs] = useState<HorarioRow[]>([]);
+  const [servs, setServs] = useState<HorarioRow[]>([]);
+
+  useEffect(() => {
+    if (data) { setSucs(data.sucursales); setServs(data.servicios); }
+  }, [data]);
+
+  async function guardar(tipo: 'sucursal' | 'servicio', id: string, dias: boolean[]) {
+    try {
+      await api.put(`/agenda/horario/${tipo}/${id}`, { dias });
+    } catch (e) {
+      toast((e as Error).message, 'error');
+      void recargar();
+    }
+  }
+
+  function toggle(tipo: 'sucursal' | 'servicio', idx: number, dia: number) {
+    const setter = tipo === 'sucursal' ? setSucs : setServs;
+    setter((rows) => {
+      const next = rows.map((r, i) =>
+        i === idx ? { ...r, dias: r.dias.map((d, j) => (j === dia ? !d : d)) } : r,
+      );
+      void guardar(tipo, next[idx].id, next[idx].dias);
+      return next;
+    });
+  }
+
+  if (error) return <ErrorState onRetry={recargar} />;
+  if (cargando || !data) return <div style={{ display: 'grid', placeItems: 'center', padding: 40 }}><Spinner /></div>;
+
+  const Lista = ({ rows, tipo, vacio }: { rows: HorarioRow[]; tipo: 'sucursal' | 'servicio'; vacio: string }) =>
+    rows.length === 0 ? (
+      <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>{vacio}</p>
+    ) : (
+      <>
+        {rows.map((r, i) => (
+          <div key={r.id} style={{ padding: '14px 0', borderTop: i ? '1px solid var(--border-subtle)' : 'none' }}>
+            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{r.nombre}</div>
+            <DiasRow dias={r.dias} onToggle={(dia) => toggle(tipo, i, dia)} />
+          </div>
+        ))}
+      </>
+    );
+
+  return (
+    <>
+      <ConfigCard title="Días laborables por sucursal" desc="Marca los días que abre cada sede. Los cambios se guardan al instante; en los días cerrados el cliente no puede reservar." pad={22}>
+        <Lista rows={sucs} tipo="sucursal" vacio="No hay sucursales activas." />
+      </ConfigCard>
+      <ConfigCard title="Servicios por día" desc="Desactiva un servicio los días que no lo ofreces. Aplica a todas las sedes." pad={22}>
+        <Lista rows={servs} tipo="servicio" vacio="No hay servicios activos." />
+      </ConfigCard>
     </>
   );
 }

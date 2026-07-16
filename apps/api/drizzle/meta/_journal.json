@@ -57,6 +57,13 @@
       "when": 1782491186389,
       "tag": "0007_stormy_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784166233915,
+      "tag": "0008_famous_callisto",
+      "breakpoints": true
     }
   ]
 }

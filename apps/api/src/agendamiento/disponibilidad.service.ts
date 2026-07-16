@@ -12,6 +12,7 @@ import {
 } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { horaAMinutos } from './validators/validador-cita.port';
+import { HorarioService } from './horario.service';
 
 export interface Franja {
   inicio: string; // ISO
@@ -34,6 +35,8 @@ function instante(fechaIso: string, minutos: number): Date {
 /** Disponibilidad en tiempo real (FASE-08, RF-017): franjas libres por día. */
 @Injectable()
 export class DisponibilidadService {
+  constructor(private readonly horario: HorarioService) {}
+
   /**
    * Franjas libres para una fecha, compatibles con la duración TOTAL de los
    * servicios elegidos. Acepta un especialista concreto o `'any'` (agrega sobre
@@ -49,6 +52,14 @@ export class DisponibilidadService {
     fechaIso: string,
   ): Promise<FranjaPublica[]> {
     return runInTenantTx(ctx, async (tx) => {
+      // Día cerrado por el negocio → sin franjas (el cliente no puede reservar).
+      const [y0, m0, d0] = fechaIso.split('-').map(Number);
+      const weekday = new Date(Date.UTC(y0, m0 - 1, d0)).getUTCDay();
+      if (!(await this.horario.esDiaLaborable(tx, sucursalId, weekday))) return [];
+      // Si algún servicio elegido está desactivado ese día → no se puede reservar el combo.
+      const inactivos = await this.horario.serviciosInactivosEnDia(tx, weekday, servicioIds);
+      if (inactivos.size > 0) return [];
+
       // Duración total = suma de los servicios elegidos.
       const servs = await tx
         .select({ id: servicio.id, dur: servicio.duracionMin })

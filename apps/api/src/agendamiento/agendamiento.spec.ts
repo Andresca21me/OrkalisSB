@@ -11,6 +11,7 @@ import type { TenantContext } from '../db/tenant-context';
 import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
 import { ConfigWriteService } from '../config-module/config-write.service';
 import { DisponibilidadService } from './disponibilidad.service';
+import { HorarioService } from './horario.service';
 import { OtpService } from './otp.service';
 import { ValidadorFactory } from './validators/validador.factory';
 import { PublicAgendamientoService } from './public-agendamiento.service';
@@ -79,13 +80,15 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     const metrics = new MetricsService();
     const notificaciones = new NotificacionesService(queue, new MockAdapter(), new CuposService(new PlanService()), metrics);
     notificaciones.onModuleInit();
+    const horario = new HorarioService();
     pub = new PublicAgendamientoService(
-      new DisponibilidadService(),
+      new DisponibilidadService(horario),
       new OtpService(),
       resolver,
       validadores,
       notificaciones,
       metrics,
+      horario,
     );
     agenda = new AgendamientoService(validadores);
   });

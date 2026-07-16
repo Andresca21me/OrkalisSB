@@ -47,6 +47,10 @@ export interface PublicInfo {
   negocioNombre: string;
   perfil: PerfilNegocio;
   sucursales: { id: string; nombre: string }[];
+  /** Días laborables de la sucursal, índice 0=domingo … 6=sábado (true=abre). */
+  diasLaborables: boolean[];
+  /** Por servicioId, actividad por día (índice 0=domingo … 6=sábado; true=disponible). */
+  serviciosDia: Record<string, boolean[]>;
 }
 
 /** Especialista público (para reservar). */

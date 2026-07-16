@@ -242,6 +242,8 @@ export function BookingPage() {
           especialistaId={especialistaId!}
           fecha={fecha}
           slot={slot}
+          diasLaborables={info.data.diasLaborables}
+          serviciosDia={info.data.serviciosDia}
           onPickFecha={(f) => { setFecha(f); setSlot(null); }}
           onPickSlot={setSlot}
           onBack={() => setStep(reagendando ? 'gestion' : 'especialista')}
@@ -479,12 +481,20 @@ function RadioDot({ on }: { on: boolean }) {
 }
 
 // ════════════════════ Horario ════════════════════
-function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, onPickFecha, onPickSlot, onBack, onContinue }: { sucursalId: string; negocio: string; servicios: string[]; especialistaId: string; fecha: string | null; slot: FranjaPublica | null; onPickFecha: (f: string) => void; onPickSlot: (s: FranjaPublica) => void; onBack: () => void; onContinue: () => void }) {
+function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, diasLaborables, serviciosDia, onPickFecha, onPickSlot, onBack, onContinue }: { sucursalId: string; negocio: string; servicios: string[]; especialistaId: string; fecha: string | null; slot: FranjaPublica | null; diasLaborables: boolean[]; serviciosDia: Record<string, boolean[]>; onPickFecha: (f: string) => void; onPickSlot: (s: FranjaPublica) => void; onBack: () => void; onContinue: () => void }) {
   const dias = useMemo(() => Array.from({ length: 14 }, (_, i) => diaParts(sumarDiasISO(hoyISO(), i))), []);
-  const activo = fecha ?? dias[0].key;
+  // Un día es reservable si la sucursal abre ese día de la semana Y ningún
+  // servicio elegido está desactivado ese día (0=domingo … 6=sábado).
+  const bookableDia = (key: string): boolean => {
+    const wd = new Date(`${key}T00:00:00Z`).getUTCDay();
+    if (diasLaborables && diasLaborables[wd] === false) return false;
+    return servicios.every((sid) => serviciosDia?.[sid]?.[wd] !== false);
+  };
+  const primerDisponible = dias.find((d) => bookableDia(d.key))?.key ?? dias[0].key;
+  const activo = fecha ?? primerDisponible;
   useEffect(() => {
-    if (!fecha) onPickFecha(dias[0].key);
-  }, [fecha, dias, onPickFecha]);
+    if (!fecha) onPickFecha(primerDisponible);
+  }, [fecha, primerDisponible, onPickFecha]);
 
   const disp = useApi<FranjaPublica[]>(
     () => api.get(`/public/${sucursalId}/disponibilidad?especialista=${especialistaId}&servicios=${servicios.join(',')}&fecha=${activo}`, false),
@@ -503,11 +513,12 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 16px' }}>
           {dias.map((d) => {
             const on = d.key === activo;
+            const cerrado = !bookableDia(d.key);
             return (
-              <button key={d.key} type="button" data-testid={`booking-dia-${d.key}`} onClick={() => onPickFecha(d.key)} style={{ flex: 'none', width: 54, height: 68, borderRadius: 'var(--radius-md)', cursor: 'pointer', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-subtle)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+              <button key={d.key} type="button" data-testid={`booking-dia-${d.key}`} disabled={cerrado} onClick={() => { if (!cerrado) onPickFecha(d.key); }} title={cerrado ? 'El negocio no atiende este día' : undefined} style={{ flex: 'none', width: 54, height: 68, borderRadius: 'var(--radius-md)', cursor: cerrado ? 'not-allowed' : 'pointer', opacity: cerrado ? 0.4 : 1, border: `1px solid ${on ? 'var(--brand)' : 'var(--border-subtle)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
                 <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: on ? 'rgba(255,255,255,0.8)' : 'var(--text-tertiary)' }}>{d.isToday ? 'HOY' : d.dow}</span>
-                <span className="data" style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: on ? '#fff' : 'var(--text-primary)', lineHeight: 1 }}>{d.day}</span>
-                <span style={{ fontSize: 10, color: on ? 'rgba(255,255,255,0.7)' : 'var(--text-tertiary)' }}>{d.month}</span>
+                <span className="data" style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: on ? '#fff' : 'var(--text-primary)', lineHeight: 1, textDecoration: cerrado ? 'line-through' : 'none' }}>{d.day}</span>
+                <span style={{ fontSize: 10, color: on ? 'rgba(255,255,255,0.7)' : 'var(--text-tertiary)' }}>{cerrado ? 'Cerr.' : d.month}</span>
               </button>
             );
           })}
@@ -524,7 +535,11 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
         ) : disp.error ? (
           <ErrorState onRetry={disp.recargar} title="No pudimos cargar la agenda" />
         ) : franjas.length === 0 ? (
-          <EmptyState icon="calendar-x" title="No quedan horas libres este día" desc="Esta fecha está completa. Elige otro día en la tira de arriba." />
+          !bookableDia(activo) ? (
+            <EmptyState icon="calendar-x" title="El negocio no atiende este día" desc="Elige otro día disponible en la tira de arriba." />
+          ) : (
+            <EmptyState icon="calendar-x" title="No quedan horas libres este día" desc="Esta fecha está completa. Elige otro día en la tira de arriba." />
+          )
         ) : (
           <div style={{ padding: 16 }}>
             <SlotGroup label="Mañana" slots={am} slot={slot} onPick={onPickSlot} />
