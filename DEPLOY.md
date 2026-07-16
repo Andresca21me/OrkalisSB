@@ -96,10 +96,16 @@ multi-tenant **siempre** aplique. Las migraciones/seed usan el rol **dueño**.
 
 ## 4. Migraciones en el arranque (ADR-004)
 
-`apps/api/railway.json` arranca con `node dist/db/migrate.js && node dist/main.js`:
-migra (migrador de `drizzle-orm`) y luego arranca. Si una migración falla, el
-proceso no levanta y Railway reintenta (política `ON_FAILURE`). Revisa los logs
-del primer deploy para confirmar `migraciones aplicadas`.
+El contenedor arranca con `sh docker-entrypoint.sh` (definido en `railway.json` y
+en el `CMD` del Dockerfile): el script aplica migraciones (`node dist/db/migrate.js`,
+migrador de `drizzle-orm`) y luego hace `exec node dist/main.js`. Si una migración
+falla, `set -e` corta y Railway reintenta (política `ON_FAILURE`). Revisa los logs
+del primer deploy para confirmar `Migraciones aplicadas.` y `Orkalis API escuchando`.
+
+> ⚠️ **No uses `&&` en el `startCommand`.** Railway ejecuta el start command sin
+> shell, así que `node migrate.js && node main.js` correría **solo** la migración
+> (el `&&` llega como argumento) y la API nunca arrancaría. Por eso el arranque va
+> por un script invocado como `sh docker-entrypoint.sh` (dos tokens, sin operadores).
 
 ## 5. Servicio Web (frontend)
 
