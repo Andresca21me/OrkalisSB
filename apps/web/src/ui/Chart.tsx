@@ -20,7 +20,11 @@ import {
   YAxis,
 } from 'recharts';
 
-const BRAND = '#1A73E8';
+import { readCssVar } from '../lib/theme';
+
+/** Color de marca actual (sigue el tema por vertical). Se resuelve en cada
+ *  render porque recharts no entiende `var(--brand)` en SVG/canvas. */
+const brandColor = (): string => readCssVar('--brand') || '#1A73E8';
 const TEAL = '#00D4AA';
 const AXIS = '#94A3B8';
 const GRID = '#E2E8F0';
@@ -54,7 +58,7 @@ export interface SeriePunto {
 }
 
 /** Línea compacta (tendencia). `color` opcional (default azul marca). */
-export function LineChartMini({ data, height = 220, color = BRAND, formatY }: { data: SeriePunto[]; height?: number; color?: string; formatY?: (v: number) => string }) {
+export function LineChartMini({ data, height = 220, color = brandColor(), formatY }: { data: SeriePunto[]; height?: number; color?: string; formatY?: (v: number) => string }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RLineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -69,7 +73,7 @@ export function LineChartMini({ data, height = 220, color = BRAND, formatY }: { 
 }
 
 /** Barras verticales. */
-export function BarChart({ data, height = 220, color = BRAND, formatY }: { data: SeriePunto[]; height?: number; color?: string; formatY?: (v: number) => string }) {
+export function BarChart({ data, height = 220, color = brandColor(), formatY }: { data: SeriePunto[]; height?: number; color?: string; formatY?: (v: number) => string }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RBarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -89,17 +93,18 @@ export interface DonutDato {
   color?: string;
 }
 
-const DONUT_PALETTE = [BRAND, TEAL, '#334155', '#64748B', '#3B82F6', '#94A3B8'];
+const donutPalette = (): string[] => [brandColor(), TEAL, '#334155', '#64748B', '#3B82F6', '#94A3B8'];
 
 /** Donut (composición). Leyenda opcional a la derecha. */
 export function Donut({ data, height = 220, thickness = 28 }: { data: DonutDato[]; height?: number; thickness?: number }) {
   const outer = height / 2 - 8;
+  const palette = donutPalette();
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RPieChart>
         <Pie data={data} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={outer - thickness} outerRadius={outer} paddingAngle={2} stroke="none">
           {data.map((d, i) => (
-            <Cell key={d.label} fill={d.color ?? DONUT_PALETTE[i % DONUT_PALETTE.length]} />
+            <Cell key={d.label} fill={d.color ?? palette[i % palette.length]} />
           ))}
         </Pie>
         <Tooltip {...tooltipStyle} />

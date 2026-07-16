@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { MktNav, SiteFooter, SITE_CSS, type Funnel, type Go } from './site-ui';
 import type { Vertical } from './site-data';
+import { applyVertical, loadLandingVertical, saveLandingVertical } from '../../lib/theme';
 import { CalculatorPage, ComparePage, ContactPage, FAQPage, LandingPage, LegalPage, PricingPage } from './site-pages';
 import { CheckoutPage, SignupPage, WelcomePage } from './site-funnel';
 
@@ -9,10 +10,18 @@ import { CheckoutPage, SignupPage, WelcomePage } from './site-funnel';
 export function SiteApp() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [vertical, setVertical] = useState<Vertical>('barberia');
-  const [funnel, setFunnel] = useState<Funnel>({ planId: 'pro', specialists: 4, sucursales: 1, cycle: 'mensual', vertical: 'barberia', negocio: '' });
+  const [vertical, setVertical] = useState<Vertical>(() => loadLandingVertical());
+  const [funnel, setFunnel] = useState<Funnel>({ planId: 'pro', specialists: 4, sucursales: 1, cycle: 'mensual', vertical: loadLandingVertical(), negocio: '' });
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'auto' }); }, [location.pathname]);
+
+  // El selector del navbar cambia el tema de TODA la landing (y se recuerda
+  // durante la sesión). Solo afecta al sitio público; la plataforma usa el
+  // tema de la cuenta.
+  useEffect(() => {
+    applyVertical(vertical);
+    saveLandingVertical(vertical);
+  }, [vertical]);
 
   const go: Go = (target, opts) => {
     if (opts) setFunnel((f) => ({ ...f, ...opts }));

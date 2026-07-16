@@ -114,7 +114,7 @@ export function CheckoutPage({ go, funnel, setFunnel }: Props) {
             </div>
           ) : (
             <>
-              <div style={{ display: 'flex', gap: 11, padding: 14, borderRadius: 'var(--radius-md)', background: 'var(--brand-tint)', border: '1px solid rgba(124,58,237,0.22)', marginBottom: 20 }}>
+              <div style={{ display: 'flex', gap: 11, padding: 14, borderRadius: 'var(--radius-md)', background: 'var(--brand-tint)', border: '1px solid var(--brand-tint-border)', marginBottom: 20 }}>
                 <Icon name="zap" size={18} color="var(--brand)" style={{ flex: 'none', marginTop: 1 }} />
                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '20px' }}>
                   Pagas <strong style={{ color: 'var(--text-primary)' }}>{money(monto)}/mes</strong> y activas tu cuenta hoy. El cobro se repetirá cada mes en esta misma fecha; puedes cancelar cuando quieras.

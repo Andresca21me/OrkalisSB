@@ -24,7 +24,7 @@ export function ConfigCard({ title, desc, action, pad = 22, children }: { title?
 const BANNER: Record<string, { bg: string; border: string; fg: string; icon: string }> = {
   info: { bg: 'var(--info-tint)', border: 'rgba(59,130,246,0.22)', fg: 'var(--info)', icon: 'info' },
   warning: { bg: 'var(--warning-tint)', border: 'rgba(245,158,11,0.30)', fg: '#B45309', icon: 'alert-triangle' },
-  brand: { bg: 'var(--brand-tint)', border: 'rgba(26,115,232,0.22)', fg: 'var(--brand)', icon: 'info' },
+  brand: { bg: 'var(--brand-tint)', border: 'var(--brand-tint-border)', fg: 'var(--brand)', icon: 'info' },
   danger: { bg: 'var(--error-tint)', border: 'rgba(239,68,68,0.25)', fg: 'var(--error)', icon: 'alert-octagon' },
 };
 export function ConfigBanner({ tone = 'info', title, icon, action, children }: { tone?: 'info' | 'warning' | 'brand' | 'danger'; title: ReactNode; icon?: string; action?: ReactNode; children?: ReactNode }) {

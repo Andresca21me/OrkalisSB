@@ -76,6 +76,36 @@
   --warning-tint:        rgba(245, 158, 11, 0.12);
   --error-tint:          rgba(239, 68, 68, 0.10);
   --info-tint:           rgba(59, 130, 246, 0.10);
+
+  /* Derivados de marca (se re-tematizan solos porque referencian --brand):
+     borde tenue y glow para botones/cajas destacadas. */
+  --brand-tint-border:   color-mix(in srgb, var(--brand) 26%, transparent);
+  --brand-glow:          color-mix(in srgb, var(--brand) 55%, transparent);
+  --brand-glow-soft:     color-mix(in srgb, var(--brand) 30%, transparent);
+}
+
+/* ============================================================
+   TEMA POR VERTICAL (identidad visual según el tipo de negocio)
+   Barbería = azul (tokens por defecto, arriba).
+   Salón    = rosa elegante (pink-600), sin caer en fucsia.
+   Solo se remapean los tokens BASE (--blue*, --navy) y los tints
+   literales; como --brand, --brand-hover, --brand-pressed,
+   --focus-ring y --text-link referencian esos base, toda la
+   plataforma cambia de golpe. Añadir otro tema = otro bloque.
+   ============================================================ */
+:root[data-vertical='salon'] {
+  --blue:            #DB2777; /* rosa marca — CTAs, links, acentos */
+  --blue-hover:      #EC4899; /* más claro — hover */
+  --blue-pressed:    #BE185D; /* más oscuro — pressed / texto sobre blanco */
+  --navy:            #241019; /* superficie "autoridad" en cálido (plum) */
+
+  --text-link:       #BE185D; /* rosa oscuro: AA de texto sobre blanco */
+  --brand-tint:      rgba(219, 39, 119, 0.08);
+}
+
+.dark[data-vertical='salon'] {
+  --brand-tint:      rgba(219, 39, 119, 0.18);
+  --text-link:       var(--blue-hover);
 }
 
 /* ============================================================

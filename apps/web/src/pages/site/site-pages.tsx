@@ -267,7 +267,7 @@ function LifestyleBand({ vertical, go }: { vertical: Vertical; go: Go }) {
             icon="camera"
           >
             {/* Degradado + copy sobre la foto. */}
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(15,25,35,0.78) 0%, rgba(15,25,35,0.35) 48%, rgba(15,25,35,0) 72%)' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, color-mix(in srgb, var(--navy) 78%, transparent) 0%, color-mix(in srgb, var(--navy) 35%, transparent) 48%, transparent 72%)' }} />
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center' }}>
               <div style={{ padding: 'clamp(20px, 4vw, 48px)', maxWidth: 560 }}>
                 <h2 className="mkt-h2" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: '#fff', margin: 0, textShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>Menos caos. Más sillas llenas.</h2>

@@ -12,6 +12,7 @@ import type {
 } from '@orkalis/shared';
 import { api, ApiError } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
+import { applyVertical, normalizeVertical } from '../../lib/theme';
 import { hoyISO, money, sumarDiasISO } from '../../lib/format';
 import {
   AppHeader,
@@ -74,6 +75,11 @@ export function BookingPage() {
   const [enviando, setEnviando] = useState(false);
 
   const info = useApi<PublicInfo>(() => api.get(`/public/${sucursalId}/info`, false), [sucursalId]);
+  // La reserva pública adopta el tema del negocio que se reserva (un salón se
+  // ve en rosa aunque el visitante no tenga sesión).
+  useEffect(() => {
+    if (info.data) applyVertical(normalizeVertical(info.data.perfil));
+  }, [info.data]);
   const catalogo = useApi<PublicServicio[]>(() => api.get(`/public/${sucursalId}/servicios`, false), [sucursalId]);
   const equipo = useApi<PublicEspecialista[]>(() => api.get(`/public/${sucursalId}/especialistas`, false), [sucursalId]);
 

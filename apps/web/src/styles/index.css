@@ -89,7 +89,7 @@
 }
 .ork-btn-primary:not(:disabled):hover {
   background-position: 100% 50%;
-  box-shadow: 0 8px 22px -6px rgba(26, 115, 232, 0.55), 0 2px 6px rgba(26, 115, 232, 0.3);
+  box-shadow: 0 8px 22px -6px var(--brand-glow), 0 2px 6px var(--brand-glow-soft);
   transform: translateY(-1px);
 }
 .ork-btn-primary:not(:disabled):hover::after {

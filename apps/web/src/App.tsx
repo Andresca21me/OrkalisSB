@@ -1,7 +1,8 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { RolUsuario } from '@orkalis/shared';
 import { useAuth } from './lib/auth';
+import { applyVertical, loadLandingVertical, normalizeVertical } from './lib/theme';
 import { Spinner } from './ui/ui';
 import { LoginPage } from './pages/LoginPage';
 
@@ -29,6 +30,14 @@ function Pantalla({ children }: { children: ReactNode }) {
 
 export function App() {
   const { usuario, cargando, cuentaSuspendida } = useAuth();
+
+  // Tema visual de la plataforma = tipo de negocio de la cuenta. Se aplica al
+  // iniciar sesión y tras recargar (usuario viene de /auth/me), de forma que el
+  // tema NO depende solo del estado del front. La landing gestiona el suyo.
+  useEffect(() => {
+    if (usuario) applyVertical(normalizeVertical(usuario.negocio.perfil));
+    else applyVertical(loadLandingVertical());
+  }, [usuario]);
 
   if (cargando) {
     return (

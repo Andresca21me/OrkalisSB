@@ -83,6 +83,34 @@ a:hover { color: var(--brand-hover); }
 }
 
 /* ============================================================
+   TRANSICIÓN DE TEMA (cambio de vertical)
+   Se activa solo mientras <html> tiene la clase `theme-anim`
+   (que el JS añade ~0.45s al cambiar de tema), así no hay coste
+   de transición permanente ni interferencia con hovers/scroll.
+   ============================================================ */
+html.theme-anim,
+html.theme-anim *,
+html.theme-anim *::before,
+html.theme-anim *::after {
+  transition:
+    background-color 0.4s ease,
+    background-image 0.4s ease,
+    border-color 0.4s ease,
+    color 0.4s ease,
+    fill 0.4s ease,
+    stroke 0.4s ease,
+    box-shadow 0.4s ease !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.theme-anim,
+  html.theme-anim *,
+  html.theme-anim *::before,
+  html.theme-anim *::after {
+    transition: none !important;
+  }
+}
+
+/* ============================================================
    CHROME MÓVIL (reserva pública + panel del especialista)
    El frame ocupa exactamente el alto del viewport y el scroll
    es interno (ScrollArea con min-height:0), así las barras
