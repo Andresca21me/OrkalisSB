@@ -34,6 +34,8 @@ COPY --from=build /repo/apps/api/dist ./dist
 COPY --from=build /repo/apps/api/drizzle ./drizzle
 COPY --from=build /repo/apps/api/drizzle.config.ts ./drizzle.config.ts
 COPY --from=build /repo/packages/shared/dist ./node_modules/@orkalis/shared/dist
+COPY apps/api/docker-entrypoint.sh ./docker-entrypoint.sh
 EXPOSE 3000
-# La migración se ejecuta en el pipeline/arranque (ADR-004); aquí solo arranca.
-CMD ["node", "dist/main.js"]
+# El entrypoint aplica migraciones y luego arranca la API (ADR-004). Se invoca
+# como `sh <script>` para no depender de que Railway interprete `&&` con shell.
+CMD ["sh", "docker-entrypoint.sh"]
