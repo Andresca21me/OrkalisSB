@@ -24,8 +24,14 @@ async function run(): Promise<void> {
   console.log('Migraciones aplicadas.');
 }
 
-run().catch((e) => {
-  // eslint-disable-next-line no-console
-  console.error('Fallo de migración:', e);
-  process.exit(1);
-});
+run()
+  .then(() => {
+    // Salida explícita: si drizzle/postgres deja algún handle vivo, el proceso
+    // no terminaría solo y el `&& node dist/main.js` del arranque nunca correría.
+    process.exit(0);
+  })
+  .catch((e) => {
+    // eslint-disable-next-line no-console
+    console.error('Fallo de migración:', e);
+    process.exit(1);
+  });
