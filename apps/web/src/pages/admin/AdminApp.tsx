@@ -162,8 +162,9 @@ function TrialBanner({ onIrSuscripcion }: { onIrSuscripcion: () => void }) {
         acento="#B45309"
         cta="Pagar ahora"
         onCta={onIrSuscripcion}
+        detalle="Reintentaremos automáticamente; paga ahora para evitar la suspensión."
       >
-        <strong>No pudimos cobrar tu suscripción.</strong> Reintentaremos automáticamente; paga ahora para evitar la suspensión.
+        <strong>No pudimos cobrar tu suscripción.</strong>
       </BannerBase>
     );
   }
@@ -181,8 +182,9 @@ function TrialBanner({ onIrSuscripcion }: { onIrSuscripcion: () => void }) {
       acento={urgente ? '#B45309' : 'var(--brand)'}
       cta="Agregar método de pago"
       onCta={onIrSuscripcion}
+      detalle="Agrega tu método de pago para no perder el acceso al panel."
     >
-      <strong>{texto}.</strong> Agrega tu método de pago para no perder el acceso al panel.
+      <strong>{texto}.</strong>
     </BannerBase>
   );
 }
@@ -196,6 +198,7 @@ function BannerBase({
   cta,
   onCta,
   children,
+  detalle,
 }: {
   testid: string;
   icon: string;
@@ -205,14 +208,20 @@ function BannerBase({
   cta: string;
   onCta: () => void;
   children: React.ReactNode;
+  /** Frase secundaria; se oculta en móvil para mantener la alerta compacta. */
+  detalle?: React.ReactNode;
 }) {
   return (
     <div
       data-testid={testid}
+      className="ork-trialbanner"
       style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', marginBottom: 20, borderRadius: 'var(--radius-md)', background: fondo, border: `1px solid ${borde}` }}
     >
-      <Icon name={icon} size={18} color={acento} />
-      <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--text-primary)', lineHeight: '20px' }}>{children}</span>
+      <Icon name={icon} size={18} color={acento} style={{ flex: 'none' }} />
+      <span className="ork-tb-msg" style={{ flex: 1, minWidth: 0, fontSize: 'var(--text-sm)', color: 'var(--text-primary)', lineHeight: '20px' }}>
+        {children}
+        {detalle && <span className="ork-tb-extra"> {detalle}</span>}
+      </span>
       <Button variant="primary" size="sm" iconRight="arrow-right" onClick={onCta}>{cta}</Button>
     </div>
   );

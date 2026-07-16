@@ -509,13 +509,13 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
       <AppHeader title="Elige fecha y hora" sub={negocio} onBack={onBack} />
       <ProgressBar steps={PASOS} current="horario" />
 
-      <div style={{ flex: 'none', background: 'var(--surface-card)', borderBottom: '1px solid var(--border-subtle)', padding: '14px 0 16px' }}>
+      <div style={{ flex: 'none', background: 'var(--surface-card)', borderBottom: '1px solid var(--border-subtle)', padding: '10px 0 12px' }}>
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 16px' }}>
           {dias.map((d) => {
             const on = d.key === activo;
             const cerrado = !bookableDia(d.key);
             return (
-              <button key={d.key} type="button" data-testid={`booking-dia-${d.key}`} disabled={cerrado} onClick={() => { if (!cerrado) onPickFecha(d.key); }} title={cerrado ? 'El negocio no atiende este día' : undefined} style={{ flex: 'none', width: 54, height: 68, borderRadius: 'var(--radius-md)', cursor: cerrado ? 'not-allowed' : 'pointer', opacity: cerrado ? 0.4 : 1, border: `1px solid ${on ? 'var(--brand)' : 'var(--border-subtle)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+              <button key={d.key} type="button" data-testid={`booking-dia-${d.key}`} disabled={cerrado} onClick={() => { if (!cerrado) onPickFecha(d.key); }} title={cerrado ? 'El negocio no atiende este día' : undefined} style={{ flex: 'none', width: 50, height: 60, borderRadius: 'var(--radius-md)', cursor: cerrado ? 'not-allowed' : 'pointer', opacity: cerrado ? 0.4 : 1, border: `1px solid ${on ? 'var(--brand)' : 'var(--border-subtle)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
                 <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: on ? 'rgba(255,255,255,0.8)' : 'var(--text-tertiary)' }}>{d.isToday ? 'HOY' : d.dow}</span>
                 <span className="data" style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: on ? '#fff' : 'var(--text-primary)', lineHeight: 1, textDecoration: cerrado ? 'line-through' : 'none' }}>{d.day}</span>
                 <span style={{ fontSize: 10, color: on ? 'rgba(255,255,255,0.7)' : 'var(--text-tertiary)' }}>{cerrado ? 'Cerr.' : d.month}</span>
@@ -528,8 +528,8 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
       <ScrollArea>
         {disp.cargando ? (
           <div style={{ padding: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-              {Array.from({ length: 9 }).map((_, i) => <Card key={i} padding={0} style={{ height: 48 }}><div /></Card>)}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))', gap: 8 }}>
+              {Array.from({ length: 9 }).map((_, i) => <Card key={i} padding={0} style={{ height: 44 }}><div /></Card>)}
             </div>
           </div>
         ) : disp.error ? (
@@ -560,13 +560,13 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
 function SlotGroup({ label, slots, slot, onPick }: { label: string; slots: FranjaPublica[]; slot: FranjaPublica | null; onPick: (s: FranjaPublica) => void }) {
   if (!slots.length) return null;
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div className="eyebrow" style={{ marginBottom: 10 }}>{label}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+    <div style={{ marginBottom: 14 }}>
+      <div className="eyebrow" style={{ marginBottom: 8 }}>{label}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))', gap: 8 }}>
         {slots.map((s) => {
           const on = slot?.inicio === s.inicio;
           return (
-            <button key={s.inicio} type="button" data-testid="booking-slot" onClick={() => onPick(s)} className="data" style={{ height: 48, borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-subtle)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', color: on ? '#fff' : 'var(--text-primary)', fontSize: 'var(--text-base)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+            <button key={s.inicio} type="button" data-testid="booking-slot" onClick={() => onPick(s)} className="data" style={{ height: 44, borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-subtle)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', color: on ? '#fff' : 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
               {horaCorta(s.inicio)}
             </button>
           );

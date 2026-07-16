@@ -60,8 +60,8 @@ export function ConfigScreen() {
 
   return (
     <div className="ork-config-body">
-      <Card padding={8} style={{ position: 'sticky', top: 88 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Card padding={8} className="ork-confignav" style={{ position: 'sticky', top: 88 }}>
+        <div className="ork-confignav-list" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {SECCIONES.map((s) => {
             const on = s.id === section;
             return (

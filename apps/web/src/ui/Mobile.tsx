@@ -12,10 +12,10 @@ export function MobileFrame({ children }: { children: ReactNode }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--surface-sunken)', display: 'flex', justifyContent: 'center' }}>
       <div
+        className="ork-appframe"
         style={{
           width: '100%',
           maxWidth: 480,
-          minHeight: '100vh',
           background: 'var(--surface-page)',
           display: 'flex',
           flexDirection: 'column',
@@ -67,7 +67,7 @@ export function AppHeader({ title, sub, onBack, right }: { title: string; sub?: 
 /** Zona scrollable del contenido. */
 export function ScrollArea({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
   return (
-    <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', background: 'var(--surface-page)', ...style }}>
+    <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', background: 'var(--surface-page)', ...style }}>
       {children}
     </main>
   );

@@ -317,6 +317,7 @@ export function Card({
   padding = 16,
   style,
   testId,
+  className,
 }: {
   children: ReactNode;
   interactive?: boolean;
@@ -326,11 +327,14 @@ export function Card({
   style?: CSSProperties;
   /** data-testid opcional (inerte) — para localizar la tarjeta en pruebas E2E. */
   testId?: string;
+  /** Clase CSS opcional (p. ej. para reglas responsive). */
+  className?: string;
 }) {
   const [hover, setHover] = useState(false);
   return (
     <div
       data-testid={testId}
+      className={className}
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}

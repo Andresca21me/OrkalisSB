@@ -71,7 +71,7 @@ export function LandingPage({ vertical, go, setFunnel }: PageProps) {
     <div>
       {/* Hero con fondo animado. El fondo del hero termina en --surface-sunken
           (igual que "el problema"), así la animación se funde sin escalón. */}
-      <section className="mkt-section" style={{ position: 'relative', overflow: 'hidden', paddingBottom: 112, background: 'linear-gradient(to bottom, var(--surface-page) 52%, var(--surface-sunken) 100%)' }}>
+      <section className="mkt-section mkt-hero-section" style={{ position: 'relative', overflow: 'hidden', paddingBottom: 112, background: 'linear-gradient(to bottom, var(--surface-page) 52%, var(--surface-sunken) 100%)' }}>
         <AnimatedBackground variant="medium" intensity={0.3} speed={0.085} />
         <div className="mkt-wrap" style={{ position: 'relative', zIndex: 1 }}>
           <div className="mkt-hero">

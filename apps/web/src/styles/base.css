@@ -81,3 +81,57 @@ a:hover { color: var(--brand-hover); }
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================
+   CHROME MÓVIL (reserva pública + panel del especialista)
+   El frame ocupa exactamente el alto del viewport y el scroll
+   es interno (ScrollArea con min-height:0), así las barras
+   inferiores (FooterBar / SpecTabBar) quedan siempre ancladas
+   y nunca las tapa el contenido. `100dvh` sigue al teclado y
+   a la barra de URL; `100vh` es el fallback para navegadores
+   sin dvh.
+   ============================================================ */
+.ork-appframe {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ── Alerta de días de prueba: versión compacta en móvil ──────────────────── */
+@media (max-width: 560px) {
+  .ork-trialbanner {
+    padding: 8px 12px !important;
+    gap: 9px !important;
+    margin-bottom: 12px !important;
+  }
+  .ork-trialbanner .ork-tb-msg {
+    font-size: var(--text-xs) !important;
+    line-height: 1.3 !important;
+  }
+  /* La frase secundaria se oculta: en pantalla pequeña basta el titular. */
+  .ork-trialbanner .ork-tb-extra { display: none; }
+}
+
+/* ── Nav interno de Configuración: barra horizontal deslizable en móvil ───────
+   En escritorio es una columna sticky; al colapsar a una sola columna se
+   convierte en una tira horizontal compacta (sigue sticky y accesible) para
+   no comerse el alto útil. ------------------------------------------------- */
+@media (max-width: 720px) {
+  .ork-confignav {
+    top: 60px !important;
+    padding: 6px !important;
+  }
+  .ork-confignav-list {
+    flex-direction: row !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 4px !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .ork-confignav-list::-webkit-scrollbar { display: none; }
+  .ork-confignav-list > button {
+    flex: 0 0 auto !important;
+    white-space: nowrap;
+  }
+}

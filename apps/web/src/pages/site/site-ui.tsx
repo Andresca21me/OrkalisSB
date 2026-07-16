@@ -30,6 +30,20 @@ export const SITE_CSS = `
   .mkt-grid-3, .mkt-grid-4 { grid-template-columns: 1fr; }
   .mkt-grid-2 { grid-template-columns: 1fr !important; }
 }
+/* Móvil pequeño (320–480px): menos aire, tipografías y tarjetas más contenidas
+   para reducir el scroll y mostrar más contenido en el primer viewport.
+   Solo afecta a móvil; el escritorio conserva sus valores. */
+@media (max-width: 480px) {
+  .mkt-wrap { padding: 0 16px; }
+  .mkt-section { padding: 34px 0; }
+  .mkt-h1 { font-size: clamp(26px, 7.5vw, 36px); }
+  .mkt-h2 { font-size: clamp(23px, 6vw, 30px); }
+  .mkt-hero { gap: 26px; }
+  .mkt-hero-section { padding-bottom: 52px !important; }
+  .mkt-sectionhead { margin-bottom: 24px !important; }
+  .mkt-plancard { padding: 18px !important; }
+  .mkt-plancard .mkt-price { font-size: 26px !important; }
+}
 
 /* ── Movimiento y detalle (sin abrumar) ─────────────────────────────────── */
 /* Elevación suave al pasar el cursor sobre tarjetas. */
@@ -142,7 +156,7 @@ export function Section({ children, tone, id, style }: { children: ReactNode; to
 
 export function SectionHead({ eyebrow, title, sub, center, light, eyebrowTone }: { eyebrow?: string; title: ReactNode; sub?: ReactNode; center?: boolean; light?: boolean; eyebrowTone?: 'teal' | 'brand' }) {
   return (
-    <div style={{ maxWidth: 680, margin: center ? '0 auto' : 0, textAlign: center ? 'center' : 'left', marginBottom: 44 }}>
+    <div className="mkt-sectionhead" style={{ maxWidth: 680, margin: center ? '0 auto' : 0, textAlign: center ? 'center' : 'left', marginBottom: 44 }}>
       {eyebrow && <Reveal style={{ marginBottom: 16, display: 'inline-block' }}><Pill tone={eyebrowTone}>{eyebrow}</Pill></Reveal>}
       <Reveal delay={80}>
         <h2 className="mkt-h2" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.025em', color: light ? '#fff' : 'var(--text-primary)', margin: 0 }}>{title}</h2>
@@ -180,20 +194,20 @@ export function PlanCard({ plan, cycle, specialists, onChoose }: { plan: Plan; c
   const price = displayMonthly(plan, specialists || plan.included, cycle);
   const hi = !!plan.highlight;
   return (
-    <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', padding: 24, borderRadius: 'var(--radius-lg)', background: hi ? 'var(--navy)' : 'var(--surface-card)', color: hi ? '#fff' : 'var(--text-primary)', border: `1px solid ${hi ? 'var(--navy)' : 'var(--border-subtle)'}`, boxShadow: hi ? 'var(--shadow-lg)' : 'var(--shadow-xs)' }}>
+    <div className="mkt-plancard" style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', padding: 24, borderRadius: 'var(--radius-lg)', background: hi ? 'var(--navy)' : 'var(--surface-card)', color: hi ? '#fff' : 'var(--text-primary)', border: `1px solid ${hi ? 'var(--navy)' : 'var(--border-subtle)'}`, boxShadow: hi ? 'var(--shadow-lg)' : 'var(--shadow-xs)' }}>
       {hi && <span style={{ position: 'absolute', top: 16, right: 16 }}><Badge tone="accent" solid size="md">Recomendado</Badge></span>}
       <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-lg)', letterSpacing: '-0.01em' }}>{plan.name}</div>
       <p style={{ fontSize: 'var(--text-sm)', color: hi ? 'rgba(255,255,255,0.7)' : 'var(--text-secondary)', margin: '6px 0 16px', minHeight: 40 }}>{plan.blurb}</p>
       {plan.contact ? (
         <div style={{ marginBottom: 18 }}>
-          <div className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 30, letterSpacing: '-0.02em' }}>Desde {money(plan.base)}</div>
+          <div className="data mkt-price" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 30, letterSpacing: '-0.02em' }}>Desde {money(plan.base)}</div>
           <div style={{ fontSize: 'var(--text-xs)', color: hi ? 'rgba(255,255,255,0.6)' : 'var(--text-tertiary)', marginTop: 4 }}>/mes · hablemos de tu cadena</div>
         </div>
       ) : (
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
             <span style={{ fontSize: 'var(--text-sm)', color: hi ? 'rgba(255,255,255,0.6)' : 'var(--text-tertiary)' }}>desde</span>
-            <span className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 32, letterSpacing: '-0.02em' }}>{money(price)}</span>
+            <span className="data mkt-price" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 32, letterSpacing: '-0.02em' }}>{money(price)}</span>
             <span style={{ fontSize: 'var(--text-sm)', color: hi ? 'rgba(255,255,255,0.6)' : 'var(--text-tertiary)' }}>/mes</span>
           </div>
           <div style={{ fontSize: 'var(--text-xs)', color: hi ? 'rgba(255,255,255,0.6)' : 'var(--text-tertiary)', marginTop: 4 }}>
