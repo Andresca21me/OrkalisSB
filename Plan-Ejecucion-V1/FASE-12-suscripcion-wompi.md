@@ -1,10 +1,10 @@
 # FASE-12 · Suscripción y pasarela de pagos (Wompi)
 
 ## Objetivo
-Conectar el **cobro de la suscripción del negocio** (no de las citas) con **Wompi**, calculando el monto **por número de sucursales activas**, y dar al **operador de plataforma** las herramientas para **suspender/reactivar** cuentas según el estado de pago, conservando los datos. (Pagos del servicio al cliente final están **fuera de alcance v1**.)
+Conectar el **cobro de la suscripción del negocio** (no de las citas) con **Wompi**, calculando el monto **por plan + número de especialistas** (ADR-009), y dar al **operador de plataforma** las herramientas para **suspender/reactivar** cuentas según el estado de pago, conservando los datos. (Pagos del servicio al cliente final están **fuera de alcance v1**.)
 
 ## Prerrequisitos
-- FASE-07 (conteo de sucursales activas + estado de suscripción).
+- FASE-07 (cálculo del cargo por plan + nº especialistas + estado de suscripción).
 - FASE-05 (rol `operador_plataforma`).
 
 ---
@@ -12,7 +12,7 @@ Conectar el **cobro de la suscripción del negocio** (no de las citas) con **Wom
 ## Pasos de Claude
 
 ### 1. Módulo `suscripcion` / facturación
-- Servicio que, dado un negocio, calcula el **cargo** = f(nº sucursales activas, plan) (RF-006). Definir el/los planes (al menos uno) y el precio por sucursal.
+- Servicio que, dado un negocio, calcula el **cargo mensual** = `precio_base(plan) + max(0, nº_especialistas_activos − incluidos(plan)) × costo_especialista_adicional(plan)` (RF-006, ADR-009). El catálogo de planes (precios/cupos/funciones) es el registry en código de FASE-07.
 - Registrar el ciclo de cobro (mensual) y el estado de pago.
 
 ### 2. Integración Wompi (sandbox primero)
@@ -28,7 +28,7 @@ Conectar el **cobro de la suscripción del negocio** (no de las citas) con **Wom
 
 ### 4. Operador de plataforma (HU-PLT-001, HU-PLT-002)
 - Endpoints solo para rol `operador_plataforma`:
-  - Ver suscripciones y nº de sucursales activas por negocio; ajustar cobro al alta/baja de sucursales (RF-006).
+  - Ver suscripciones (plan + nº especialistas activos + cargo) por negocio; ajustar plan y recalcular cargo al alta/baja de especialistas o cambio de plan (RF-006, ADR-009).
   - `POST /api/plataforma/negocios/:id/suspender` → `estado_suscripcion='suspendida'`. Los usuarios ven aviso de cuenta suspendida al iniciar sesión (guard de FASE-05) **pero los datos se conservan íntegros** (RF-007).
   - `POST /api/plataforma/negocios/:id/reactivar` → `estado_suscripcion='activa'`, acceso completo restaurado.
 
@@ -53,9 +53,9 @@ Conectar el **cobro de la suscripción del negocio** (no de las citas) con **Wom
 ## Verificación / Done
 - En sandbox, un pago de prueba dispara el webhook, la firma se valida y la suscripción queda al día.
 - Suspender un negocio bloquea el acceso de sus usuarios (aviso claro) pero **conserva** todos sus datos; reactivar restaura el acceso intacto.
-- Alta/baja de sucursal ajusta el cobro al nuevo nº de sucursales activas.
+- Alta/baja de especialista o cambio de plan ajusta el cargo mensual correctamente.
 - El operador de plataforma no puede ver datos operativos internos de los negocios (solo suscripción/estado).
-- Pruebas: verificación de firma del webhook, suspensión/reactivación no destructiva, recálculo por sucursales.
+- Pruebas: verificación de firma del webhook, suspensión/reactivación no destructiva, **recálculo del cargo por plan + nº especialistas**.
 
 ## Trazabilidad
-- RF-006, RF-007, RNF-012. HU-PLT-001, HU-PLT-002. ADR-001 (aislamiento), decisión de pasarela (Wompi). Definición §5 (pago del servicio fuera de alcance; Orkalis cobra la suscripción).
+- RF-006, RF-007, RNF-012. HU-PLT-001, HU-PLT-002. ADR-001 (aislamiento), **ADR-009 (modelo de cobro)**, decisión de pasarela (Wompi). Definición §5 (pago del servicio fuera de alcance; Orkalis cobra la suscripción).

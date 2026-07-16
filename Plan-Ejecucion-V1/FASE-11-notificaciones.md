@@ -42,6 +42,12 @@ El dominio depende SOLO de esta interfaz, nunca de Twilio directamente.
 ### 5. Plantillas
 - Plantillas de mensaje en **español**, con datos del turno (sucursal, especialista, servicio, fecha/hora) formateados `es-CO`.
 
+### 6. Cupos de mensajería por plan (ADR-009)
+- Cada plan define **cupos mensuales por canal** (WhatsApp Utility, WhatsApp Marketing, SMS, Email), con un **cupo base** + **adicional por cada especialista extra**. Catálogo canónico en ADR-009 (registry de planes, FASE-07).
+- **Contabilizar el consumo** por negocio y canal en el período de facturación (tabla de consumo o contador) y compararlo contra el cupo resuelto = `base(plan, canal) + (nº_especialistas − incluidos) × adicional(plan, canal)`.
+- Al **agotar el cupo** de un canal: degradar con gracia (p. ej. usar canal de respaldo más barato o detener marketing) y avisar al admin; **utility/confirmaciones/recordatorios** no deben cortarse abruptamente (afectan al cliente final). Política de exceso documentada.
+- El **marketing** se vende como **paquetes de créditos adicionales** (no se regala el canal más costoso).
+
 ---
 
 ## ⚠️ ACCIÓN DEL USUARIO
@@ -62,6 +68,7 @@ El dominio depende SOLO de esta interfaz, nunca de Twilio directamente.
 - El recordatorio respeta `ventana_recordatorio_horas` del config.
 - Cancelación por el negocio dispara aviso al cliente.
 - Cambiar de proveedor (mock↔twilio) no toca el código de dominio (solo el adaptador).
+- El consumo por canal se contabiliza y, al alcanzar el cupo del plan, se aplica la política de exceso (degradación/aviso) sin cortar recordatorios/confirmaciones.
 
 ## Trazabilidad
-- ADR-007 completo, ADR-002 (canal configurable), ADR-003 (OTP), RNF-002, RNF-011. RF-047, RF-048, HU-CLI-005.
+- ADR-007 completo, ADR-002 (canal configurable), ADR-003 (OTP), **ADR-009 (cupos de mensajería por plan)**, RNF-002, RNF-011. RF-047, RF-048, HU-CLI-005.

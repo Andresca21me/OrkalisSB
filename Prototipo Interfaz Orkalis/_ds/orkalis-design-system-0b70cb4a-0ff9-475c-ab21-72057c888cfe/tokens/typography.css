@@ -1,0 +1,40 @@
+/* ============================================================
+   ORKALIS — TYPOGRAPHY TOKENS
+   Display: Plus Jakarta Sans (700/800, tracking -0.02em)
+   Body/UI: DM Sans (400/500/600)
+   Mono/Data: JetBrains Mono (400/500)
+   Never: Inter, Roboto, Open Sans.
+   ============================================================ */
+
+:root {
+  /* --- Families --- */
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* --- Weights --- */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+  --weight-extrabold:800;
+
+  /* --- Type scale (8pt baseline). Pairs: size / line-height --- */
+  --text-xs:   11px;   --leading-xs:  16px;
+  --text-sm:   13px;   --leading-sm:  20px;
+  --text-base: 15px;   --leading-base:24px;
+  --text-md:   17px;   --leading-md:  28px;
+  --text-lg:   20px;   --leading-lg:  32px;
+  --text-xl:   24px;   --leading-xl:  36px;
+  --text-2xl:  30px;   --leading-2xl: 40px;
+  --text-3xl:  38px;   --leading-3xl: 48px;
+  --text-4xl:  48px;   --leading-4xl: 56px;
+  --text-5xl:  60px;   --leading-5xl: 68px;
+
+  /* --- Tracking --- */
+  --tracking-display: -0.02em;  /* headlines */
+  --tracking-tight:   -0.04em;  /* wordmark / large display */
+  --tracking-normal:  0em;      /* body */
+  --tracking-wide:    0.02em;   /* small caps labels */
+  --tracking-caps:    0.06em;   /* uppercase eyebrows */
+}

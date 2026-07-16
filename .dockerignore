@@ -1,0 +1,18 @@
+node_modules
+**/node_modules
+**/dist
+**/build
+.git
+.github
+coverage
+*.log
+.env
+.env.*
+!.env.example
+apps/web
+Prototipo Interfaz Orkalis
+Documentacion
+Plan-Ejecucion-V1
+*.md
+*.zip
+*.pdf

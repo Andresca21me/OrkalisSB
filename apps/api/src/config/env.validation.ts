@@ -1,0 +1,61 @@
+import { z } from 'zod';
+
+/**
+ * Esquema de validación de variables de entorno (FASE-01, §6).
+ *
+ * Solo se exigen las variables necesarias HOY. El resto (auth, Twilio, Wompi…)
+ * se irán marcando como requeridas en su fase correspondiente. Mantener en
+ * sincronía con `apps/api/.env.example`.
+ */
+export const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(3000),
+  CORS_ORIGIN: z.string().default('http://localhost:5173'),
+
+  // Rate limiting (RNF-011). Defaults de producción: 120 req/min por IP. Se
+  // exponen como env para poder subir el techo en entornos donde varios
+  // usuarios comparten IP (NAT de un negocio) o en pruebas E2E (un solo origen).
+  THROTTLE_TTL_MS: z.coerce.number().int().positive().default(60_000),
+  THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),
+
+  // Base de datos (FASE-02): opcional aún en FASE-01.
+  DATABASE_URL: z.string().optional(),
+  // Conexión admin (FASE-04): migraciones/seed/fixtures con el rol dueño.
+  DATABASE_URL_ADMIN: z.string().optional(),
+
+  // Auth (FASE-05): requeridos. Secretos largos y aleatorios (RNF-012).
+  JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET debe tener ≥32 caracteres'),
+  JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET debe tener ≥32 caracteres'),
+  JWT_ACCESS_TTL: z.coerce.number().int().positive().default(900),
+  JWT_REFRESH_TTL: z.coerce.number().int().positive().default(1209600),
+
+  // OTP / SMS (FASE-08 / FASE-11) — Twilio.
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM_NUMBER: z.string().optional(),
+
+  // Email (FASE-11) — SendGrid (opcional).
+  SENDGRID_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
+
+  // Pasarela de suscripción — Mercado Pago (Plan-Pagos FASE-02). Opcionales:
+  // sin ellas el cliente opera en modo INACTIVO (no cobra, no llama a la API).
+  MP_PUBLIC_KEY: z.string().optional(), // TEST-… / APP_USR-… (tokenización en el front)
+  MP_ACCESS_TOKEN: z.string().optional(), // credencial privada del backend
+  MP_WEBHOOK_SECRET: z.string().optional(), // clave secreta para verificar x-signature
+  MP_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+});
+
+export type Env = z.infer<typeof envSchema>;
+
+/** Validador para `@nestjs/config` (`validate`). Lanza si algo no cuadra. */
+export function validateEnv(config: Record<string, unknown>): Env {
+  const result = envSchema.safeParse(config);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
+    throw new Error(`Variables de entorno inválidas:\n${issues}`);
+  }
+  return result.data;
+}

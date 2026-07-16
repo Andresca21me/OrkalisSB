@@ -27,7 +27,7 @@ Plataforma **SaaS multi-tenant** para **salones de belleza y barberías en Colom
 - **Agendamiento público sin cuenta** para el cliente final (elige especialista/servicio, ve franjas libres en tiempo real, reserva; se identifica por teléfono con OTP).
 - **Todo configurable** por negocio y por sucursal (módulos on/off + parámetros financieros) con herencia.
 
-Jerarquía: **negocio (tenant) → sucursal → operación**. Un negocio de una sede = una sucursal. Suscripción **se cobra por número de sucursales activas**.
+Jerarquía: **negocio (tenant) → sucursal → operación**. Un negocio de una sede = una sucursal. Suscripción **se cobra por plan (Básico/Pro/Premium/Empresarial) + número de especialistas**, con cupos de mensajería por plan; multi-sede es una función del plan, no un factor de cobro (ver **ADR-009**).
 
 ---
 
@@ -47,6 +47,7 @@ Jerarquía: **negocio (tenant) → sucursal → operación**. Un negocio de una 
 | Finanzas | **servicio de dominio en la app** al completar; **snapshot** de parámetros; reversión transaccional | ADR-006 |
 | Notificaciones | puerto `NotificationSender` + **SMS (Twilio)** como proveedor inicial; email complemento; WhatsApp futuro | ADR-007 |
 | Repo / Deploy | **monorepo** (workspaces `api`/`web`/`shared`) + **Railway** (Postgres gestionado con PITR, workers, CI/CD con migraciones y pruebas como *gate*) | ADR-008 |
+| Modelo de cobro | **planes por niveles** (Básico/Pro/Premium/Empresarial) + **nº de especialistas** + **cupos de mensajería**; sucursal NO es factor de cobro | ADR-009 |
 | Pasarela suscripción | **Wompi** (Colombia) | decidido con el USUARIO |
 | Localización | **COP**, formato `es-CO`, textos en **español** | Definición §7 / RNF-004 |
 | Diseño | **demo de Claude Design** que traerá el USUARIO es la fuente de verdad visual | Definición §6 / RNF-005 |
@@ -64,7 +65,7 @@ Jerarquía: **negocio (tenant) → sucursal → operación**. Un negocio de una 
 | 04 | `FASE-04-rls-y-aislamiento.md` | Políticas RLS, repositorio base con scope, `TenantContext`, **pruebas de aislamiento** | No |
 | 05 | `FASE-05-auth-y-rbac.md` | Login/refresh/logout, argon2, claims, guards rol + alcance sucursal | No |
 | 06 | `FASE-06-configurabilidad.md` | Registry de claves, `ConfigResolver`, caché+invalidación, validación, clonado de sucursal | No |
-| 07 | `FASE-07-negocio-sucursales-suscripcion.md` | Onboarding, perfiles salón/barbería, CRUD sucursales, conteo para cobro | No |
+| 07 | `FASE-07-negocio-sucursales-suscripcion.md` | Onboarding, perfiles salón/barbería, CRUD sucursales, equipo, cálculo de cobro por plan + nº especialistas (ADR-009) | No |
 | 08 | `FASE-08-agendamiento.md` | Disponibilidad, retención TTL, máquina de estados, validadores por origen, endpoints públicos+OTP, walk-ins | No |
 | 09 | `FASE-09-motor-financiero.md` | Cálculo al completar (guard de pago), snapshot, reversión transaccional | No |
 | 10 | `FASE-10-operacion-interna.md` | Clientes/CRM, servicios, inventario opcional, ventas, gastos, liquidaciones, reportes, cierre de período | No |
@@ -79,21 +80,21 @@ Jerarquía: **negocio (tenant) → sucursal → operación**. Un negocio de una 
 
 ## 4. Tablero de progreso (actualizar al terminar cada fase)
 
-- ⬜ FASE-00 Prerrequisitos y cuentas
-- ⬜ FASE-01 Monorepo y tooling
-- ⬜ FASE-02 Postgres y Drizzle
-- ⬜ FASE-03 Esquema de datos
-- ⬜ FASE-04 RLS y aislamiento
-- ⬜ FASE-05 Auth y RBAC
-- ⬜ FASE-06 Configurabilidad
-- ⬜ FASE-07 Negocio, sucursales y suscripción
-- ⬜ FASE-08 Agendamiento
-- ⬜ FASE-09 Motor financiero
-- ⬜ FASE-10 Operación interna
-- ⬜ FASE-11 Notificaciones
-- ⬜ FASE-12 Suscripción Wompi
-- ⬜ FASE-13 Frontend
-- ⬜ FASE-14 Pruebas, observabilidad y despliegue
+- ✅ FASE-00 Prerrequisitos y cuentas (Wompi sandbox pendiente, no bloqueante hasta FASE-12)
+- ✅ FASE-01 Monorepo y tooling
+- ✅ FASE-02 Postgres y Drizzle
+- ✅ FASE-03 Esquema de datos
+- ✅ FASE-04 RLS y aislamiento
+- ✅ FASE-05 Auth y RBAC
+- ✅ FASE-06 Configurabilidad
+- ✅ FASE-07 Negocio, sucursales y suscripción
+- ✅ FASE-08 Agendamiento
+- ✅ FASE-09 Motor financiero
+- ✅ FASE-10 Operación interna
+- ✅ FASE-11 Notificaciones
+- ✅ FASE-12 Suscripción Wompi
+- ✅ FASE-13 Frontend
+- ✅ FASE-14 Pruebas, observabilidad y despliegue
 
 ---
 
@@ -117,7 +118,7 @@ Jerarquía: **negocio (tenant) → sucursal → operación**. Un negocio de una 
 | Término | Significado |
 |---|---|
 | Tenant / negocio | Cliente suscrito; unidad de aislamiento principal (`negocio_id`). |
-| Sucursal | Sede física; unidad operativa y de cobro (`sucursal_id`). |
+| Sucursal | Sede física; unidad operativa y de aislamiento (`sucursal_id`). **No** es unidad de cobro (ADR-009); multi-sede es función del plan. |
 | Walk-in | Cliente sin reserva; turno creado a mano (en vivo o retroactivo). |
 | Origen | Atributo de la cita: `agendamiento_publico` o `creacion_interna`. Decide qué validación aplica. |
 | Confirmación automática | Reserva pública que entra como `confirmada` sin aceptación manual (default). |

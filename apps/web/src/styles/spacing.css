@@ -1,0 +1,31 @@
+/* ============================================================
+   ORKALIS — SPACING & LAYOUT TOKENS
+   8pt grid. Desktop 12-col / 1280px max / 80px side padding.
+   ============================================================ */
+
+:root {
+  /* --- Spacing (8pt grid) --- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* --- Layout --- */
+  --content-max:    1280px;
+  --side-padding:   80px;
+  --grid-gutter:    24px;
+  --sidebar-width:  240px;
+  --sidebar-row-h:  44px;
+  --topnav-h:       64px;
+
+  /* --- Min touch target (a11y) --- */
+  --touch-min: 44px;
+}

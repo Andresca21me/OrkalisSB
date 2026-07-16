@@ -1,0 +1,92 @@
+name: CI
+
+# Gate de calidad (FASE-14, ADR-008): typecheck + lint + pruebas (incluidas
+# aislamiento y concurrencia) + migraciones. Si algo falla, no se despliega.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: orkalis
+          POSTGRES_PASSWORD: orkalis
+          POSTGRES_DB: orkalis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orkalis -d orkalis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      # Rol de app (sin superusuario) y rol admin (dueño) — ver FASE-04.
+      DATABASE_URL: postgres://orkalis_app:orkalis_app@localhost:5432/orkalis
+      DATABASE_URL_ADMIN: postgres://orkalis:orkalis@localhost:5432/orkalis
+      # Secretos SOLO de prueba (no son secretos de producción).
+      JWT_ACCESS_SECRET: ci_access_secret_de_pruebas_0123456789
+      JWT_REFRESH_SECRET: ci_refresh_secret_de_pruebas_0123456789
+      # E2E golpea desde un solo origen (localhost): sube el techo del rate limit
+      # para no chocar con el límite de producción (120/min/IP). No afecta prod.
+      THROTTLE_LIMIT: '100000'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Compilar paquete compartido
+        run: pnpm --filter @orkalis/shared build
+
+      - name: Typecheck (shared, api, web)
+        run: pnpm -r typecheck
+
+      - name: Lint
+        run: pnpm --filter @orkalis/shared lint && pnpm --filter api lint
+
+      - name: Migraciones (gate previo a las pruebas, ADR-004)
+        run: pnpm --filter api db:migrate
+
+      - name: Seed de datos para e2e
+        run: pnpm --filter api db:seed
+
+      - name: Pruebas (unitarias, e2e, aislamiento, concurrencia, financiero)
+        run: pnpm --filter api test
+
+      - name: Build del frontend
+        run: pnpm --filter web build
+
+      - name: Navegador de Playwright
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: API en segundo plano (para E2E)
+        run: |
+          pnpm --filter api start > /tmp/api-e2e.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3000/api/health >/dev/null && { echo "API lista"; exit 0; }
+            sleep 2
+          done
+          echo "La API no respondió a tiempo"; cat /tmp/api-e2e.log; exit 1
+
+      - name: E2E por rol (Playwright, gate — RNF-016)
+        run: pnpm --filter web e2e
+        env:
+          CI: 'true'

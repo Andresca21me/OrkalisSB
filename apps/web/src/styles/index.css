@@ -1,0 +1,121 @@
+/* Orkalis Design System — entrada global (FASE-13). Orden: fonts → tokens → base. */
+@import url('./fonts.css');
+@import url('./colors.css');
+@import url('./typography.css');
+@import url('./spacing.css');
+@import url('./radius-elevation.css');
+@import url('./base.css');
+
+/* Animaciones reutilizadas por los primitivos (Sheet, Toast, Skeleton). */
+@keyframes ork-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ork-sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes ork-toast {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes ork-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ork-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.ork-shimmer {
+  background: linear-gradient(90deg, var(--surface-sunken) 25%, var(--gray-200) 37%, var(--surface-sunken) 63%);
+  background-size: 400% 100%;
+  animation: ork-shimmer 1.4s ease infinite;
+}
+@keyframes ork-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* Botón primario: hover elaborado — gradiente azul que viaja + barrido de brillo
+   + glow + leve elevación. GPU-friendly. Lo aplica <Button variant="primary">. */
+.ork-btn-primary {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(110deg, var(--blue) 0%, var(--blue-hover) 44%, var(--blue-pressed) 100%);
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  transition:
+    background-position 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s ease,
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ork-btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 55%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: translateX(-180%) skewX(-12deg);
+  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+.ork-btn-primary:not(:disabled):hover {
+  background-position: 100% 50%;
+  box-shadow: 0 8px 22px -6px rgba(26, 115, 232, 0.55), 0 2px 6px rgba(26, 115, 232, 0.3);
+  transform: translateY(-1px);
+}
+.ork-btn-primary:not(:disabled):hover::after {
+  transform: translateX(320%) skewX(-12deg);
+}
+.ork-btn-primary:not(:disabled):active {
+  transform: translateY(0) scale(0.985);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ork-btn-primary {
+    transition: background-position 0.2s ease, box-shadow 0.2s ease;
+  }
+  .ork-btn-primary::after {
+    display: none;
+  }
+  .ork-btn-primary:not(:disabled):hover {
+    transform: none;
+  }
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Scrollbars sutiles, coherentes con el estilo. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}

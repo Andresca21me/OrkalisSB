@@ -1,18 +1,20 @@
 # Definición del Problema: Orkalis — Plataforma SaaS de Gestión para Salones y Barberías
 
 **Proyecto:** Orkalis
-**Versión:** 1.4
-**Fecha:** 2026-06-08
+**Versión:** 1.5
+**Fecha:** 2026-06-16
 **Estado:** Borrador
 **Predecesor:** NOVA — Salón & Spa (software a la medida, mono-salón, modo demo)
 
 > **Cambios v1.1:** se incorpora soporte **multi-sucursal** (negocio → sucursales, con herencia de configuración) y la **creación manual de turnos para walk-ins** (clientes sin cita previa). Afecta §2, §3, §4, §5, §6, §7 y §8.
 >
-> **Cambios v1.2:** **confirmación automática de reservas por defecto** (elimina la fricción de aceptar turno por turno; la aprobación manual pasa a ser opción configurable); **suscripción cobrada por número de sucursales**; se confirma que un especialista puede pertenecer a varias sucursales pero operar en una sola a la vez. Afecta §5, §6 y §8.
+> **Cambios v1.2:** **confirmación automática de reservas por defecto** (elimina la fricción de aceptar turno por turno; la aprobación manual pasa a ser opción configurable); **suscripción cobrada por número de sucursales** *(reemplazado en v1.5 — ver abajo)*; se confirma que un especialista puede pertenecer a varias sucursales pero operar en una sola a la vez. Afecta §5, §6 y §8.
 >
 > **Cambios v1.3:** **registro retroactivo de walk-ins** (el turno ya ocurrió y se registra después, con horas pasadas y cobro al final); la **validación de citas depende del origen** (reserva pública = estricta hacia adelante; creación interna = relajada, admite pasado). Afecta §5, §6 y §8.
 >
 > **Cambios v1.4:** se generaliza el **cobro al finalizar el turno** como regla de toda la operación (no solo walk-ins): el precio del agendamiento es estimado y el monto/servicios/pago definitivos se consolidan al completar. Afecta §5 y §8.
+>
+> **Cambios v1.5:** **se reemplaza la dimensión de cobro de la suscripción**: ya **no** se cobra por número de sucursales, sino por **plan** (Básico/Pro/Premium/Empresarial) **+ número de especialistas** (cada plan incluye una base y cobra por especialista adicional), con **cupos de mensajería** por plan. La sucursal pasa a ser una **función habilitada por el plan** (multi-sede), no un factor de precio. El detalle canónico (precios, cupos, funciones) vive en el **ADR-009**. Afecta §5 y §8.
 
 ---
 
@@ -148,7 +150,7 @@ Problemas concretos que existen hoy, antes de Orkalis:
 - Cada negocio (tenant) opera de forma **independiente**; no hay datos compartidos entre tenants salvo los de la plataforma.
 - Un negocio tiene **una o más sucursales**; el caso de una sola sede se modela como una única sucursal (no es un caso especial aparte).
 - Un especialista pertenece a **una o varias sucursales**, pero su agenda y disponibilidad se gestionan **por sucursal** (atiende en una sede a la vez en un momento dado).
-- La **suscripción se administra a nivel de negocio y se cobra según el número de sucursales activas**; los tramos/planes concretos se definirán en el ADR de facturación, pero la dimensión de cobro (por sucursal) está fijada.
+- La **suscripción se administra a nivel de negocio y se cobra por plan + número de especialistas** (planes Básico/Pro/Premium/Empresarial: precio base con especialistas incluidos + costo por especialista adicional), con **cupos de mensajería** por plan. La sucursal **no** es factor de cobro: multi-sede es una función habilitada por el plan. El detalle canónico (precios, cupos, funciones) está fijado en el **ADR-009**.
 - Un **walk-in** puede ser un cliente nuevo o existente; su registro es ágil y la captura de datos (teléfono, nombre) es opcional pero recomendada para trazabilidad.
 - Un walk-in puede registrarse **después de que el servicio ya terminó** (horas en el pasado); en ese caso no aplican las validaciones de disponibilidad futura ni el bloqueo de concurrencia, solo chequeos de sanidad (fin ≥ inicio, dentro del período contable abierto, especialista y sucursal válidos).
 - El cliente final tiene un **teléfono móvil** y acceso a un navegador para abrir el enlace público; no se le exige instalar nada ni crear cuenta.

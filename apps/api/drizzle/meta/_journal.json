@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1781632890342,
+      "tag": "0000_init_extensions",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781633466445,
+      "tag": "0001_tidy_spitfire",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781634002062,
+      "tag": "0002_rls_y_rol_app",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781637601931,
+      "tag": "0003_ambitious_wendell_vaughn",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781640397945,
+      "tag": "0004_outstanding_silvermane",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781645180796,
+      "tag": "0005_thankful_ultimatum",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781645931804,
+      "tag": "0006_shocking_morlocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782491186389,
+      "tag": "0007_stormy_smasher",
+      "breakpoints": true
+    }
+  ]
+}

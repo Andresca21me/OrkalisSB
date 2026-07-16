@@ -1,0 +1,27 @@
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+build/
+.turbo/
+
+# Entorno / secretos (RNF-012) — nunca commitear .env, sí el ejemplo
+.env
+.env.*
+!.env.example
+
+# Pruebas / cobertura
+coverage/
+
+# Logs
+*.log
+
+# Sistema operativo
+.DS_Store
+
+# Playwright (FASE-14)
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
+apps/web/.playwright/

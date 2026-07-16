@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Orkalis · La plataforma para tu salón o barbería</title>
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  html, body { margin: 0; min-height: 100%; background: var(--surface-page); }
+  #root { width: 100%; }
+  * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+  @keyframes ork-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes ork-pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes ork-toast { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 999px; border: 3px solid var(--surface-page); }
+  h1, h2, h3, h4 { line-height: 1.12; margin: 0; }
+  table { border-collapse: collapse; }
+  button { font-family: var(--font-body); }
+
+  /* layout helpers */
+  .mkt-wrap { max-width: 1200px; margin: 0 auto; }
+  .mkt-section { padding: 72px 40px; }
+  .mkt-h1 { font-size: 54px; }
+  .mkt-h2 { font-size: 36px; }
+  .mkt-desktop { display: flex; }
+  .mkt-mobile { display: none; }
+
+  /* responsive */
+  @media (max-width: 1024px) {
+    .mkt-grid-4, .mkt-plans { grid-template-columns: repeat(2, 1fr) !important; }
+  }
+  @media (max-width: 900px) {
+    .mkt-hero { grid-template-columns: 1fr !important; }
+    .mkt-hero-art { justify-content: flex-start !important; margin-top: 8px; }
+    .mkt-funnel, .mkt-calc { grid-template-columns: 1fr !important; }
+    .mkt-footer-grid { grid-template-columns: repeat(3, 1fr) !important; }
+  }
+  @media (max-width: 860px) {
+    .mkt-desktop { display: none !important; }
+    .mkt-nav .mkt-mobile { display: inline-flex !important; }
+  }
+  @media (max-width: 768px) {
+    .mkt-section { padding: 48px 20px; }
+    .mkt-h1 { font-size: 34px; }
+    .mkt-h2 { font-size: 26px; }
+    .mkt-grid-3 { grid-template-columns: 1fr !important; }
+    .mkt-grid-2 { grid-template-columns: 1fr !important; }
+    .mkt-footer-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  }
+  @media (max-width: 560px) {
+    .mkt-grid-4, .mkt-plans { grid-template-columns: 1fr !important; }
+    .mkt-phone { display: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="data.js"></script>
+  <script src="site-data.js"></script>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="ork-ui.jsx"></script>
+  <script type="text/babel" src="site-ui.jsx"></script>
+  <script type="text/babel" src="site-pages.jsx"></script>
+  <script type="text/babel" src="site-funnel.jsx"></script>
+  <script type="text/babel" src="site-support.jsx"></script>
+  <script type="text/babel" src="site-app.jsx"></script>
+</body>
+</html>

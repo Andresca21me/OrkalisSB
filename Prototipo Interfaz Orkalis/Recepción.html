@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Orkalis · Recepción</title>
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  html, body { margin: 0; min-height: 100%; background: var(--surface-page); }
+  #root { width: 100%; }
+  .ork-shimmer {
+    background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 37%, var(--gray-100) 63%);
+    background-size: 400% 100%; animation: ork-shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes ork-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+  @keyframes ork-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes ork-pop { from { opacity: 0; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+  @keyframes ork-toast { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  * { -webkit-tap-highlight-color: transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 999px; border: 3px solid var(--surface-page); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+  h1, h2, h3, h4 { line-height: 1.12; }
+  table { border-collapse: collapse; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="data.js"></script>
+  <script src="specialist-data.js"></script>
+  <script src="admin-data.js"></script>
+  <script src="admin-data-config.js"></script>
+  <script src="admin-data-recepcion.js"></script>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="ork-ui.jsx"></script>
+  <script type="text/babel" src="admin-ui.jsx"></script>
+  <script type="text/babel" src="admin-gestion-ui.jsx"></script>
+  <script type="text/babel" src="admin-screens-clientes.jsx"></script>
+  <script type="text/babel" src="admin-modals.jsx"></script>
+  <script type="text/babel" src="admin-modals-ventas.jsx"></script>
+  <script type="text/babel" src="recepcion-app.jsx"></script>
+</body>
+</html>

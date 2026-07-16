@@ -1,0 +1,25 @@
+# Ignore específico para el build del FRONTEND (BuildKit lo prioriza sobre el
+# .dockerignore raíz, que excluye apps/web porque está pensado para el backend).
+# Aquí SÍ necesitamos apps/web, pero seguimos excluyendo lo pesado/secreto.
+node_modules
+**/node_modules
+**/dist
+**/build
+.git
+.github
+coverage
+*.log
+.env
+.env.*
+!.env.example
+Prototipo Interfaz Orkalis
+Documentacion
+Plan-Ejecucion-V1
+Plan-Ejecucion-V2
+Plan-Ejecucion-V3
+Plan-Ejecucion-Mensajeria
+Plan-Ejecucion-Pagos-Suscripciones
+apps/web/e2e
+apps/web/test-results
+*.zip
+*.pdf

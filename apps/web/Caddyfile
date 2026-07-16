@@ -1,0 +1,16 @@
+# Sirve el SPA de Orkalis. Railway inyecta $PORT; en local por defecto 8080.
+:{$PORT:8080} {
+	root * /srv
+	encode gzip zstd
+
+	# Assets con hash → cache larga e inmutable.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	# index.html nunca se cachea (para que un deploy nuevo se vea al instante).
+	header /index.html Cache-Control "no-cache"
+
+	# Fallback SPA: cualquier ruta desconocida sirve index.html (react-router).
+	try_files {path} /index.html
+	file_server
+}

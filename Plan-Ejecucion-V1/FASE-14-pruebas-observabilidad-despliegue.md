@@ -73,4 +73,4 @@ Asegurar que existen y pasan:
 ---
 
 ## 🎉 Cierre de la v1
-Al pasar la verificación de esta fase con todas las anteriores en ✅, Orkalis v1 está **levantado**: SaaS multi-tenant robusto, agendamiento público sin fricción con 0 dobles reservas, app del especialista, configurabilidad con herencia, motor financiero auditable, notificaciones, suscripción por sucursales y despliegue gestionado. Actualiza el tablero de progreso en `PLAN-V1.md`.
+Al pasar la verificación de esta fase con todas las anteriores en ✅, Orkalis v1 está **levantado**: SaaS multi-tenant robusto, agendamiento público sin fricción con 0 dobles reservas, app del especialista, configurabilidad con herencia, motor financiero auditable, notificaciones con cupos por plan, suscripción por plan + nº de especialistas (ADR-009) y despliegue gestionado. Actualiza el tablero de progreso en `PLAN-V1.md`.

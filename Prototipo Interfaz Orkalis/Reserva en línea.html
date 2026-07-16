@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Orkalis · Reserva en línea</title>
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #0F1923; }
+  #root { width: 100%; height: 100%; }
+  .stage {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(120% 120% at 50% 0%, #16222f 0%, #0F1923 55%, #0a0f14 100%);
+    padding: 24px;
+    box-sizing: border-box;
+  }
+  /* malla geométrica de fondo del escenario */
+  .stage::before {
+    content: ""; position: absolute; inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 22px 22px; pointer-events: none;
+  }
+  .ork-shimmer {
+    background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 37%, var(--gray-100) 63%);
+    background-size: 400% 100%;
+    animation: ork-shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes ork-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+  @keyframes ork-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes ork-pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+  @keyframes ork-sheet { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes ork-toast { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  * { -webkit-tap-highlight-color: transparent; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div id="root"></div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="data.js"></script>
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="ork-ui.jsx"></script>
+  <script type="text/babel" src="screens-common.jsx"></script>
+  <script type="text/babel" src="screens-flow-a.jsx"></script>
+  <script type="text/babel" src="screens-flow-b.jsx"></script>
+  <script type="text/babel" src="screens-flow-c.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

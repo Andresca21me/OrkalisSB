@@ -1,0 +1,124 @@
+/* ============================================================
+   ORKALIS — COLOR TOKENS
+   Cool-toned SaaS palette. Navy authority + electric blue action
+   + teal precision accent. Light & dark surfaces both first-class.
+   ============================================================ */
+
+:root {
+  /* --- Brand core --- */
+  --navy:            #0F1923; /* primary surfaces, sidebars, nav */
+  --blue:            #1A73E8; /* electric blue — brand, CTAs, links */
+  --blue-hover:      #4D94F0; /* lighter — hover */
+  --blue-pressed:    #1558C0; /* darker — pressed */
+  --teal:            #00D4AA; /* accent — success/highlight/KPI growth */
+
+  /* --- Backgrounds --- */
+  --bg-light:        #F8FAFC; /* near-white, cool undertone */
+  --bg-dark:         #0A0F14; /* deep dark dashboard surface */
+
+  /* --- Card surfaces --- */
+  --card-light:      #FFFFFF;
+  --card-light-border: #E2E8F0;
+  --card-dark:       #111827;
+  --card-dark-border:  #1F2937;
+
+  /* --- Semantic --- */
+  --success:         #10B981;
+  --warning:         #F59E0B;
+  --error:           #EF4444;
+  --info:            #3B82F6;
+
+  /* --- Gray scale (cool / slate) --- */
+  --gray-50:         #F8FAFC;
+  --gray-100:        #F1F5F9;
+  --gray-200:        #E2E8F0;
+  --gray-300:        #CBD5E1;
+  --gray-400:        #94A3B8;
+  --gray-500:        #64748B;
+  --gray-600:        #475569;
+  --gray-700:        #334155;
+  --gray-800:        #1E293B;
+  --gray-900:        #0F172A;
+  --gray-950:        #020617;
+
+  /* ============================================================
+     SEMANTIC ALIASES — light mode (default)
+     ============================================================ */
+  --surface-page:        var(--bg-light);
+  --surface-card:        var(--card-light);
+  --surface-raised:      var(--card-light);
+  --surface-sunken:      var(--gray-100);
+  --surface-inverse:     var(--navy);
+
+  --border-subtle:       var(--gray-200);
+  --border-default:      var(--gray-300);
+  --border-strong:       var(--gray-400);
+
+  --text-primary:        var(--gray-900);
+  --text-secondary:      var(--gray-600);
+  --text-tertiary:       var(--gray-500);
+  --text-disabled:       var(--gray-400);
+  --text-inverse:        #FFFFFF;
+  --text-on-brand:       #FFFFFF;
+  --text-link:           var(--blue);
+
+  --brand:               var(--blue);
+  --brand-hover:         var(--blue-hover);
+  --brand-pressed:       var(--blue-pressed);
+  --accent:              var(--teal);
+
+  --focus-ring:          var(--blue);
+
+  /* Tinted fills (light) */
+  --brand-tint:          rgba(26, 115, 232, 0.08);
+  --teal-tint:           rgba(0, 212, 170, 0.10);
+  --success-tint:        rgba(16, 185, 129, 0.10);
+  --warning-tint:        rgba(245, 158, 11, 0.12);
+  --error-tint:          rgba(239, 68, 68, 0.10);
+  --info-tint:           rgba(59, 130, 246, 0.10);
+}
+
+/* ============================================================
+   DARK MODE — manual (.dark) + system fallback
+   ============================================================ */
+.dark {
+  --surface-page:        var(--bg-dark);
+  --surface-card:        var(--card-dark);
+  --surface-raised:      #161F2B;
+  --surface-sunken:      #070B0F;
+  --surface-inverse:     var(--gray-100);
+
+  --border-subtle:       var(--card-dark-border);
+  --border-default:      #2A3441;
+  --border-strong:       var(--gray-700);
+
+  --text-primary:        #F1F5F9;
+  --text-secondary:      var(--gray-400);
+  --text-tertiary:       var(--gray-500);
+  --text-disabled:       var(--gray-600);
+  --text-inverse:        var(--gray-900);
+  --text-on-brand:       #FFFFFF;
+  --text-link:           var(--blue-hover);
+
+  --brand-tint:          rgba(26, 115, 232, 0.16);
+  --teal-tint:           rgba(0, 212, 170, 0.16);
+  --success-tint:        rgba(16, 185, 129, 0.16);
+  --warning-tint:        rgba(245, 158, 11, 0.18);
+  --error-tint:          rgba(239, 68, 68, 0.16);
+  --info-tint:           rgba(59, 130, 246, 0.16);
+}
+
+/* System-preference dark mode:
+   Dark tokens live on the registered `.dark` scope above. To auto-enable
+   dark on a user's system preference, add `.dark` to <html> at boot:
+
+     <script>
+       if (matchMedia('(prefers-color-scheme: dark)').matches
+           && !document.documentElement.classList.contains('light')) {
+         document.documentElement.classList.add('dark');
+       }
+     </script>
+
+   Apps with a manual toggle just add/remove `.dark` (and optionally `.light`
+   to pin light mode). This keeps every theme token under a single registrable
+   selector instead of a `:not()` media block. */

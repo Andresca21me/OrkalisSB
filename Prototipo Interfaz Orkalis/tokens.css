@@ -1,0 +1,342 @@
+/* Orkalis tokens — assembled for the booking prototype */
+
+/* ===== fonts.css ===== */
+/* ============================================================
+   ORKALIS — WEBFONTS
+   Plus Jakarta Sans (display, 700/800)
+   DM Sans (body, 400/500/600)
+   JetBrains Mono (data/code, 400/500)
+
+   NOTE: Loaded from the Google Fonts CDN rather than bundled as
+   local binaries. These are the exact, correct families — not
+   substitutes. If you need fully offline/self-hosted binaries,
+   ask and we will vendor the .woff2 files into assets/fonts/.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@700;800&display=swap');
+
+
+/* ===== colors.css ===== */
+/* ============================================================
+   ORKALIS — COLOR TOKENS
+   Cool-toned SaaS palette. Navy authority + electric blue action
+   + teal precision accent. Light & dark surfaces both first-class.
+   ============================================================ */
+
+:root {
+  /* --- Brand core --- */
+  --navy:            #0F1923; /* primary surfaces, sidebars, nav */
+  --blue:            #1A73E8; /* electric blue — brand, CTAs, links */
+  --blue-hover:      #4D94F0; /* lighter — hover */
+  --blue-pressed:    #1558C0; /* darker — pressed */
+  --teal:            #00D4AA; /* accent — success/highlight/KPI growth */
+
+  /* --- Backgrounds --- */
+  --bg-light:        #F8FAFC; /* near-white, cool undertone */
+  --bg-dark:         #0A0F14; /* deep dark dashboard surface */
+
+  /* --- Card surfaces --- */
+  --card-light:      #FFFFFF;
+  --card-light-border: #E2E8F0;
+  --card-dark:       #111827;
+  --card-dark-border:  #1F2937;
+
+  /* --- Semantic --- */
+  --success:         #10B981;
+  --warning:         #F59E0B;
+  --error:           #EF4444;
+  --info:            #3B82F6;
+
+  /* --- Gray scale (cool / slate) --- */
+  --gray-50:         #F8FAFC;
+  --gray-100:        #F1F5F9;
+  --gray-200:        #E2E8F0;
+  --gray-300:        #CBD5E1;
+  --gray-400:        #94A3B8;
+  --gray-500:        #64748B;
+  --gray-600:        #475569;
+  --gray-700:        #334155;
+  --gray-800:        #1E293B;
+  --gray-900:        #0F172A;
+  --gray-950:        #020617;
+
+  /* ============================================================
+     SEMANTIC ALIASES — light mode (default)
+     ============================================================ */
+  --surface-page:        var(--bg-light);
+  --surface-card:        var(--card-light);
+  --surface-raised:      var(--card-light);
+  --surface-sunken:      var(--gray-100);
+  --surface-inverse:     var(--navy);
+
+  --border-subtle:       var(--gray-200);
+  --border-default:      var(--gray-300);
+  --border-strong:       var(--gray-400);
+
+  --text-primary:        var(--gray-900);
+  --text-secondary:      var(--gray-600);
+  --text-tertiary:       var(--gray-500);
+  --text-disabled:       var(--gray-400);
+  --text-inverse:        #FFFFFF;
+  --text-on-brand:       #FFFFFF;
+  --text-link:           var(--blue);
+
+  --brand:               var(--blue);
+  --brand-hover:         var(--blue-hover);
+  --brand-pressed:       var(--blue-pressed);
+  --accent:              var(--teal);
+
+  --focus-ring:          var(--blue);
+
+  /* Tinted fills (light) */
+  --brand-tint:          rgba(26, 115, 232, 0.08);
+  --teal-tint:           rgba(0, 212, 170, 0.10);
+  --success-tint:        rgba(16, 185, 129, 0.10);
+  --warning-tint:        rgba(245, 158, 11, 0.12);
+  --error-tint:          rgba(239, 68, 68, 0.10);
+  --info-tint:           rgba(59, 130, 246, 0.10);
+}
+
+/* ============================================================
+   DARK MODE — manual (.dark) + system fallback
+   ============================================================ */
+.dark {
+  --surface-page:        var(--bg-dark);
+  --surface-card:        var(--card-dark);
+  --surface-raised:      #161F2B;
+  --surface-sunken:      #070B0F;
+  --surface-inverse:     var(--gray-100);
+
+  --border-subtle:       var(--card-dark-border);
+  --border-default:      #2A3441;
+  --border-strong:       var(--gray-700);
+
+  --text-primary:        #F1F5F9;
+  --text-secondary:      var(--gray-400);
+  --text-tertiary:       var(--gray-500);
+  --text-disabled:       var(--gray-600);
+  --text-inverse:        var(--gray-900);
+  --text-on-brand:       #FFFFFF;
+  --text-link:           var(--blue-hover);
+
+  --brand-tint:          rgba(26, 115, 232, 0.16);
+  --teal-tint:           rgba(0, 212, 170, 0.16);
+  --success-tint:        rgba(16, 185, 129, 0.16);
+  --warning-tint:        rgba(245, 158, 11, 0.18);
+  --error-tint:          rgba(239, 68, 68, 0.16);
+  --info-tint:           rgba(59, 130, 246, 0.16);
+}
+
+/* System-preference dark mode:
+   Dark tokens live on the registered `.dark` scope above. To auto-enable
+   dark on a user's system preference, add `.dark` to <html> at boot:
+
+     <script>
+       if (matchMedia('(prefers-color-scheme: dark)').matches
+           && !document.documentElement.classList.contains('light')) {
+         document.documentElement.classList.add('dark');
+       }
+     </script>
+
+   Apps with a manual toggle just add/remove `.dark` (and optionally `.light`
+   to pin light mode). This keeps every theme token under a single registrable
+   selector instead of a `:not()` media block. */
+
+
+/* ===== typography.css ===== */
+/* ============================================================
+   ORKALIS — TYPOGRAPHY TOKENS
+   Display: Plus Jakarta Sans (700/800, tracking -0.02em)
+   Body/UI: DM Sans (400/500/600)
+   Mono/Data: JetBrains Mono (400/500)
+   Never: Inter, Roboto, Open Sans.
+   ============================================================ */
+
+:root {
+  /* --- Families --- */
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* --- Weights --- */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+  --weight-extrabold:800;
+
+  /* --- Type scale (8pt baseline). Pairs: size / line-height --- */
+  --text-xs:   11px;   --leading-xs:  16px;
+  --text-sm:   13px;   --leading-sm:  20px;
+  --text-base: 15px;   --leading-base:24px;
+  --text-md:   17px;   --leading-md:  28px;
+  --text-lg:   20px;   --leading-lg:  32px;
+  --text-xl:   24px;   --leading-xl:  36px;
+  --text-2xl:  30px;   --leading-2xl: 40px;
+  --text-3xl:  38px;   --leading-3xl: 48px;
+  --text-4xl:  48px;   --leading-4xl: 56px;
+  --text-5xl:  60px;   --leading-5xl: 68px;
+
+  /* --- Tracking --- */
+  --tracking-display: -0.02em;  /* headlines */
+  --tracking-tight:   -0.04em;  /* wordmark / large display */
+  --tracking-normal:  0em;      /* body */
+  --tracking-wide:    0.02em;   /* small caps labels */
+  --tracking-caps:    0.06em;   /* uppercase eyebrows */
+}
+
+
+/* ===== spacing.css ===== */
+/* ============================================================
+   ORKALIS — SPACING & LAYOUT TOKENS
+   8pt grid. Desktop 12-col / 1280px max / 80px side padding.
+   ============================================================ */
+
+:root {
+  /* --- Spacing (8pt grid) --- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* --- Layout --- */
+  --content-max:    1280px;
+  --side-padding:   80px;
+  --grid-gutter:    24px;
+  --sidebar-width:  240px;
+  --sidebar-row-h:  44px;
+  --topnav-h:       64px;
+
+  /* --- Min touch target (a11y) --- */
+  --touch-min: 44px;
+}
+
+
+/* ===== radius-elevation.css ===== */
+/* ============================================================
+   ORKALIS — RADIUS & ELEVATION TOKENS
+   Sharp-ish geometry (6–8px core). No uniform rounded-2xl.
+   Neutral shadows only — no colored / Material shadows.
+   ============================================================ */
+
+:root {
+  /* --- Border radius --- */
+  --radius-xs:   4px;    /* inputs, badges, subtle containers */
+  --radius-sm:   6px;    /* cards, dropdowns, tooltips */
+  --radius-md:   8px;    /* primary cards, modals, panels */
+  --radius-lg:   12px;   /* large content cards, feature blocks */
+  --radius-xl:   16px;   /* hero cards only */
+  --radius-pill: 9999px; /* tags, status chips */
+
+  /* --- Border widths --- */
+  --border-hairline: 1px;
+  --border-thick:    2px;
+
+  /* --- Elevation (neutral, layered) --- */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.05);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.10);
+
+  /* --- Focus ring --- */
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* --- Motion --- */
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);   /* @kind other */
+  --ease-in-out:cubic-bezier(0.65, 0, 0.35, 1);  /* @kind other */
+  --dur-fast:   120ms;  /* @kind other */
+  --dur-base:   180ms;  /* @kind other */
+  --dur-slow:   260ms;  /* @kind other */
+}
+
+.dark {
+  /* Deeper shadows read better on dark surfaces */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.40), 0 2px 4px rgba(0,0,0,0.30);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.45), 0 4px 6px rgba(0,0,0,0.30);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.55);
+}
+
+
+/* ===== base.css ===== */
+/* ============================================================
+   ORKALIS — BASE LAYER
+   Sensible element defaults built on the token layer.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: var(--weight-regular);
+  color: var(--text-primary);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-display);
+  color: var(--text-primary);
+  margin: 0;
+  text-wrap: balance;
+}
+
+p { text-wrap: pretty; }
+
+code, pre, kbd, samp {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+a {
+  color: var(--text-link);
+  text-decoration: none;
+}
+a:hover { color: var(--brand-hover); }
+
+/* Universal focus treatment — always visible, never removed */
+:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--radius-xs);
+}
+
+/* Eyebrow / overline label */
+.eyebrow {
+  font-family: var(--font-body);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* Monospace data treatment */
+.data {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
+}
+
+::selection {
+  background: var(--brand-tint);
+  color: var(--text-primary);
+}
+

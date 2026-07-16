@@ -51,7 +51,7 @@ Sistema nuevo e independiente que reemplaza al software a la medida NOVA. Se com
 - Creación manual de turnos (walk-in en vivo y retroactivo) con validación dependiente del origen.
 - Gestión interna: clientes/CRM, catálogo de servicios con repartición, inventario opcional, ventas, gastos, liquidaciones.
 - Cálculo financiero con cobro al finalizar, reportes y exportaciones (CSV/PDF).
-- Suscripción cobrada por número de sucursales activas y suspensión por estado de pago.
+- Suscripción cobrada por plan (Básico/Pro/Premium/Empresarial) + número de especialistas, con cupos de mensajería por plan y suspensión por estado de pago (ADR-009).
 - Notificaciones de confirmación y recordatorio.
 
 ### 2.3 Usuarios del Sistema
@@ -96,7 +96,7 @@ Sistema nuevo e independiente que reemplaza al software a la medida NOVA. Se com
 
 **RF-005 — Aislamiento de datos multi-tenant.** El sistema debe garantizar que ningún usuario acceda a datos de otro negocio ni de una sucursal fuera de su alcance, aplicando scope obligatorio y RLS. *Alta · HU-ADM-002 / ADR-001*
 
-**RF-006 — Suscripción por número de sucursales.** El sistema debe calcular el cobro de la suscripción según el número de sucursales activas y ajustarlo al alta o baja de sucursales. *Alta · HU-PLT-001*
+**RF-006 — Suscripción por plan + número de especialistas.** El sistema debe calcular el cobro de la suscripción según el **plan** contratado (Básico/Pro/Premium/Empresarial) más el **número de especialistas** del negocio (precio base + costo por especialista adicional), y ajustarlo al alta o baja de especialistas o al cambio de plan. Cada plan define **cupos mensuales de mensajería** (WhatsApp Utility/Marketing, SMS, Email) y habilita funciones (multi-sede, reportes, fidelización, etc.). *Alta · HU-PLT-001 / ADR-009*
 
 **RF-007 — Suspensión y reactivación por estado de pago.** El operador de plataforma debe poder suspender o reactivar el acceso de un negocio según su pago, conservando íntegros los datos durante la suspensión. *Alta · HU-PLT-002*
 

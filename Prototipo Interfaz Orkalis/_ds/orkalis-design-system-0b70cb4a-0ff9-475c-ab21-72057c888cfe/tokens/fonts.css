@@ -1,0 +1,13 @@
+/* ============================================================
+   ORKALIS — WEBFONTS
+   Plus Jakarta Sans (display, 700/800)
+   DM Sans (body, 400/500/600)
+   JetBrains Mono (data/code, 400/500)
+
+   NOTE: Loaded from the Google Fonts CDN rather than bundled as
+   local binaries. These are the exact, correct families — not
+   substitutes. If you need fully offline/self-hosted binaries,
+   ask and we will vendor the .woff2 files into assets/fonts/.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@700;800&display=swap');

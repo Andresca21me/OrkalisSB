@@ -681,20 +681,26 @@ Escenario 2: Exportar el resumen diario
 
 | Campo | Detalle |
 |---|---|
-| **Título** | Administrar la suscripción por número de sucursales |
-| **Descripción** | **Como** operador de plataforma, **quiero** gestionar la suscripción de cada negocio en función del número de sucursales activas, **para** cobrar de acuerdo con su uso. |
+| **Título** | Administrar la suscripción por plan y número de especialistas |
+| **Descripción** | **Como** operador de plataforma, **quiero** gestionar la suscripción de cada negocio en función de su **plan** (Básico/Pro/Premium/Empresarial) y su **número de especialistas**, **para** cobrar de acuerdo con el valor entregado (ver ADR-009). |
 | **Prioridad** | Alta |
 
 ```gherkin
-Escenario 1: Alta de una sucursal adicional
-  Dado que un negocio agrega una nueva sucursal
-  Cuando la sucursal se activa
-  Entonces la suscripción refleja el cobro correspondiente al número de sucursales activas
+Escenario 1: Alta de un especialista adicional
+  Dado un negocio con su plan y los especialistas incluidos cubiertos
+  Cuando se agrega un especialista por encima de los incluidos en el plan
+  Entonces la suscripción suma el costo por especialista adicional del plan
 
-Escenario 2: Reducción de sucursales
-  Dado que un negocio desactiva una sucursal
-  Cuando se confirma la baja
-  Entonces el cobro se ajusta al nuevo número de sucursales activas
+Escenario 2: Baja de un especialista
+  Dado un negocio que cobra especialistas adicionales
+  Cuando se da de baja (desactiva) un especialista
+  Entonces el cobro se ajusta al nuevo número de especialistas activos
+
+Escenario 3: Cambio de plan
+  Dado un negocio en un plan
+  Cuando el operador cambia el plan (upgrade/downgrade)
+  Entonces el precio base, los cupos de mensajería y las funciones habilitadas
+    se ajustan al nuevo plan, sin pérdida de datos
 ```
 
 #### HU-PLT-002

@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: orkalis_db
+    environment:
+      POSTGRES_USER: orkalis
+      POSTGRES_PASSWORD: orkalis
+      POSTGRES_DB: orkalis
+    # Host 5433 → contenedor 5432 (el 5432 del host lo usa un Postgres del sistema).
+    ports:
+      - "5433:5432"
+    volumes:
+      - orkalis_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orkalis -d orkalis"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+volumes:
+  orkalis_pgdata:

@@ -1,0 +1,46 @@
+/* ============================================================
+   ORKALIS — RADIUS & ELEVATION TOKENS
+   Sharp-ish geometry (6–8px core). No uniform rounded-2xl.
+   Neutral shadows only — no colored / Material shadows.
+   ============================================================ */
+
+:root {
+  /* --- Border radius --- */
+  --radius-xs:   4px;    /* inputs, badges, subtle containers */
+  --radius-sm:   6px;    /* cards, dropdowns, tooltips */
+  --radius-md:   8px;    /* primary cards, modals, panels */
+  --radius-lg:   12px;   /* large content cards, feature blocks */
+  --radius-xl:   16px;   /* hero cards only */
+  --radius-pill: 9999px; /* tags, status chips */
+
+  /* --- Border widths --- */
+  --border-hairline: 1px;
+  --border-thick:    2px;
+
+  /* --- Elevation (neutral, layered) --- */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.05);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.10);
+
+  /* --- Focus ring --- */
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* --- Motion --- */
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);   /* @kind other */
+  --ease-in-out:cubic-bezier(0.65, 0, 0.35, 1);  /* @kind other */
+  --dur-fast:   120ms;  /* @kind other */
+  --dur-base:   180ms;  /* @kind other */
+  --dur-slow:   260ms;  /* @kind other */
+}
+
+.dark {
+  /* Deeper shadows read better on dark surfaces */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.40), 0 2px 4px rgba(0,0,0,0.30);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.45), 0 4px 6px rgba(0,0,0,0.30);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.55);
+}

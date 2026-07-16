@@ -21,6 +21,7 @@
 | **ADR-006** | Motor de cálculo financiero | Propuesto |
 | **ADR-007** | Canal de notificaciones | Propuesto |
 | **ADR-008** | Estructura de repositorio y estrategia de despliegue/CI-CD | Propuesto |
+| **ADR-009** | Modelo de facturación de la suscripción (planes por niveles + especialistas + cupos de mensajería) | Propuesto |
 
 ---
 
@@ -133,7 +134,7 @@ Fecha: 2026-06-08
 
 ### Contexto
 
-Orkalis es una plataforma **SaaS multi-tenant** dirigida al mercado colombiano de salones de belleza y barberías: muchos negocios pequeños, alto volumen de cuentas y un ingreso por cuenta (ARPU) relativamente bajo. Cada negocio suscrito (el *tenant*) debe ver y operar únicamente sus propios datos. Dentro de un negocio existe un segundo nivel: las **sucursales**. Los datos operativos (citas, atenciones, inventario, ventas, gastos, disponibilidad) pertenecen a una sucursal, mientras que el administrador necesita tanto una vista por sucursal como una vista consolidada del negocio. La suscripción se **cobra por número de sucursales activas**.
+Orkalis es una plataforma **SaaS multi-tenant** dirigida al mercado colombiano de salones de belleza y barberías: muchos negocios pequeños, alto volumen de cuentas y un ingreso por cuenta (ARPU) relativamente bajo. Cada negocio suscrito (el *tenant*) debe ver y operar únicamente sus propios datos. Dentro de un negocio existe un segundo nivel: las **sucursales**. Los datos operativos (citas, atenciones, inventario, ventas, gastos, disponibilidad) pertenecen a una sucursal, mientras que el administrador necesita tanto una vista por sucursal como una vista consolidada del negocio. La suscripción se **cobra por plan + número de especialistas** (ver ADR-009); la sucursal es unidad de aislamiento y operación, **no** de cobro.
 
 El backend será propio en **Node.js + NestJS** sobre **PostgreSQL** (premisa de este ADR, a formalizar en el ADR de persistencia). La v1 prioriza robustez: el aislamiento de datos debe ser **verificable**, no solo confiado al cuidado del desarrollador. El sistema debe permitir reportes consolidados dentro de un negocio y analítica a nivel de plataforma, y debe escalar a un número alto de tenants sin que el costo operativo por tenant se dispare.
 
@@ -216,7 +217,7 @@ La Opción 3 queda reservada como posible evolución **híbrida** para clientes 
 
 El mercado objetivo —muchos salones y barberías pequeños— exige **costo por tenant bajo, onboarding inmediato y consolidación sencilla**, justo donde la Opción 1 es superior. Las opciones 2 y 3 compran un aislamiento más fuerte a cambio de un costo operativo y una fricción de onboarding que no se justifican para este volumen y ARPU, y encarecen la analítica de plataforma que Orkalis necesitará.
 
-El principal riesgo de la Opción 1 —la fuga de datos por un filtro olvidado— se neutraliza con una estrategia de defensa en profundidad: el scope obligatorio en el repositorio base elimina la dependencia del cuidado manual, y **RLS actúa aunque el código falle**. Esto convierte el aislamiento en algo **verificable** (la promesa de robustez de la v1) en lugar de confiado. El modelo de columnas `negocio_id`/`sucursal_id` también expresa de forma directa la jerarquía y habilita el cobro por sucursal y la herencia de configuración del ADR-002.
+El principal riesgo de la Opción 1 —la fuga de datos por un filtro olvidado— se neutraliza con una estrategia de defensa en profundidad: el scope obligatorio en el repositorio base elimina la dependencia del cuidado manual, y **RLS actúa aunque el código falle**. Esto convierte el aislamiento en algo **verificable** (la promesa de robustez de la v1) en lugar de confiado. El modelo de columnas `negocio_id`/`sucursal_id` también expresa de forma directa la jerarquía y habilita la herencia de configuración del ADR-002 (el cobro se rige por el ADR-009: plan + nº de especialistas, no por sucursal).
 
 ### Consecuencias
 
@@ -225,7 +226,7 @@ El principal riesgo de la Opción 1 —la fuga de datos por un filtro olvidado�
 - Onboarding de un negocio o de una sucursal sin aprovisionamiento (alta por datos).
 - Reportes consolidados por negocio, por sucursal y de plataforma con consultas directas.
 - Una única ruta de migración y de respaldo para todo el sistema.
-- Base limpia para el cobro por número de sucursales y para la herencia de configuración.
+- Base limpia para el cobro por plan + número de especialistas (ADR-009) y para la herencia de configuración.
 
 **Negativas (compromisos aceptados):**
 - El aislamiento es lógico; se asume el costo de mantener RLS, el repositorio base y las pruebas de aislamiento como elementos no negociables.
@@ -239,7 +240,7 @@ El principal riesgo de la Opción 1 —la fuga de datos por un filtro olvidado�
 - **Autenticación/RBAC:** el token debe portar el `negocio_id` y el alcance de sucursal del usuario; el `TenantContext` se construye por petición. (Detalle en el futuro ADR de auth/RBAC.)
 - **Capa de acceso a datos:** se introduce un repositorio/consulta base que inyecta el filtro de tenant y sucursal; se configura RLS en PostgreSQL.
 - **Reportes y finanzas:** todas las agregaciones parametrizadas por `negocio_id` y, opcionalmente, `sucursal_id`.
-- **Facturación:** el conteo de sucursales activas por negocio alimenta la suscripción (HU-PLT-001).
+- **Facturación:** el plan contratado y el conteo de especialistas activos alimentan la suscripción (HU-PLT-001, ADR-009).
 - **Habilita el ADR-002:** el nivel de alcance por entidad define dónde viven los valores y dónde los *overrides* de configuración.
 
 ### ADRs relacionados
@@ -698,3 +699,83 @@ Para un equipo pequeño con objetivos de 99.9% y RPO/RTO estrictos, **comprar la
 
 ### ADRs relacionados
 - ADR-000 (tipos compartidos), ADR-004 (migraciones), ADR-007 (cola de notificaciones), ADR-002/RNF (objetivos de calidad).
+
+---
+
+## ADR-009: Modelo de facturación de la suscripción (planes por niveles + especialistas + cupos de mensajería)
+
+Estado: Propuesto
+Fecha: 2026-06-16
+
+### Contexto
+
+La Definición del Problema v1.x fijó originalmente que la suscripción se cobraba **por número de sucursales activas**. Esa dimensión de cobro se **reemplaza** por un modelo de **planes por niveles** más alineado con el valor entregado y con el costo variable real (mensajería). La sucursal deja de ser un factor de precio y pasa a ser una **función habilitada por el plan** (multi-sede). El cobro pasa a depender de **dos dimensiones**: (1) el **plan** contratado y (2) el **número de especialistas** del negocio (cada plan incluye una base y cobra por especialista adicional). Adicionalmente, cada plan define **cupos mensuales de mensajería** (WhatsApp Utility, WhatsApp Marketing, SMS, Email), que son el principal costo variable de la plataforma.
+
+> Este ADR **reemplaza la dimensión de cobro** del ADR-001 y de la Definición del Problema (cobro por sucursal). No altera la arquitectura de aislamiento negocio → sucursal del ADR-001, que sigue intacta: las sucursales existen como unidad operativa y de aislamiento, pero **no** como unidad de cobro.
+
+### Decisión
+
+**Cuatro planes** (perfil de barbería/salón), cobro **mensual**, precios en **COP sin IVA**:
+
+| Concepto | Básico | Pro | Premium | Empresarial |
+|---|---|---|---|---|
+| Perfil objetivo | 1 local pequeño | Local en crecimiento | Local grande / 2 sedes | Cadena / franquicia |
+| **Precio base mensual** | $80.000 | $130.000 | $210.000 | $720.000 |
+| Especialistas incluidos | 2 | 2 | 2 | 15 |
+| Costo por especialista adicional | $15.000 | $18.000 | $22.000 | $25.000 |
+
+**Cargo mensual = precio_base + max(0, nº_especialistas − incluidos) × costo_especialista_adicional.**
+(Empresarial: plano hasta 15 especialistas; a partir del 16, +$25.000 c/u.)
+
+**Cupos de mensajería / mes** (base, para los especialistas incluidos):
+
+| Canal | Básico | Pro | Premium | Empresarial |
+|---|---|---|---|---|
+| WhatsApp Utility (recordatorios/confirmaciones) | 600 | 1.500 | 3.500 | 14.000 |
+| WhatsApp Marketing (promociones) | 80 | 250 | 400 | 1.800 |
+| SMS | 40 | 120 | 300 | 1.200 |
+| Email (uso justo) | 3.000 | 8.000 | 20.000 | 60.000 |
+
+**Cupo adicional por cada especialista extra:**
+
+| Canal | Básico | Pro | Premium | Empresarial |
+|---|---|---|---|---|
+| + WhatsApp Utility | 200 | 350 | 600 | 800 |
+| + WhatsApp Marketing | 25 | 60 | 100 | 120 |
+| + SMS | 15 | 30 | 60 | 80 |
+
+**Matriz de funciones por plan:**
+
+| Función | Básico | Pro | Premium | Empresarial |
+|---|---|---|---|---|
+| Agenda y reservas online | ✓ | ✓ | ✓ | ✓ |
+| Recordatorios y confirmaciones por WhatsApp | ✓ | ✓ | ✓ | ✓ |
+| Recordatorios por Email | ✓ | ✓ | ✓ | ✓ |
+| SMS de respaldo | — | ✓ | ✓ | ✓ |
+| Campañas de marketing (WhatsApp/Email) | Básico | ✓ | ✓ | ✓ |
+| Reportes y analítica | — | Básico | Avanzado | Avanzado |
+| Programa de fidelización / puntos | — | — | ✓ | ✓ |
+| Multi-sede | — | — | 2 sedes | Ilimitado |
+| Roles y permisos por usuario | — | ✓ | ✓ | ✓ |
+| Soporte | Email | Chat | Prioritario | Dedicado |
+| API / integraciones | — | — | ✓ | ✓ |
+
+**Notas de diseño:**
+- El "peor escenario" (cliente agota el 100% del cupo, incluido todo el marketing) deja márgenes 79,5% / 64,7% / 56,4% / 48,0% (Básico→Empresarial). En la realidad la mayoría de mensajes son *utility* (~$12 c/u), así que el margen real es mayor. **El marketing se vende como paquetes de créditos adicionales** para no regalar el canal más costoso.
+- El **catálogo de planes** (precios, cupos, matriz de funciones) es la **fuente de verdad de facturación** y vive como **constante/registry en código** (no editable por tenant), análogo al registry de configuración del ADR-002. Los valores de esta tabla son canónicos.
+- La cantidad facturable de especialistas es el **nº de especialistas activos** del negocio.
+
+### Consecuencias
+
+**Positivas:** el cobro escala con el valor (tamaño del equipo) y con el costo variable (mensajería); multi-sede deja de penalizar al cliente y se vuelve gancho de upsell a Premium/Empresarial; márgenes acotados y auditables.
+**Negativas (aceptadas):** mayor complejidad de facturación (dos dimensiones + cupos) frente al simple conteo de sucursales; requiere medir consumo de mensajería por canal (FASE-11).
+
+### Impacto en el sistema
+- **Modelo de datos:** `suscripcion` deja de usar `num_sucursales`; pasa a `plan` (enum) + `num_especialistas` (facturables) + estado. El catálogo de precios/cupos vive en código.
+- **Enums compartidos:** nuevo `PlanSuscripcion` (`basico|pro|premium|empresarial`) en `@orkalis/shared`.
+- **Negocio/suscripción (FASE-07):** el cargo se calcula a partir de plan + nº especialistas activos; alta/baja de especialistas recalcula. Multi-sede se habilita según el plan.
+- **Notificaciones (FASE-11):** se mide el consumo por canal contra el cupo del plan (+ extras por especialista); marketing como créditos adicionales.
+- **Pasarela (FASE-12):** Wompi cobra el cargo mensual = f(plan, nº especialistas); suspensión/reactivación por estado de pago.
+
+### ADRs relacionados
+- **Reemplaza la dimensión de cobro** descrita en ADR-001 y en la Definición del Problema (cobro por sucursal). ADR-002 (registry de configuración, patrón análogo al catálogo de planes), ADR-007 (canal de notificaciones / cupos). Cubre RF-006 (redefinido).

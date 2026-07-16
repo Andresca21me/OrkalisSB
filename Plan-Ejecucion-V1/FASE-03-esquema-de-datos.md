@@ -23,7 +23,7 @@ Crear un archivo por grupo dentro de `apps/api/src/db/schema/` y reexportar en `
 
 ### Grupo A — Tenencia y cuenta
 1. **`negocio`**: `id`, `nombre`, `perfil` (`salon`|`barberia`), `estado_suscripcion` (`activa`|`suspendida`, default `activa`), timestamps.
-2. **`suscripcion`**: `id`, `negocio_id`, `plan`, `num_sucursales` (int), `estado`, timestamps. (El cobro se calcula por nº de sucursales activas, RF-006.)
+2. **`suscripcion`**: `id`, `negocio_id`, `plan` (`basico`|`pro`|`premium`|`empresarial`), `num_especialistas` (int: especialistas facturables/activos), `estado`, timestamps. (El cobro se calcula por **plan + nº de especialistas**, RF-006 / ADR-009. El catálogo de precios/cupos vive en código, no en BD.)
 3. **`sucursal`** (operativa-base): `id`, `negocio_id`, `nombre`, `activa boolean default true`, timestamps.
 4. **`usuario`**: `id`, `negocio_id`, `nombre`, `email` (único por negocio), `password_hash`, `rol` (RolUsuario), `activo`, timestamps. (Sin `sucursal_id` directo: el alcance de sucursal va en `usuario_sucursal` o en claims; ver nota.)
    - Tabla relación **`usuario_sucursal`** (`usuario_id`, `sucursal_id`): alcance de sucursales del usuario (para RBAC, RF-014). PK compuesta.
