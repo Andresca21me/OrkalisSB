@@ -28,12 +28,16 @@
 - [x] `TWILIO_MESSAGING_SERVICE_SID` (se cablea en FASE-01)
 - [x] `TWILIO_VERIFY_SERVICE_SID` (se usa en FASE-06)
 - [ ] `TWILIO_WHATSAPP_FROM` + `TWILIO_WA_TPL_*` (AM-3: sender Meta + plantillas aprobadas)
-- [ ] `TWILIO_STATUS_CALLBACK_URL` (AM-4) — **único pendiente de FASE-02**. El endpoint
-  `POST /api/webhooks/twilio/status` ya existe y valida la firma; falta pegar la URL
-  pública (`https://<dominio>/api/webhooks/twilio/status`) como *Status Callback* del
-  Messaging Service en Twilio **y** en esta variable (mismo valor exacto: la firma se
-  calcula sobre la URL). Sin ella, los mensajes se quedan en `enviado` y no avanzan a
-  `entregado`.
+- [x] `TWILIO_STATUS_CALLBACK_URL` (AM-4) — puesta en Railway:
+  `https://api.orkalis.com/api/webhooks/twilio/status`. El endpoint existe y valida la
+  firma (responde 403 sin `X-Twilio-Signature` válida). **Falta el lado de Twilio:**
+  pegar esa MISMA URL como *Status Callback* del Messaging Service (Messaging →
+  Services → Integration). Debe coincidir carácter por carácter, porque la firma se
+  calcula sobre la URL exacta.
+  > Ojo: producción está en **mock** (sin claves Twilio) hasta FASE-10, así que el
+  > callback no recibirá nada real todavía. Y los SMS que salen de **tu entorno local**
+  > no los verá este webhook (otra base de datos): para probarlo en local hace falta un
+  > túnel (`ngrok http 3000`) apuntando la variable al dominio del túnel.
 - [ ] (Opcional, email) `SENDGRID_API_KEY` + `MAIL_FROM`
 - Nota: el SDK `twilio` ya está instalado en `apps/api`. `@sendgrid/mail` es opcional
   (instalar antes de activar el envío de email real).

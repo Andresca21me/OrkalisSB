@@ -9,6 +9,35 @@ Guía **paso a paso** para desplegar **todo en Railway**: base de datos
 > Claude deja todo listo (Dockerfiles, `railway.json`, migraciones, esta guía)
 > pero **no** ejecuta el primer deploy ni pega llaves reales sin tu confirmación.
 
+## Dominios de producción (activos)
+
+| Dominio | Servicio Railway | Notas |
+|---|---|---|
+| `https://orkalis.com` | **web** | apex; dominio comprado **en Railway**, que gestiona la zona DNS |
+| `https://www.orkalis.com` | **web** | alias |
+| `https://api.orkalis.com` | **OrkalisSB** (API) | la API vive bajo el prefijo `/api` |
+
+Los `*.up.railway.app` siguen respondiendo y están en `CORS_ORIGIN` como red de
+seguridad; se pueden retirar cuando el dominio propio esté rodado.
+
+Variables que dependen del dominio (ya aplicadas):
+
+| Servicio | Variable | Valor |
+|---|---|---|
+| API | `CORS_ORIGIN` | `https://orkalis.com,https://www.orkalis.com,https://web-production-031b1.up.railway.app` |
+| API | `TWILIO_STATUS_CALLBACK_URL` | `https://api.orkalis.com/api/webhooks/twilio/status` |
+| web | `VITE_API_URL` | `https://api.orkalis.com/api` |
+
+> ⚠️ `VITE_API_URL` la **hornea Vite en el build**: cambiarla exige **redesplegar
+> el web**, no basta con guardar la variable. (Railway redespliega solo al
+> cambiar una variable, así que en la práctica se resuelve; pero si alguna vez
+> editas el valor sin que dispare build, fuerza el redeploy a mano.)
+
+Pendiente **manual** en paneles externos:
+- **Mercado Pago** → webhook a `https://api.orkalis.com/api/pagos/webhook`.
+- **Twilio** → Status Callback a `https://api.orkalis.com/api/webhooks/twilio/status`
+  (solo tendrá efecto cuando producción envíe mensajes reales, FASE-10).
+
 ## 0. Qué se despliega (mapa)
 
 ```
