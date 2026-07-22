@@ -19,8 +19,9 @@ import {
   type Vertical,
 } from './site-data';
 import { AnimatedBackground } from '../../ui/AnimatedBackground';
+import { Parallax } from '../../ui/Parallax';
 import { Reveal } from '../../ui/Reveal';
-import { BillingToggle, BrowserMock, FeatureCard, Pill, PlanCard, Section, SectionHead, SField, SInput, type Funnel, type Go } from './site-ui';
+import { BillingToggle, BrowserMock, FeatureCard, Pill, PlanCard, Section, SectionHead, SField, SInput, Typewriter, type Funnel, type Go } from './site-ui';
 import { FloatingChip, GlowBlob, Marquee, MediaFrame } from './site-media';
 
 /** Ciudades para la franja "confían en nosotros" (marquee). */
@@ -77,7 +78,14 @@ export function LandingPage({ vertical, go, setFunnel }: PageProps) {
           <div className="mkt-hero">
             <div>
               <Reveal style={{ display: 'inline-block' }}><Pill icon="sparkles" tone="brand">Para {vv.label.toLowerCase()}s en Colombia</Pill></Reveal>
-              <Reveal delay={90}><h1 className="mkt-h1" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.03em', margin: '18px 0 0', color: 'var(--text-primary)' }}>{vv.heroTitle}</h1></Reveal>
+              <Reveal delay={90}>
+                <h1 className="mkt-h1" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.03em', margin: '18px 0 0', color: 'var(--text-primary)' }}>
+                  {vv.heroFijo}{' '}
+                  {/* El remate se teclea y se borra: cada vuelta añade otra
+                      razón de compra sin alargar el titular. */}
+                  <Typewriter frases={vv.heroRotativo} style={{ color: 'var(--text-tertiary)' }} />
+                </h1>
+              </Reveal>
               <Reveal delay={180}><p style={{ fontSize: 'var(--text-md)', lineHeight: 1.5, color: 'var(--text-secondary)', margin: '18px 0 0', maxWidth: 520 }}>{vv.heroSub}</p></Reveal>
               <Reveal delay={270}>
                 <div style={{ display: 'flex', gap: 12, marginTop: 28, flexWrap: 'wrap' }}>
@@ -106,12 +114,21 @@ export function LandingPage({ vertical, go, setFunnel }: PageProps) {
             </div>
             {/* Mock del producto con profundidad: blob + flotación + chips "en vivo". */}
             <Reveal delay={200} y={24}>
+              {/* Tres planos a distinta velocidad de scroll: los halos casi
+                  quietos, el mock a ritmo medio y los chips más adelantados.
+                  Esa diferencia es lo que se lee como profundidad. */}
               <div style={{ position: 'relative' }}>
-                <GlowBlob color="var(--brand)" size={360} style={{ top: -40, right: -40 }} />
-                <GlowBlob color="var(--accent)" size={260} style={{ bottom: -30, left: -30 }} />
-                <div className="mkt-float-slow" style={{ position: 'relative' }}><BrowserMock vertical={vertical} /></div>
-                <FloatingChip icon="check-circle" tone="accent" title="Nueva reserva confirmada" sub="Hoy · 3:30 p. m." float="slow" style={{ top: -18, left: -22 }} />
-                <FloatingChip icon="bell" tone="brand" title="Recordatorio enviado" sub="WhatsApp · −40% ausencias" float="fast" style={{ bottom: 34, right: -26 }} />
+                <Parallax velocidad={0.04} maximo={26}>
+                  <GlowBlob color="var(--brand)" size={360} style={{ top: -40, right: -40 }} />
+                  <GlowBlob color="var(--accent)" size={260} style={{ bottom: -30, left: -30 }} />
+                </Parallax>
+                <Parallax velocidad={0.09} maximo={42}>
+                  <div className="mkt-float-slow" style={{ position: 'relative' }}><BrowserMock vertical={vertical} /></div>
+                </Parallax>
+                <Parallax velocidad={0.16} maximo={64}>
+                  <FloatingChip icon="check-circle" tone="accent" title="Nueva reserva confirmada" sub="Hoy · 3:30 p. m." float="slow" style={{ top: -18, left: -22 }} />
+                  <FloatingChip icon="bell" tone="brand" title="Recordatorio enviado" sub="WhatsApp · −40% ausencias" float="fast" style={{ bottom: 34, right: -26 }} />
+                </Parallax>
               </div>
             </Reveal>
           </div>

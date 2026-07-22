@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { money } from '../../lib/format';
 import { Badge, Button, Icon } from '../../ui/ui';
 import { Reveal } from '../../ui/Reveal';
@@ -64,8 +64,18 @@ export const SITE_CSS = `
 /* Ken-burns muy leve para fotos lifestyle. */
 @keyframes mkt-kenburns { from { transform: scale(1); } to { transform: scale(1.06); } }
 .mkt-kenburns { animation: mkt-kenburns 18s ease-in-out infinite alternate; }
+/* Cursor de la máquina de escribir del titular. Parpadea aparte del texto para
+   que no se note el salto entre teclear y borrar. */
+@keyframes mkt-caret { 0%, 45% { opacity: 1; } 55%, 100% { opacity: 0; } }
+.mkt-caret { display: inline-block; width: 3px; margin-left: 2px; border-radius: 2px; background: var(--brand); animation: mkt-caret 1s steps(1) infinite; vertical-align: baseline; }
+/* Reserva el alto de la frase más larga: sin esto el titular salta de línea
+   cada vez que cambia la palabra y arrastra media pantalla con él. */
+.mkt-type-wrap { position: relative; display: block; }
+.mkt-type-sizer { visibility: hidden; pointer-events: none; }
+.mkt-type-live { position: absolute; inset: 0; }
+
 @media (prefers-reduced-motion: reduce) {
-  .mkt-float, .mkt-float-slow, .mkt-marquee-track, .mkt-gradient-text, .mkt-kenburns { animation: none !important; }
+  .mkt-float, .mkt-float-slow, .mkt-marquee-track, .mkt-gradient-text, .mkt-kenburns, .mkt-caret { animation: none !important; }
   .mkt-lift { transition: none; }
 }
 `;
@@ -379,4 +389,72 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+
+/**
+ * Titular con máquina de escribir (inspirado en la referencia de gogahub, no
+ * copiado: aquí rota la *promesa* del producto, no el tipo de negocio).
+ *
+ * Tres cuidados que hacen la diferencia entre "bonito" y "usable":
+ * - **No salta el layout**: se renderiza invisible la frase más larga para
+ *   reservar el alto; si no, el titular cambia de línea y empuja media página.
+ * - **Accesible**: el lector de pantalla lee UNA frase completa y estable; la
+ *   parte animada va `aria-hidden` para no dictar letra a letra.
+ * - **Respeta `prefers-reduced-motion`**: con movimiento reducido se muestra la
+ *   primera frase fija, sin teclear.
+ */
+export function Typewriter({ frases, className, style }: { frases: string[]; className?: string; style?: CSSProperties }) {
+  const reducido = usePrefiereMenosMovimiento();
+  const [i, setI] = useState(0);
+  const [n, setN] = useState(0);
+  const [borrando, setBorrando] = useState(false);
+
+  const masLarga = frases.reduce((a, b) => (b.length > a.length ? b : a), '');
+
+  useEffect(() => {
+    if (reducido || frases.length === 0) return;
+    const frase = frases[i % frases.length];
+    // Borrar es más rápido que escribir: así se siente natural y no aburre.
+    const completa = !borrando && n === frase.length;
+    const vacia = borrando && n === 0;
+    const espera = completa ? 1900 : vacia ? 260 : borrando ? 32 : 62;
+
+    const t = setTimeout(() => {
+      if (completa) setBorrando(true);
+      else if (vacia) {
+        setBorrando(false);
+        setI((v) => (v + 1) % frases.length);
+      } else setN((v) => v + (borrando ? -1 : 1));
+    }, espera);
+    return () => clearTimeout(t);
+  }, [n, borrando, i, frases, reducido]);
+
+  if (reducido) return <span className={className} style={style}>{frases[0]}</span>;
+
+  return (
+    <span className={`mkt-type-wrap ${className ?? ''}`} style={style}>
+      {/* Sizer: reserva el espacio de la frase más larga. */}
+      <span className="mkt-type-sizer" aria-hidden="true">{masLarga}</span>
+      {/* Texto real para lectores de pantalla (estable, no se teclea). */}
+      <span className="sr-only">{frases[0]}</span>
+      <span className="mkt-type-live" aria-hidden="true">
+        {frases[i % frases.length].slice(0, n)}
+        <span className="mkt-caret" style={{ height: '0.9em' }} />
+      </span>
+    </span>
+  );
+}
+
+/** `true` si el sistema pide menos animación (accesibilidad). */
+export function usePrefiereMenosMovimiento(): boolean {
+  const [reducido, setReducido] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const aplicar = () => setReducido(mq.matches);
+    aplicar();
+    mq.addEventListener('change', aplicar);
+    return () => mq.removeEventListener('change', aplicar);
+  }, []);
+  return reducido;
 }

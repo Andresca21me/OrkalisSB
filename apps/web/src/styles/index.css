@@ -119,3 +119,42 @@
   scrollbar-width: thin;
   scrollbar-color: var(--border-default) transparent;
 }
+
+/* ── Lluvia inversa: cuadrados que ascienden (login, FASE-13) ─────────────── */
+/* Solo transform + opacity: el navegador lo resuelve en GPU sin recalcular
+   layout. La entrada y salida se desvanecen para que ninguno aparezca o
+   desaparezca de golpe en el borde del panel. */
+@keyframes ork-rise {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, -125vh, 0) rotate(var(--ork-giro, 20deg));
+    opacity: 0;
+  }
+}
+.ork-rising-sq {
+  position: absolute;
+  bottom: -140px;
+  display: block;
+  will-change: transform, opacity;
+  animation-name: ork-rise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Sin movimiento se conserva la textura, quieta: el panel no queda vacío. */
+  .ork-rising-sq {
+    animation: none;
+    bottom: auto;
+    top: 30%;
+    opacity: 0.5;
+  }
+}

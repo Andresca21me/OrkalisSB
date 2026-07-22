@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, type MotivoBloqueo } from '../lib/auth';
 import { ApiError } from '../lib/api';
 import { Button, Icon, Logo, Spinner } from '../ui/ui';
+import { RisingSquares } from '../ui/RisingSquares';
 
 type EstadoLogin = 'normal' | 'suspendida' | 'bloqueo';
 
@@ -63,6 +64,9 @@ export function LoginPage() {
         }}
       >
         <div style={{ position: 'absolute', inset: 0, opacity: 0.5, backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.07) 1px, transparent 0)', backgroundSize: '26px 26px' }} />
+        {/* Lluvia inversa sobre el navy: da vida al panel sin robar atención al
+            formulario. Toma el color de marca, así cambia con el vertical. */}
+        <RisingSquares color="var(--accent)" />
         <div
           style={{ position: 'absolute', right: -120, bottom: -120, width: 380, height: 380, pointerEvents: 'none', opacity: 0.16 }}
           dangerouslySetInnerHTML={{ __html: '<svg width="380" height="380" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="2.5" width="19" height="19" rx="6.5" stroke="#fff" stroke-width="1"/><circle cx="14.5" cy="14.5" r="4.2" stroke="#fff" stroke-width="1"/></svg>' }}

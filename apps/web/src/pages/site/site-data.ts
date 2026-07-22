@@ -77,9 +77,19 @@ export const FEATURE_GROUPS: { group: string; rows: { label: string; vals: (bool
   ] },
 ];
 
-export const VERTICAL: Record<Vertical, { label: string; esp: string; heroTitle: string; heroSub: string; bookingHost: string; sample: string }> = {
-  barberia: { label: 'Barbería', esp: 'barberos', heroTitle: 'Tus clientes reservan solos. Tú dejas de vivir en WhatsApp.', heroSub: 'Agenda en línea, recordatorios automáticos, finanzas y equipo de tu barbería en un solo lugar.', bookingHost: 'orkalis.co/r/la-navaja', sample: 'La Navaja' },
-  salon: { label: 'Salón de belleza', esp: 'especialistas', heroTitle: 'Tu salón, agendado solo. Sin chats interminables ni cuadernos.', heroSub: 'Reservas en línea, recordatorios, inventario y liquidaciones de tu salón en una sola plataforma.', bookingHost: 'orkalis.co/r/estudio-aura', sample: 'Estudio Aura' },
+/**
+ * Copy por vertical. `heroTitle` se parte en dos: `heroFijo` es la promesa que
+ * NO cambia y `heroRotativo` son los remates que se teclean uno tras otro. Rota
+ * el beneficio, no el tipo de negocio: cada frase añade una razón de compra en
+ * lugar de repetir a quién va dirigido.
+ */
+export const VERTICAL: Record<Vertical, { label: string; esp: string; heroTitle: string; heroFijo: string; heroRotativo: string[]; heroSub: string; bookingHost: string; sample: string }> = {
+  barberia: { label: 'Barbería', esp: 'barberos', heroTitle: 'Tus clientes reservan solos. Tú dejas de vivir en WhatsApp.',
+    heroFijo: 'Tus clientes reservan solos.',
+    heroRotativo: ['Tú dejas de vivir en WhatsApp.', 'Tú dejas de perder citas.', 'Tú dejas de cuadrar caja a mano.', 'Tú dejas de armar la nómina en Excel.'], heroSub: 'Agenda en línea, recordatorios automáticos, finanzas y equipo de tu barbería en un solo lugar.', bookingHost: 'orkalis.co/r/la-navaja', sample: 'La Navaja' },
+  salon: { label: 'Salón de belleza', esp: 'especialistas', heroTitle: 'Tu salón, agendado solo. Sin chats interminables ni cuadernos.',
+    heroFijo: 'Tu salón, agendado solo.',
+    heroRotativo: ['Sin chats interminables.', 'Sin cuadernos ni recordatorios a mano.', 'Sin cuadrar comisiones cada quincena.', 'Sin adivinar cómo va el mes.'], heroSub: 'Reservas en línea, recordatorios, inventario y liquidaciones de tu salón en una sola plataforma.', bookingHost: 'orkalis.co/r/estudio-aura', sample: 'Estudio Aura' },
 };
 
 export const PAINS = [
