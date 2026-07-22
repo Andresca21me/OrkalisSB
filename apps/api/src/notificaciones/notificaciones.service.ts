@@ -4,6 +4,7 @@ import { mensaje } from '../db/schema';
 import { JobQueue } from './job-queue';
 import type { Canal } from './notification-sender.port';
 import { CuposService, type CanalCupo } from './cupos.service';
+import { PlantillasService } from './plantillas.service';
 import { plantillas, type DatosCita } from './templates';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 
@@ -32,6 +33,7 @@ export class NotificacionesService implements OnModuleInit {
   constructor(
     private readonly queue: JobQueue,
     private readonly cupos: CuposService,
+    private readonly plantillas: PlantillasService,
     private readonly metrics: MetricsService,
   ) {}
 
@@ -97,20 +99,24 @@ export class NotificacionesService implements OnModuleInit {
   }
 
   // ── Interno ─────────────────────────────────────────────────────────────────
-  private encolarCita(
+  private async encolarCita(
     negocioId: string,
     telefono: string,
     datos: DatosCita,
     tipo: 'confirmacion' | 'recordatorio' | 'aviso',
     ctx: Contexto,
   ): Promise<void> {
+    // El texto se resuelve AQUÍ (plantilla del negocio o default de plataforma)
+    // y se guarda ya renderizado en el outbox: editar la plantilla después no
+    // reescribe lo que ya estaba en cola.
     // v1: el canal por evento (SMS vs WhatsApp) llega en FASE-05; aquí SMS.
-    return this.encolar(negocioId, {
+    const cuerpo = await this.plantillas.cuerpoSms(negocioId, tipo, datos);
+    await this.encolar(negocioId, {
       tipo,
       canal: 'sms',
       cupoCanal: 'sms',
       destino: telefono,
-      cuerpo: plantillas[tipo](datos),
+      cuerpo,
       ...ctx,
     });
   }

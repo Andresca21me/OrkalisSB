@@ -47,6 +47,14 @@ export const canalMensajeriaEnum = pgEnum('canal_mensajeria', [
 ]);
 /** Canal de transporte del outbox (espejo de `Canal` del puerto, FASE-02). */
 export const canalEnvioEnum = pgEnum('canal_envio', ['sms', 'whatsapp', 'email']);
+/** Eventos con plantilla personalizable por negocio (FASE-04, D5). */
+export const eventoPlantillaEnum = pgEnum('evento_plantilla', [
+  'confirmacion',
+  'recordatorio',
+  'aviso',
+  'aviso_especialista',
+  'marketing',
+]);
 /** Ciclo de vida de una fila del outbox (FASE-02). */
 export const estadoMensajeEnum = pgEnum('estado_mensaje', [
   'pendiente',

@@ -10,6 +10,7 @@ import { ConfigResolverService } from '../config-module/config-resolver.service'
 import { PlanService } from '../plans/plan.service';
 import { JobQueue } from './job-queue';
 import { CuposService } from './cupos.service';
+import { PlantillasService } from './plantillas.service';
 import { AlertasService } from './alertas.service';
 import { MockAdapter } from './adapters/mock.adapter';
 import { RemitenteResolver } from './remitente/remitente.resolver';
@@ -45,6 +46,7 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
   let mock: MockAdapter;
   let cupos: CuposService;
   let alertas: AlertasService;
+  let plantillasSvc: PlantillasService;
   let notificaciones: NotificacionesService;
   let outbox: OutboxWorker;
   let scheduler: RecordatoriosScheduler;
@@ -102,7 +104,8 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
     // MockAdapter ignora el perfil, así que basta para las pruebas de dominio).
     const config = { get: () => undefined } as unknown as ConstructorParameters<typeof RemitenteResolver>[0];
     const remitente = new RemitenteResolver(config);
-    notificaciones = new NotificacionesService(new JobQueue(), cupos, new MetricsService());
+    plantillasSvc = new PlantillasService();
+    notificaciones = new NotificacionesService(new JobQueue(), cupos, plantillasSvc, new MetricsService());
     notificaciones.onModuleInit();
     alertas = new AlertasService(notificaciones, cupos);
     outbox = new OutboxWorker([mock], remitente, cupos, alertas, new MetricsService());
@@ -288,6 +291,46 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       .from(alertaAdmin)
       .where(eq(alertaAdmin.clave, `cupo:sms:100:${ciclo.inicio.toISOString().slice(0, 10)}`));
     expect(critica.severidad).toBe('critico');
+  });
+
+  it('plantilla del negocio: el mensaje encolado usa su texto y sus variables', async () => {
+    const ctx = { negocioId, sucursalIds: null, rol: 'admin' as const };
+    await plantillasSvc.guardar(ctx, 'confirmacion', 'sms', {
+      contenidoSms: 'Hola {{cliente}}! Te esperamos en {{sucursal}} a las {{hora}} con {{especialista}}.',
+    });
+
+    await notificaciones.encolarConfirmacion(negocioId, '3001234567', {
+      sucursalNombre: 'Sede',
+      especialistaNombre: 'Carlos',
+      clienteNombre: 'Pedro',
+      inicio: new Date('2030-04-01T19:00:00Z'),
+    });
+
+    const m = await ultimoMensajeDe('confirmacion');
+    expect(m.cuerpo).toContain('Hola Pedro!');
+    expect(m.cuerpo).toContain('Sede');
+    expect(m.cuerpo).toContain('Carlos');
+    expect(m.cuerpo).not.toContain('{{');
+  });
+
+  it('variable no permitida se rechaza al guardar (no llega a un cliente real)', async () => {
+    const ctx = { negocioId, sucursalIds: null, rol: 'admin' as const };
+    await expect(
+      plantillasSvc.guardar(ctx, 'recordatorio', 'sms', { contenidoSms: 'Hola {{fehca}}' }),
+    ).rejects.toThrow(/no permitidas/i);
+  });
+
+  it('sin plantilla (o vaciándola) vuelve el texto por defecto de plataforma', async () => {
+    const ctx = { negocioId, sucursalIds: null, rol: 'admin' as const };
+    await plantillasSvc.guardar(ctx, 'confirmacion', 'sms', { contenidoSms: '' });
+
+    await notificaciones.encolarConfirmacion(negocioId, '3001234567', {
+      sucursalNombre: 'Sede',
+      especialistaNombre: 'Carlos',
+      inicio: new Date('2030-04-02T19:00:00Z'),
+    });
+    const m = await ultimoMensajeDe('confirmacion');
+    expect(m.cuerpo).toContain('¡Reserva confirmada!');
   });
 
   it('scheduler: encola recordatorio dentro de la ventana y lo marca; ignora los lejanos', async () => {

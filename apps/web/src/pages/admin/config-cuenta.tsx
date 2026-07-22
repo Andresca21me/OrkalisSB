@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { CanalCupo } from '@orkalis/shared';
+import { medirSms, VARIABLES_PLANTILLA, type CanalCupo, type EventoPlantilla, type PlantillaMensaje } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { fechaCorta, num } from '../../lib/format';
 import { marcarAlertaLeida, useAlertas, useCupos } from '../../lib/useCupos';
+import { guardarPlantilla, usePlantillas } from '../../lib/usePlantillas';
 import { Badge, Button, Dialog, ErrorState, Icon, Spinner, useToast } from '../../ui/ui';
 import { GField } from './gestion-ui';
 import { ConfigBanner, ConfigCard } from './config-ui';
@@ -14,11 +15,13 @@ const CANAL_LABEL: Record<CanalCupo, { label: string; icon: string }> = {
   email: { label: 'Email', icon: 'mail' },
 };
 
-const NOTIF_EVENTOS = [
-  { id: 'confirmacion', name: 'Confirmación de cita' },
-  { id: 'recordatorio', name: 'Recordatorio' },
-  { id: 'cambio', name: 'Cambio o cancelación' },
-];
+const EVENTO_LABEL: Record<EventoPlantilla, { name: string; desc: string }> = {
+  confirmacion: { name: 'Confirmación de cita', desc: 'Se envía al cliente en cuanto queda la reserva.' },
+  recordatorio: { name: 'Recordatorio', desc: 'Se envía dentro de la ventana configurada antes de la cita.' },
+  aviso: { name: 'Cancelación', desc: 'Se envía cuando la cita se cancela.' },
+  aviso_especialista: { name: 'Aviso al especialista', desc: 'Novedades de su agenda (se activa en una fase posterior).' },
+  marketing: { name: 'Campaña', desc: 'Mensaje promocional. Se detiene si se agota el cupo del plan.' },
+};
 
 // ── Notificaciones ───────────────────────────────────────────────────────────
 export function ConfigNotif() {
@@ -86,22 +89,7 @@ export function ConfigNotif() {
         )}
       </ConfigCard>
 
-      {/* Canales y plantillas (MAQUETA · sin backend aún) */}
-      <div style={{ marginBottom: 16 }}>
-        <ConfigBanner tone="info" title="Edición de canales y plantillas — próximamente">
-          La matriz de canales por evento y el editor de plantillas se conectarán cuando el backend exponga su almacenamiento. Abajo se muestra la vista previsualizada.
-        </ConfigBanner>
-      </div>
-
-      <ConfigCard title="Plantillas de mensaje" desc="Texto que verá el cliente. Usa {cliente}, {fecha} y {especialista} como variables.">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, opacity: 0.7 }}>
-          {NOTIF_EVENTOS.map((e) => (
-            <GField key={e.id} label={`Plantilla · ${e.name}`}>
-              <textarea disabled rows={2} placeholder={`Hola {cliente}, tu cita de ${e.name.toLowerCase()}…`} style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--border-default)', background: 'var(--surface-sunken)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', resize: 'none' }} />
-            </GField>
-          ))}
-        </div>
-      </ConfigCard>
+      <PanelPlantillas />
     </div>
   );
 }
@@ -171,5 +159,113 @@ function DangerConfirm({ danger, onClose, onConfirm }: { danger: { title: string
         </GField>
       </div>
     </Dialog>
+  );
+}
+
+// ── Plantillas de mensaje (FASE-04, D5) ──────────────────────────────────────
+const ORDEN: EventoPlantilla[] = ['confirmacion', 'recordatorio', 'aviso', 'aviso_especialista', 'marketing'];
+
+function PanelPlantillas() {
+  const { data, cargando, error, recargar } = usePlantillas('sms');
+
+  return (
+    <ConfigCard
+      title="Plantillas de mensaje · SMS"
+      desc={`Texto que verá el cliente. Variables disponibles: ${VARIABLES_PLANTILLA.map((v) => `{{${v}}}`).join(' ')}. Deja el campo vacío para volver al texto por defecto.`}
+    >
+      {error ? (
+        <ErrorState onRetry={recargar} />
+      ) : cargando || !data ? (
+        <div style={{ display: 'grid', placeItems: 'center', padding: 30 }}><Spinner /></div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {ORDEN.map((ev) => {
+            const p = data.find((x) => x.evento === ev);
+            return p ? <EditorPlantilla key={ev} plantilla={p} onGuardado={recargar} /> : null;
+          })}
+        </div>
+      )}
+    </ConfigCard>
+  );
+}
+
+function EditorPlantilla({ plantilla, onGuardado }: { plantilla: PlantillaMensaje; onGuardado: () => void }) {
+  const toast = useToast();
+  const meta = EVENTO_LABEL[plantilla.evento];
+  const [texto, setTexto] = useState(plantilla.contenidoSms ?? '');
+  const [guardando, setGuardando] = useState(false);
+
+  const personalizado = texto.trim().length > 0;
+  // Lo que de verdad se enviará: el texto propio o el default de plataforma.
+  const efectivo = personalizado ? texto : plantilla.porDefecto;
+  const medida = medirSms(efectivo);
+  const sucio = texto !== (plantilla.contenidoSms ?? '');
+
+  async function guardar() {
+    setGuardando(true);
+    try {
+      await guardarPlantilla(plantilla.evento, 'sms', { contenidoSms: texto.trim() || null });
+      toast(personalizado ? 'Plantilla guardada' : 'Volviste al texto por defecto', 'success');
+      onGuardado();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  function insertar(v: string) {
+    setTexto((t) => `${t}${t && !t.endsWith(' ') ? ' ' : ''}{{${v}}}`);
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>{meta.name}</span>
+        {!personalizado && <Badge tone="neutral" size="md">Por defecto</Badge>}
+      </div>
+      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', margin: '0 0 10px' }}>{meta.desc}</p>
+
+      <textarea
+        rows={3}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        placeholder={plantilla.porDefecto}
+        aria-label={`Plantilla de ${meta.name}`}
+        style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', resize: 'vertical' }}
+      />
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '8px 0' }}>
+        {VARIABLES_PLANTILLA.map((v) => (
+          <button key={v} type="button" onClick={() => insertar(v)}
+            style={{ height: 26, padding: '0 9px', borderRadius: 999, border: '1px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+            {`{{${v}}}`}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: '10px 12px', borderRadius: 'var(--radius-xs)', background: 'var(--surface-sunken)', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '20px' }}>
+        <span className="eyebrow" style={{ display: 'block', marginBottom: 4 }}>Vista previa</span>
+        {efectivo}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+        <span className="data" style={{ fontSize: 'var(--text-xs)', color: medida.segmentos > 1 ? 'var(--warning)' : 'var(--text-tertiary)' }}>
+          {medida.caracteres} caracteres · {medida.segmentos} segmento{medida.segmentos === 1 ? '' : 's'} · {medida.codificacion}
+        </span>
+        <Button size="sm" loading={guardando} disabled={!sucio} onClick={guardar}>
+          {personalizado ? 'Guardar' : 'Restablecer'}
+        </Button>
+      </div>
+
+      {medida.codificacion === 'UCS-2' && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginTop: 8, fontSize: 'var(--text-xs)', color: 'var(--warning)' }}>
+          <Icon name="alert-circle" size={13} color="var(--warning)" style={{ flex: 'none', marginTop: 2 }} />
+          <span>
+            Caracteres fuera del alfabeto GSM ({medida.fueraDeGsm.slice(0, 6).join(' ')}) obligan a codificación Unicode: cada segmento pasa de 160 a 70 caracteres y el envío cuesta más. Quitar esas tildes suele reducir el mensaje a la mitad de segmentos.
+          </span>
+        </div>
+      )}
+    </div>
   );
 }

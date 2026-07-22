@@ -317,6 +317,8 @@ export class PublicAgendamientoService {
       } else if (nombreNuevo && nombreNuevo !== cli.nombre) {
         await tx.update(cliente).set({ nombre: nombreNuevo }).where(eq(cliente.id, cli.id));
       }
+      // Nombre efectivo tras la posible actualización (variable {{cliente}}).
+      const nombreCliente = nombreNuevo || cli.nombre;
 
       // precio estimado = suma de los servicios elegidos.
       const servicios = await tx
@@ -379,7 +381,12 @@ export class PublicAgendamientoService {
       return {
         citaId,
         estado,
-        notif: { sucursalNombre: suc?.nombre ?? '', especialistaNombre: esp?.nombre ?? '', inicio },
+        notif: {
+          sucursalNombre: suc?.nombre ?? '',
+          especialistaNombre: esp?.nombre ?? '',
+          clienteNombre: nombreCliente,
+          inicio,
+        },
       };
     });
 

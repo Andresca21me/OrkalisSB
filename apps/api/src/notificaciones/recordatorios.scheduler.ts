@@ -43,6 +43,7 @@ export class RecordatoriosScheduler {
         sucursalId: cita.sucursalId,
         inicio: cita.inicio,
         telefono: cliente.telefono,
+        clienteNombre: cliente.nombre,
         sucursalNombre: sucursal.nombre,
         especialistaNombre: especialista.nombre,
       })
@@ -72,7 +73,7 @@ export class RecordatoriosScheduler {
         await this.notificaciones.encolarRecordatorio(
           c.negocioId,
           c.telefono,
-          { sucursalNombre: c.sucursalNombre, especialistaNombre: c.especialistaNombre, inicio: c.inicio },
+          { sucursalNombre: c.sucursalNombre, especialistaNombre: c.especialistaNombre, clienteNombre: c.clienteNombre ?? undefined, inicio: c.inicio },
           { sucursalId: c.sucursalId, citaId: c.id },
         );
         encolados++;

@@ -304,6 +304,46 @@ export interface EstadoCupo {
   cicloFin: string;
 }
 
+/** Eventos cuyo texto puede personalizar cada negocio (FASE-04, D5). */
+export type EventoPlantilla =
+  | 'confirmacion'
+  | 'recordatorio'
+  | 'aviso'
+  | 'aviso_especialista'
+  | 'marketing';
+
+/** Canales que admiten plantilla (el OTP NO es configurable, es de plataforma). */
+export type CanalPlantilla = 'sms' | 'whatsapp';
+
+/**
+ * Variables permitidas en las plantillas. Es una **whitelist**: guardar una
+ * variable fuera de esta lista se rechaza, para que un typo no acabe enviándose
+ * al cliente como `{{fehca}}`.
+ */
+export const VARIABLES_PLANTILLA = [
+  'cliente',
+  'fecha',
+  'hora',
+  'sucursal',
+  'especialista',
+  'servicio',
+] as const;
+
+export type VariablePlantilla = (typeof VARIABLES_PLANTILLA)[number];
+
+/** Plantilla de un evento/canal (`GET /notificaciones/plantillas`). */
+export interface PlantillaMensaje {
+  evento: EventoPlantilla;
+  canal: CanalPlantilla;
+  /** Texto del negocio; `null` = usa el default de plataforma. */
+  contenidoSms: string | null;
+  whatsappContentSid: string | null;
+  activo: boolean;
+  /** Texto de plataforma que se usa cuando no hay personalización. */
+  porDefecto: string;
+  actualizadoEn: string | null;
+}
+
 /** Aviso persistente para el admin (`GET /notificaciones/alertas`). */
 export interface AlertaAdmin {
   id: string;

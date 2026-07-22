@@ -1,11 +1,17 @@
 /**
- * Plantillas de mensaje en español, formato es-CO (FASE-11, RF-047/048).
+ * Plantillas de mensaje en español, formato es-CO (RF-047/048).
+ *
+ * Desde FASE-04 estas son los **defaults de plataforma**: se usan cuando el
+ * negocio no ha personalizado el evento (`PlantillasService`). No se borran ni
+ * se tocan al editar una plantilla — son la red que garantiza que siempre haya
+ * un texto válido que enviar.
  */
 
 export interface DatosCita {
   sucursalNombre: string;
   especialistaNombre: string;
   servicioNombre?: string;
+  clienteNombre?: string;
   inicio: Date;
 }
 
@@ -14,6 +20,14 @@ export function formatFechaHora(d: Date): string {
   return new Intl.DateTimeFormat('es-CO', {
     timeZone: 'America/Bogota',
     dateStyle: 'full',
+    timeStyle: 'short',
+  }).format(d);
+}
+
+/** Solo la hora, para la variable `{{hora}}` de las plantillas. */
+export function formatHora(d: Date): string {
+  return new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
     timeStyle: 'short',
   }).format(d);
 }
@@ -30,4 +44,12 @@ export const plantillas = {
 
   aviso: (d: DatosCita): string =>
     `Tu cita del ${formatFechaHora(d.inicio)} en ${d.sucursalNombre} fue cancelada. Escríbenos para reagendar.`,
+
+  /** Aviso al ESPECIALISTA (se cablea en FASE-07; aquí queda el default). */
+  avisoEspecialista: (d: DatosCita): string =>
+    `Nueva novedad en tu agenda: ${d.clienteNombre ?? 'un cliente'} el ${formatFechaHora(d.inicio)} en ${d.sucursalNombre}.`,
+
+  /** Base de campaña (FASE-05); el negocio normalmente la personaliza. */
+  marketing: (d: DatosCita): string =>
+    `${d.sucursalNombre}: tenemos cupos disponibles esta semana. Responde para agendar.`,
 };

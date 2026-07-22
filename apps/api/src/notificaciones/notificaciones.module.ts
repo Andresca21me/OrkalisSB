@@ -4,6 +4,7 @@ import type { Env } from '../config/env.validation';
 import { JobQueue } from './job-queue';
 import { CuposService } from './cupos.service';
 import { AlertasService } from './alertas.service';
+import { PlantillasService } from './plantillas.service';
 import { NotificacionesController } from './notificaciones.controller';
 import { NotificacionesService } from './notificaciones.service';
 import { RecordatoriosScheduler } from './recordatorios.scheduler';
@@ -37,6 +38,7 @@ import { MockVerifyAdapter } from './verify/mock-verify.adapter';
     JobQueue,
     CuposService,
     AlertasService,
+    PlantillasService,
     NotificacionesService,
     OutboxWorker,
     RecordatoriosScheduler,
@@ -73,6 +75,6 @@ import { MockVerifyAdapter } from './verify/mock-verify.adapter';
       inject: [ConfigService],
     },
   ],
-  exports: [NotificacionesService, OutboxWorker, AlertasService, JobQueue, CuposService, RemitenteResolver, VERIFY_PORT],
+  exports: [NotificacionesService, OutboxWorker, AlertasService, PlantillasService, JobQueue, CuposService, RemitenteResolver, VERIFY_PORT],
 })
 export class NotificacionesModule {}

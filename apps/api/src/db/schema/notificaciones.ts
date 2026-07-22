@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { boolean, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { negocio, sucursal } from './tenant';
 import { cita } from './appointments';
-import { canalEnvioEnum, canalMensajeriaEnum, estadoMensajeEnum } from './_shared';
+import { canalEnvioEnum, canalMensajeriaEnum, estadoMensajeEnum, eventoPlantillaEnum } from './_shared';
 
 /**
  * Consumo de mensajería por negocio/canal/**ciclo de cobro** (ADR-009, D1).
@@ -27,6 +27,40 @@ export const consumoMensajeria = pgTable(
   },
   (t) => ({
     uq: unique('consumo_mensajeria_uq').on(t.negocioId, t.canal, t.cicloInicio),
+  }),
+);
+
+/**
+ * Plantilla de mensaje por negocio/evento/canal (FASE-04, D5).
+ *
+ * Si un negocio no tiene fila para un evento, se usa el default de plataforma de
+ * `templates.ts` — por eso todas las columnas de contenido son opcionales y la
+ * tabla puede estar vacía sin que nada deje de funcionar.
+ *
+ * SMS lleva **texto libre** con variables `{{…}}`; WhatsApp NO puede llevar texto
+ * libre fuera de la ventana de 24 h, así que guarda el **Content SID** de una
+ * plantilla aprobada por Meta y el mapeo de sus variables posicionales.
+ */
+export const plantillaMensaje = pgTable(
+  'plantilla_mensaje',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    negocioId: uuid('negocio_id')
+      .notNull()
+      .references(() => negocio.id, { onDelete: 'cascade' }),
+    evento: eventoPlantillaEnum('evento').notNull(),
+    /** Solo 'sms' | 'whatsapp' (el enum incluye 'email', validado en el DTO). */
+    canal: canalEnvioEnum('canal').notNull(),
+    contenidoSms: text('contenido_sms'),
+    whatsappContentSid: text('whatsapp_content_sid'),
+    /** Mapeo {"1":"cliente","2":"fecha"} → variables posicionales de Meta. */
+    whatsappVariables: jsonb('whatsapp_variables').$type<Record<string, string>>(),
+    activo: boolean('activo').notNull().default(true),
+    creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
+    actualizadoEn: timestamp('actualizado_en', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uq: unique('plantilla_mensaje_uq').on(t.negocioId, t.evento, t.canal),
   }),
 );
 
