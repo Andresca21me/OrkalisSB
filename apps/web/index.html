@@ -6,7 +6,52 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
     />
-    <title>Orkalis</title>
+
+    <!-- Icono de la pestaña. El SVG lo usan los navegadores modernos (nítido a
+         cualquier zoom); el .ico y los PNG son el respaldo para los que no. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0F1923" />
+
+    <title>Orkalis · Agenda y gestión para barberías y salones</title>
+    <meta
+      name="description"
+      content="Agenda en línea, recordatorios automáticos, finanzas y equipo de tu barbería o salón en un solo lugar. Tus clientes reservan solos, 24/7."
+    />
+
+    <!-- Open Graph: es lo que leen WhatsApp, Facebook e Instagram para armar la
+         tarjeta con imagen al pegar el enlace. Sin esto el enlace sale pelado.
+         La imagen DEBE ir con URL absoluta: los crawlers no resuelven rutas
+         relativas. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Orkalis" />
+    <meta property="og:title" content="Orkalis · Agenda y gestión para barberías y salones" />
+    <meta
+      property="og:description"
+      content="Tus clientes reservan solos. Agenda en línea, recordatorios automáticos, finanzas y equipo de tu negocio en un solo lugar."
+    />
+    <meta property="og:url" content="https://orkalis.com/" />
+    <meta property="og:image" content="https://orkalis.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Orkalis — software de agenda y gestión para barberías y salones"
+    />
+    <meta property="og:locale" content="es_CO" />
+
+    <!-- Twitter/X usa su propio juego de etiquetas; sin ellas cae a una tarjeta
+         pequeña sin imagen. -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Orkalis · Agenda y gestión para barberías y salones" />
+    <meta
+      name="twitter:description"
+      content="Tus clientes reservan solos. Agenda, recordatorios, finanzas y equipo de tu negocio en un solo lugar."
+    />
+    <meta name="twitter:image" content="https://orkalis.com/og.png" />
   </head>
   <body>
     <div id="root"></div>
