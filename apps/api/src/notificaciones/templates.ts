@@ -12,6 +12,8 @@ export interface DatosCita {
   especialistaNombre: string;
   servicioNombre?: string;
   clienteNombre?: string;
+  /** Qué pasó con la cita (avisos al especialista, FASE-07). */
+  motivo?: string;
   inicio: Date;
 }
 
@@ -45,9 +47,9 @@ export const plantillas = {
   aviso: (d: DatosCita): string =>
     `Tu cita del ${formatFechaHora(d.inicio)} en ${d.sucursalNombre} fue cancelada. Escríbenos para reagendar.`,
 
-  /** Aviso al ESPECIALISTA (se cablea en FASE-07; aquí queda el default). */
+  /** Aviso al ESPECIALISTA sobre un cambio en su agenda (FASE-07, D4). */
   avisoEspecialista: (d: DatosCita): string =>
-    `Nueva novedad en tu agenda: ${d.clienteNombre ?? 'un cliente'} el ${formatFechaHora(d.inicio)} en ${d.sucursalNombre}.`,
+    `${d.motivo ?? 'Novedad en tu agenda'}: ${d.clienteNombre ?? 'cliente'}${d.servicioNombre ? ' · ' + d.servicioNombre : ''} el ${formatFechaHora(d.inicio)} en ${d.sucursalNombre}.`,
 
   /** Base de campaña (FASE-05); el negocio normalmente la personaliza. */
   marketing: (d: DatosCita): string =>

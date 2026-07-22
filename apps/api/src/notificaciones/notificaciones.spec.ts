@@ -17,6 +17,7 @@ import { RemitenteResolver } from './remitente/remitente.resolver';
 import { NotificacionesService } from './notificaciones.service';
 import { OutboxWorker, esTransitorio } from './outbox.worker';
 import { RecordatoriosScheduler } from './recordatorios.scheduler';
+import { AvisosEspecialistaService } from '../agendamiento/avisos-especialista.service';
 import { plantillas } from './templates';
 import { MetricsService } from '../observability/metrics.service';
 import type { Canal, MensajeSalida, NotificationSender, ResultadoEnvio } from './notification-sender.port';
@@ -331,6 +332,60 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
     });
     const m = await ultimoMensajeDe('confirmacion');
     expect(m.cuerpo).toContain('¡Reserva confirmada!');
+  });
+
+  describe('avisos al especialista (FASE-07, D4)', () => {
+    let avisos: AvisosEspecialistaService;
+    let citaId: string;
+    const ctx = () => ({ negocioId, sucursalIds: null, rol: 'admin' as const });
+
+    beforeAll(async () => {
+      avisos = new AvisosEspecialistaService(notificaciones);
+      const inicio = new Date(Date.now() + 30 * 86400_000);
+      const [c] = await adminDb
+        .insert(cita)
+        .values({
+          negocioId,
+          sucursalId,
+          clienteId: cliId,
+          especialistaId: espId,
+          inicio,
+          fin: new Date(inicio.getTime() + 30 * 60000),
+          estado: EstadoCita.Confirmada,
+          origen: OrigenCita.CreacionInterna,
+        })
+        .returning({ id: cita.id });
+      citaId = c.id;
+    });
+
+    it('sin celular verificado se omite el aviso y la operación NO falla', async () => {
+      // El especialista de estas pruebas se creó sin teléfono (altas anteriores).
+      await expect(avisos.avisar(ctx(), citaId, 'Nueva cita en tu agenda')).resolves.toBeUndefined();
+      const m = await ultimoMensajeDe('aviso_especialista');
+      expect(m).toBeUndefined();
+    });
+
+    it('con celular verificado se encola el aviso con el motivo y el cliente', async () => {
+      await adminDb
+        .update(especialista)
+        .set({ telefono: '+573009998877', telefonoVerificadoEn: new Date() })
+        .where(eq(especialista.id, espId));
+
+      await avisos.avisar(ctx(), citaId, 'Cita cancelada');
+
+      const m = await ultimoMensajeDe('aviso_especialista');
+      expect(m.destino).toBe('+573009998877');
+      expect(m.cuerpo).toContain('Cita cancelada');
+      expect(m.cuerpo).toContain('Ana'); // nombre del cliente
+      expect(m.citaId).toBe(citaId);
+      expect(m.transaccional).toBe(true); // no se corta por cupo
+    });
+
+    it('una cita inexistente no rompe nada (el aviso nunca tumba la operación)', async () => {
+      await expect(
+        avisos.avisar(ctx(), '00000000-0000-4000-8000-000000000000', 'X'),
+      ).resolves.toBeUndefined();
+    });
   });
 
   it('scheduler: encola recordatorio dentro de la ventana y lo marca; ignora los lejanos', async () => {

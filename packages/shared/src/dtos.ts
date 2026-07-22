@@ -327,6 +327,8 @@ export const VARIABLES_PLANTILLA = [
   'sucursal',
   'especialista',
   'servicio',
+  /** Solo en `aviso_especialista`: "nueva cita", "cancelada"… */
+  'motivo',
 ] as const;
 
 export type VariablePlantilla = (typeof VARIABLES_PLANTILLA)[number];

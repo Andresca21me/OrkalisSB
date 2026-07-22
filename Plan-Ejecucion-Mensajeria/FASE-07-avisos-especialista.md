@@ -2,6 +2,12 @@
 
 > Parte de `PLAN-MENSAJERIA`. Abre `PLAN-MENSAJERIA.md` + este archivo.
 > Implementa **D4**: avisar al especialista en cita confirmada/asignada, cancelada y reagendada.
+>
+> **Estado: ✅ implementada** (247 tests verdes), con **una salvedad de alcance**:
+> el evento *reagendada* **no se cableó porque el producto no tiene flujo de
+> reagendamiento** — no existe endpoint ni UI para mover una cita de hora. Lo más
+> cercano, **reasignar** (cambio de especialista), sí está cubierto. Cuando se
+> añada el reagendamiento, basta una línea más llamando a `AvisosEspecialistaService`.
 
 ## Objetivo
 Notificar por SMS/WhatsApp al especialista (usando su teléfono verificado) cuando una de sus citas se **confirma/asigna**, se **cancela** o se **reagenda**. Hoy el especialista solo lo ve in-app.
@@ -45,6 +51,14 @@ Notificar por SMS/WhatsApp al especialista (usando su teléfono verificado) cuan
 - E2E de los tres eventos (confirmación, cancelación, reagendamiento).
 - Omisión correcta si el especialista no tiene teléfono verificado.
 - Consumo imputado al canal correcto.
+
+## Cómo quedó implementado
+- **`agendamiento/avisos-especialista.service.ts`**: un único punto que carga cita + especialista + cliente + sucursal y encola. Vive aparte porque lo disparan dos flujos (agenda interna y reserva pública) y duplicar la consulta era pedir que se desincronizaran.
+- **Nunca tumba la operación**: se llama siempre **post-commit** y captura cualquier error. La cita ya es un hecho; que falle el aviso no puede deshacerla. Hay prueba con una cita inexistente.
+- **Sin celular verificado se omite y se registra** (altas anteriores a FASE-06): comprueba `telefono` **y** `telefono_verificado_en`, no basta con que haya número.
+- **Productores cableados**: cita interna creada (`crearAgendada`), reserva pública confirmada (solo si queda `Confirmada`; si entra como `Solicitada` el aviso irá al aprobarla), cancelación interna, cancelación desde el enlace público, y reasignación (avisa al nuevo responsable).
+- **Variable `{{motivo}}`** añadida a la whitelist de plantillas: distingue "Nueva cita en tu agenda" / "Cita cancelada" / "Te asignaron esta cita" y permite que el negocio personalice el texto sin perder el contexto (FASE-04).
+- **Transaccional**: como el resto de avisos operativos, no se corta al agotarse el cupo; se envía marcado `sobre_cupo` y queda auditado en `mensaje`.
 
 ## Trazabilidad
 D4, RF-047/048 (avisos), Parte VII del plan, HU-ESP-002 (recepción de citas — se complementa con mensajería).

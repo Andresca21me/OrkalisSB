@@ -7,6 +7,7 @@ import type { TenantContext } from '../db/tenant-context';
 import { sucursalScope } from '../common/scope';
 import { transicionar, type EventoCita } from './cita-state-machine';
 import { ValidadorFactory } from './validators/validador.factory';
+import { AvisosEspecialistaService } from './avisos-especialista.service';
 
 const EXCLUSION_VIOLATION = '23P01';
 
@@ -15,7 +16,10 @@ type Cita = typeof cita.$inferSelect;
 /** Agenda interna y operación del turno (FASE-08, RF-023/025/028). */
 @Injectable()
 export class AgendamientoService {
-  constructor(private readonly validadores: ValidadorFactory) {}
+  constructor(
+    private readonly validadores: ValidadorFactory,
+    private readonly avisos: AvisosEspecialistaService,
+  ) {}
 
   /**
    * Agenda filtrable por sucursal/especialista/rango, acotada por alcance.
@@ -89,11 +93,13 @@ export class AgendamientoService {
   }
 
   /** Crea una cita AGENDADA interna (futura), en estado Confirmada (FASE-05). */
-  crearAgendada(
+  async crearAgendada(
     ctx: TenantContext,
     input: { sucursalId: string; especialistaId: string; clienteId?: string; servicioIds: string[]; inicio: Date },
   ): Promise<Cita> {
-    return this.crearInterna(ctx, { ...input, estado: EstadoCita.Confirmada });
+    const c = await this.crearInterna(ctx, { ...input, estado: EstadoCita.Confirmada });
+    await this.avisos.avisar(ctx, c.id, 'Nueva cita en tu agenda');
+    return c;
   }
 
   /** Aplica una transición de estado validada por la máquina de estados. */
@@ -122,7 +128,7 @@ export class AgendamientoService {
    * (`cita_no_solape`) rechaza si el destino ya tiene un turno en esa franja.
    */
   async reasignar(ctx: TenantContext, citaId: string, especialistaId: string): Promise<Cita> {
-    return runInTenantTx(ctx, async (tx) => {
+    const reasignada = await runInTenantTx(ctx, async (tx) => {
       const actual = await this.cargar(tx, citaId);
       if (actual.especialistaId === especialistaId) return actual;
 
@@ -143,13 +149,18 @@ export class AgendamientoService {
         throw e;
       }
     });
+    // Post-commit: el nuevo responsable se entera de que le asignaron el turno.
+    await this.avisos.avisar(ctx, citaId, 'Te asignaron esta cita');
+    return reasignada;
   }
 
   iniciar(ctx: TenantContext, citaId: string): Promise<Cita> {
     return this.transicion(ctx, citaId, 'iniciar');
   }
-  cancelar(ctx: TenantContext, citaId: string): Promise<Cita> {
-    return this.transicion(ctx, citaId, 'cancelar');
+  async cancelar(ctx: TenantContext, citaId: string): Promise<Cita> {
+    const c = await this.transicion(ctx, citaId, 'cancelar');
+    await this.avisos.avisar(ctx, citaId, 'Cita cancelada');
+    return c;
   }
   noAsistio(ctx: TenantContext, citaId: string): Promise<Cita> {
     return this.transicion(ctx, citaId, 'no_asistio');

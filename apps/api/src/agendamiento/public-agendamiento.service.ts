@@ -28,6 +28,7 @@ import { ValidadorFactory } from './validators/validador.factory';
 import { bogotaParts } from './validators/validador-cita.port';
 import { transicionar } from './cita-state-machine';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
+import { AvisosEspecialistaService } from './avisos-especialista.service';
 import { mensajeriaSimulada } from '../notificaciones/messaging-mode';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 
@@ -49,6 +50,7 @@ export class PublicAgendamientoService {
     private readonly notificaciones: NotificacionesService,
     private readonly metrics: MetricsService,
     private readonly horario: HorarioService,
+    private readonly avisos: AvisosEspecialistaService,
   ) {}
 
   /** Resuelve el negocio de la sucursal (slug) y arma un contexto de sistema. */
@@ -395,6 +397,11 @@ export class PublicAgendamientoService {
       sucursalId,
       citaId: resultado.citaId,
     });
+    // Si la reserva quedó confirmada, el especialista se entera al momento
+    // (si quedó SOLICITADA se le avisará al aprobarla).
+    if (resultado.estado === EstadoCita.Confirmada) {
+      await this.avisos.avisar(ctx, resultado.citaId, 'Nueva cita en tu agenda');
+    }
     this.metrics.inc(METRICAS.reservasCreadas);
     return {
       citaId: resultado.citaId,
@@ -447,6 +454,7 @@ export class PublicAgendamientoService {
         { sucursalId, citaId },
       );
     }
+    await this.avisos.avisar(ctx, citaId, 'Cita cancelada por el cliente');
     return { estado: r.estado };
   }
 

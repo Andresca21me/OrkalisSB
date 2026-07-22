@@ -5,6 +5,7 @@ import { DisponibilidadService } from './disponibilidad.service';
 import { OtpService } from './otp.service';
 import { PublicAgendamientoService } from './public-agendamiento.service';
 import { AgendamientoService } from './agendamiento.service';
+import { AvisosEspecialistaService } from './avisos-especialista.service';
 import { ValidadorFactory } from './validators/validador.factory';
 import { HorarioService } from './horario.service';
 import { PublicAgendamientoController } from './public-agendamiento.controller';
@@ -19,6 +20,7 @@ import { HorarioController } from './horario.controller';
     DisponibilidadService,
     OtpService,
     PublicAgendamientoService,
+    AvisosEspecialistaService,
     AgendamientoService,
     ValidadorFactory,
     HorarioService,

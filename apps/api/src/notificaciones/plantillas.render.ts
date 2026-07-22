@@ -30,6 +30,7 @@ export function valoresDe(d: DatosCita): Record<string, string> {
     sucursal: d.sucursalNombre,
     especialista: d.especialistaNombre,
     servicio: d.servicioNombre ?? '',
+    motivo: d.motivo ?? '',
   };
 }
 

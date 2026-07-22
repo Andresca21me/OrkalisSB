@@ -24,6 +24,7 @@ import { OtpService } from './otp.service';
 import { ValidadorFactory } from './validators/validador.factory';
 import { PublicAgendamientoService } from './public-agendamiento.service';
 import { AgendamientoService } from './agendamiento.service';
+import { AvisosEspecialistaService } from './avisos-especialista.service';
 import { JobQueue } from '../notificaciones/job-queue';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { CuposService } from '../notificaciones/cupos.service';
@@ -91,6 +92,7 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     // El outbox no se drena aquí: estas pruebas solo verifican el dominio de
     // agendamiento, que encola (persiste) sin enviar.
     const horario = new HorarioService();
+    const avisos = new AvisosEspecialistaService(notificaciones);
     pub = new PublicAgendamientoService(
       new DisponibilidadService(horario),
       new OtpService(),
@@ -99,8 +101,9 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
       notificaciones,
       metrics,
       horario,
+      avisos,
     );
-    agenda = new AgendamientoService(validadores);
+    agenda = new AgendamientoService(validadores, avisos);
   });
 
   afterAll(async () => {

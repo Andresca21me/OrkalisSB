@@ -9,7 +9,7 @@ import { plantillas, type DatosCita } from './templates';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 
 /** Tipos de mensaje que emite el dominio (crece por fase). */
-export type TipoMensaje = 'otp' | 'confirmacion' | 'recordatorio' | 'aviso' | 'marketing' | 'alerta';
+export type TipoMensaje = 'otp' | 'confirmacion' | 'recordatorio' | 'aviso' | 'aviso_especialista' | 'marketing' | 'alerta';
 
 /** Datos comunes de trazabilidad de un mensaje encolado. */
 interface Contexto {
@@ -67,6 +67,15 @@ export class NotificacionesService implements OnModuleInit {
   }
 
   /**
+   * Aviso al ESPECIALISTA por un cambio en su agenda (FASE-07, D4).
+   * Transaccional: no se corta al agotarse el cupo, como el resto de avisos
+   * operativos. El teléfono debe venir ya verificado (FASE-06).
+   */
+  async encolarAvisoEspecialista(negocioId: string, telefono: string, datos: DatosCita, ctx: Contexto = {}): Promise<void> {
+    await this.encolarCita(negocioId, telefono, datos, 'aviso_especialista', ctx);
+  }
+
+  /**
    * Mensaje de marketing (NO transaccional): sujeto a bloqueo duro por cupo
    * (D2). Es la costura que usarán las campañas de FASE-05 en adelante.
    */
@@ -103,7 +112,7 @@ export class NotificacionesService implements OnModuleInit {
     negocioId: string,
     telefono: string,
     datos: DatosCita,
-    tipo: 'confirmacion' | 'recordatorio' | 'aviso',
+    tipo: 'confirmacion' | 'recordatorio' | 'aviso' | 'aviso_especialista',
     ctx: Contexto,
   ): Promise<void> {
     // El texto se resuelve AQUÍ (plantilla del negocio o default de plataforma)
