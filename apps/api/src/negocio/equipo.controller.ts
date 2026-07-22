@@ -148,6 +148,12 @@ export class EspecialistaFotoController {
    */
   @Get(':id/foto')
   @Header('Cache-Control', 'public, max-age=31536000, immutable')
+  // Helmet marca TODA respuesta como `same-origin`, y como la web vive en
+  // orkalis.com y la API en api.orkalis.com, el navegador descargaba la imagen
+  // y la descartaba sin pintarla —sin ningún error visible—. Se abre solo en
+  // esta ruta, que sirve imágenes públicas por diseño; el resto de la API
+  // conserva la política estricta.
+  @Header('Cross-Origin-Resource-Policy', 'cross-origin')
   async foto(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response): Promise<void> {
     const f = await this.equipoService.leerFoto(id);
     if (!f) throw new NotFoundException('Sin foto.');
