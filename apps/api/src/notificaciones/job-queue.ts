@@ -5,8 +5,12 @@ type JobHandler = (payload: unknown) => Promise<void>;
 /**
  * Cola en proceso (FASE-11) — abstracción simple, NO bloqueante: `enqueue`
  * retorna de inmediato y el handler corre fuera del hilo de la petición
- * (microtask). En FASE-14/Railway se reemplaza por BullMQ/cola gestionada sin
- * tocar el dominio. `drain()` permite a las pruebas esperar el procesamiento.
+ * (microtask). `drain()` permite a las pruebas esperar el procesamiento.
+ *
+ * **Ya NO la usa la mensajería** (Plan-Mensajeria FASE-02): esa pasó al outbox
+ * durable (`mensaje` + `OutboxWorker`), porque un reinicio perdía los mensajes
+ * en vuelo. Aquí quedan los jobs no-mensajería (`exportacion-pesada`), donde
+ * perder el trabajo al reiniciar es aceptable.
  */
 @Injectable()
 export class JobQueue {

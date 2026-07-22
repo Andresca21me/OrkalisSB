@@ -11,6 +11,7 @@ import { credencialesDe, getTwilioClient } from './twilio-client';
  * sender (`whatsapp:+…`) y las credenciales salen del `PerfilRemitente`.
  */
 export class TwilioWhatsappAdapter implements NotificationSender {
+  readonly proveedor = 'twilio';
   private readonly logger = new Logger('TwilioWhatsApp');
 
   constructor(private readonly statusCallbackUrl?: string) {}

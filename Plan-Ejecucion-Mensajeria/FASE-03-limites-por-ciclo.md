@@ -2,6 +2,8 @@
 
 > Parte de `PLAN-MENSAJERIA`. Abre `PLAN-MENSAJERIA.md` + este archivo.
 > Implementa **D1** (reinicio por ciclo) y **D2** (marketing duro / transaccional blando).
+>
+> **Estado: ✅ implementada** (migración `0010`, código y pruebas). Sin acciones manuales.
 
 ## Objetivo
 Alinear el consumo de cupos al **ciclo de cobro** (aniversario `diaCobro`/`proximoCobro`), contabilizar por **canal real** (no fijo `sms`), aplicar la **política de bloqueo** (marketing duro, transaccional blando con alerta) y corregir los bugs de consumo detectados.
@@ -51,6 +53,16 @@ Alinear el consumo de cupos al **ciclo de cobro** (aniversario `diaCobro`/`proxi
 - Enforcement por canal (marketing vs transaccional), registro de `sobre_cupo`.
 - Alertas 80/100% (una vez por umbral/ciclo).
 - Migración: contadores coherentes tras migrar.
+
+## Cómo quedó implementado
+- **`notificaciones/ciclo.ts` · `cicloDeCobro(sus, ahora)`** — función pura. Deriva `[inicio, fin)` del **día ancla** (`dia_cobro` → día de `proximo_cobro` → `trial_fin` → `creado_en`), acotado a 1..28 igual que `siguienteCobro`. Se calcula desde el ancla y **no** desde `proximo_cobro`, así el ciclo sigue siendo el correcto aunque el cron de cobro vaya atrasado. 10 pruebas de borde en `ciclo.spec.ts` (cruce de año, febrero, cuenta en prueba, ciclos consecutivos sin huecos).
+- **`consumo_mensajeria` reindexada**: `periodo 'YYYY-MM'` → `ciclo_inicio`/`ciclo_fin` + `unique(negocio_id, canal, ciclo_inicio)`. El histórico se **backfillea** al mes calendario que tenía; como los ciclos nuevos van anclados al aniversario, el ciclo vigente arranca en 0 (comportamiento aceptado en "Riesgos").
+- **D2 en dos barreras**: el marketing sin cupo **ni se encola** — entra al outbox ya como `sin_cupo`, así queda auditado pero el worker no lo reclama nunca; y el worker vuelve a comprobarlo por si el cupo se agotó entre el encolado y el envío. Lo transaccional siempre sale y queda marcado `sobre_cupo`.
+- **Consumo por canal real y solo al enviar**: `CuposService.registrar` lo llama el `OutboxWorker` tras el envío definitivo (nunca por intento fallido) con el `cupo_canal` del mensaje, y **devuelve el estado ya actualizado** para detectar el cruce de umbral sin releer.
+- **Alertas** (`alerta_admin` + `AlertasService`): al cruzar 80 % y 100 % por canal/ciclo se crea un aviso in-app persistente y, si el cupo de email tiene margen, se envía correo al admin. La **anti-spam es de base de datos**: `clave = cupo:<canal>:<umbral>:<ciclo>` con índice único, así que dos workers concurrentes no la duplican. No se manda email por el propio canal `email` (si el problema es el cupo de correo, avisar por correo no ayuda).
+- **Fixes del paso 6**: `cupos.service.ts` filtra el consumo por `negocio_id` explícitamente (RLS es la segunda línea, no la única) y `plataforma.service.ts` deja de sumar **todos** los períodos históricos — ahora filtra por el ciclo vigente.
+- **API**: `GET /notificaciones/cupos` devuelve `restante`, `cicloInicio` y `cicloFin`; nuevos `GET /notificaciones/alertas?sinLeer=true` y `POST /notificaciones/alertas/:id/leer`.
+- **Front**: Configuración → Notificaciones muestra los avisos (descartables con "Entendido") y la tarjeta de cupos ahora dice el rango del ciclo en vez de "período actual".
 
 ## Trazabilidad
 ADR-009 (cupos por plan), RF-006, Parte V del plan, D1/D2.

@@ -8,7 +8,7 @@ import { client, db } from './client';
 import { runInTenantTx } from './tx';
 import type { TenantContext } from './tenant-context';
 import { sucursalScope } from '../common/scope';
-import { cita, cliente, especialista, negocio, sucursal } from './schema';
+import { cita, cliente, especialista, mensaje, negocio, sucursal } from './schema';
 
 /**
  * Pruebas de aislamiento multi-tenant (FASE-04, RNF-010) — NO NEGOCIABLES.
@@ -138,6 +138,21 @@ describe('Aislamiento multi-tenant (RLS + scope de sucursal)', () => {
       tx.select().from(cita).where(sucursalScope(ctx, cita.sucursalId)),
     );
     expect(filas).toHaveLength(0);
+  });
+
+  it('el outbox de mensajería también está aislado (tabla `mensaje`, FASE-02)', async () => {
+    await adminDb
+      .insert(mensaje)
+      .values({ negocioId: bId, canal: 'sms', cupoCanal: 'sms', tipo: 'aviso', destino: '3000000000', cuerpo: 'de B' });
+
+    const filas = await runInTenantTx(ctxA(null), (tx) => tx.select().from(mensaje));
+    expect(filas).toHaveLength(0); // A no ve el outbox de B
+
+    await expect(
+      runInTenantTx(ctxA(null), (tx) =>
+        tx.insert(mensaje).values({ negocioId: bId, canal: 'sms', cupoCanal: 'sms', tipo: 'aviso', destino: '300', cuerpo: 'intruso' }),
+      ),
+    ).rejects.toThrow();
   });
 
   it('SIN fijar la GUC, la app NO ve nada (RLS es la última línea de defensa)', async () => {

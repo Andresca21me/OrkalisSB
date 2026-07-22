@@ -1,6 +1,11 @@
 # FASE-02 · Outbox persistente + auditoría + webhook de estado
 
 > Parte de `PLAN-MENSAJERIA`. Abre `PLAN-MENSAJERIA.md` + este archivo.
+>
+> **Estado: ✅ implementada** (código, migración `0010` y pruebas). Falta solo la
+> acción manual **AM-4**: publicar la URL del webhook y pegarla en Twilio (ver
+> abajo). Sin ella todo funciona, pero el estado se queda en `enviado` y nunca
+> avanza a `entregado`.
 
 ## Objetivo
 Reemplazar la cola en memoria (`JobQueue`, fire-and-forget) por un **outbox durable** (tabla `mensaje`) que es a la vez cola con reintentos, **log de auditoría** y fuente de métricas. Añadir el **webhook de estado de Twilio** para conocer la entrega real. Mantener intacta la API de encolado del dominio.
@@ -28,6 +33,21 @@ Reemplazar la cola en memoria (`JobQueue`, fire-and-forget) por un **outbox dura
 
 ## ⚠️ Acción requerida del desarrollador
 - **AM-4 · Webhook público:** exponer `https://<dominio>/api/webhooks/twilio/status` y configurarlo como Status Callback del número/Messaging Service en Twilio. Entregar/confirmar `TWILIO_STATUS_CALLBACK_URL`.
+
+  **Cómo hacerlo (pendiente):**
+  1. En Twilio → *Messaging → Services → (tu Messaging Service) → Integration*, pega la URL en **Status Callback URL**. (Si no usas Messaging Service, va en el número: *Phone Numbers → Manage → Active numbers → tu número → Messaging → Status Callback URL*.)
+  2. Pon esa **misma** URL en `TWILIO_STATUS_CALLBACK_URL` (en `apps/api/.env` y en las variables de Railway) y reinicia la API. Debe coincidir carácter por carácter: la firma `X-Twilio-Signature` se calcula sobre la URL exacta, y si difieren el webhook responde 403.
+  3. Verifica: manda un SMS de prueba y consulta la fila en `mensaje` — debe pasar de `enviado` a `entregado`.
+
+  > En local no hay URL pública; para probarlo se puede usar un túnel (`ngrok http 3000`) y apuntar la variable al dominio del túnel.
+
+## Cómo quedó implementado
+- **Outbox `mensaje`** (migración `0010`, con RLS por tenant y política `mensaje_tenant_isolation`). Separa `canal` (transporte: sms/whatsapp/email) de `cupo_canal` (cupo del plan, ADR-009), porque WhatsApp utility y marketing comparten transporte y consumen cupos distintos.
+- **`NotificacionesService.encolar*`** son ahora `async` e **insertan** la fila (`estado='pendiente'`) dentro del tenant; no hablan con el proveedor. Un fallo al encolar se registra pero **no** tumba la operación de negocio que lo originó (la reserva ya está confirmada).
+- **`OutboxWorker`** (`@Interval(5s)`): reclama con `FOR UPDATE SKIP LOCKED` (seguro con varias réplicas), recupera filas colgadas en `enviando` tras un crash (>5 min), resuelve el `PerfilRemitente` (D6) y despacha. Reintenta 429/5xx/red con backoff 30s → 60s → 120s (máx 3 intentos); un error permanente marca `fallido` sin gastar cupo. `drain()` reemplaza a `JobQueue.drain()` en las pruebas.
+- **Cupos:** la verificación/registro se movió al worker. El marketing sobre cupo queda `descartado` (auditable); lo transaccional se envía y se marca `sobre_cupo=true`.
+- **Webhook** `POST /api/webhooks/twilio/status` (`@Public()`), valida `X-Twilio-Signature` y es idempotente por rango de estado: un evento repetido o tardío nunca retrocede el ciclo de vida.
+- **`JobQueue` se conserva** solo para `exportacion-pesada` (job no-mensajería), como preveía el paso 7.
 
 ## Riesgos y mitigaciones
 - **Doble envío** si el worker no es idempotente → estado `enviando` + lock; nunca reenviar filas ya `enviado`.

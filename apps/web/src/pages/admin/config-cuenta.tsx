@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { CanalCupo } from '@orkalis/shared';
 import { api } from '../../lib/api';
-import { num } from '../../lib/format';
-import { useCupos } from '../../lib/useCupos';
+import { fechaCorta, num } from '../../lib/format';
+import { marcarAlertaLeida, useAlertas, useCupos } from '../../lib/useCupos';
 import { Badge, Button, Dialog, ErrorState, Icon, Spinner, useToast } from '../../ui/ui';
 import { GField } from './gestion-ui';
 import { ConfigBanner, ConfigCard } from './config-ui';
@@ -23,14 +23,40 @@ const NOTIF_EVENTOS = [
 // ── Notificaciones ───────────────────────────────────────────────────────────
 export function ConfigNotif() {
   const cupos = useCupos();
+  const alertas = useAlertas();
+  const ciclo = cupos.data?.[0];
+
+  async function leer(id: string) {
+    await marcarAlertaLeida(id);
+    alertas.recargar();
+  }
 
   return (
     <div>
       <h1 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em' }}>Notificaciones</h1>
       <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '4px 0 20px' }}>Cupos de mensajería del plan y plantillas de los mensajes.</p>
 
+      {/* Avisos de sobreconsumo (FASE-03) */}
+      {alertas.data?.map((a) => (
+        <div key={a.id} style={{ marginBottom: 12 }}>
+          <ConfigBanner tone={a.severidad === 'critico' ? 'danger' : 'warning'} title={a.titulo}>
+            {a.detalle}
+            <div style={{ marginTop: 10 }}>
+              <Button size="sm" variant="ghost" onClick={() => leer(a.id)}>Entendido</Button>
+            </div>
+          </ConfigBanner>
+        </div>
+      ))}
+
       {/* Cupos de mensajería (REAL · H5) */}
-      <ConfigCard title="Cupos de mensajería · período actual" desc="Consumo y cupo de cada canal según tu plan (ADR-009).">
+      <ConfigCard
+        title="Cupos de mensajería · ciclo actual"
+        desc={
+          ciclo
+            ? `Consumo y cupo de cada canal según tu plan. El ciclo va del ${fechaCorta(ciclo.cicloInicio)} al ${fechaCorta(ciclo.cicloFin)}: los cupos se recargan en tu fecha de cobro, no el día 1.`
+            : 'Consumo y cupo de cada canal según tu plan (ADR-009).'
+        }
+      >
         {cupos.error ? (
           <ErrorState onRetry={cupos.recargar} />
         ) : cupos.cargando || !cupos.data ? (
@@ -40,7 +66,7 @@ export function ConfigNotif() {
             {cupos.data.map((c) => {
               const meta = CANAL_LABEL[c.canal];
               const pct = c.cupo > 0 ? Math.min(100, Math.round((c.consumo / c.cupo) * 100)) : 0;
-              const restante = Math.max(0, c.cupo - c.consumo);
+              const restante = c.restante;
               const color = !c.dentroDeCupo ? 'var(--error)' : pct >= 80 ? 'var(--warning)' : 'var(--brand)';
               return (
                 <div key={c.canal} style={{ padding: 16, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--surface-card)' }}>

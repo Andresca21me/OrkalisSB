@@ -26,8 +26,6 @@ import { PublicAgendamientoService } from './public-agendamiento.service';
 import { AgendamientoService } from './agendamiento.service';
 import { JobQueue } from '../notificaciones/job-queue';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
-import { MockAdapter } from '../notificaciones/adapters/mock.adapter';
-import { RemitenteResolver } from '../notificaciones/remitente/remitente.resolver';
 import { CuposService } from '../notificaciones/cupos.service';
 import { PlanService } from '../plans/plan.service';
 import { MetricsService } from '../observability/metrics.service';
@@ -87,9 +85,10 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     const validadores = new ValidadorFactory();
     const queue = new JobQueue();
     const metrics = new MetricsService();
-    const remitente = new RemitenteResolver({ get: () => undefined } as unknown as ConstructorParameters<typeof RemitenteResolver>[0]);
-    const notificaciones = new NotificacionesService(queue, [new MockAdapter()], remitente, new CuposService(new PlanService()), metrics);
+    const notificaciones = new NotificacionesService(queue, new CuposService(new PlanService()), metrics);
     notificaciones.onModuleInit();
+    // El outbox no se drena aquí: estas pruebas solo verifican el dominio de
+    // agendamiento, que encola (persiste) sin enviar.
     const horario = new HorarioService();
     pub = new PublicAgendamientoService(
       new DisponibilidadService(horario),

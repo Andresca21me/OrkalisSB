@@ -1,22 +1,29 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { runInTenantTx } from '../db/tx';
+import { mensaje } from '../db/schema';
 import { JobQueue } from './job-queue';
-import { NOTIFICATION_ADAPTERS, type MensajeSalida, type NotificationSender } from './notification-sender.port';
-import { RemitenteResolver } from './remitente/remitente.resolver';
+import type { Canal } from './notification-sender.port';
 import { CuposService, type CanalCupo } from './cupos.service';
 import { plantillas, type DatosCita } from './templates';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 
-interface DatosCitaSer {
-  sucursalNombre: string;
-  especialistaNombre: string;
-  servicioNombre?: string;
-  inicio: string; // ISO
+/** Tipos de mensaje que emite el dominio (crece por fase). */
+export type TipoMensaje = 'otp' | 'confirmacion' | 'recordatorio' | 'aviso' | 'marketing' | 'alerta';
+
+/** Datos comunes de trazabilidad de un mensaje encolado. */
+interface Contexto {
+  sucursalId?: string | null;
+  citaId?: string | null;
 }
 
 /**
- * Orquestador de notificaciones (FASE-11). Encola (no bloquea) y los workers
- * envían vía el puerto `NotificationSender`, contabilizando cupos y aplicando
- * la política de exceso. El dominio solo llama a los métodos `encolar*`.
+ * Orquestador de notificaciones (Plan-Mensajeria FASE-02).
+ *
+ * `encolar*` **persiste** una fila en el outbox (`mensaje`, estado `pendiente`)
+ * dentro del tenant y retorna: no habla con el proveedor ni bloquea la petición
+ * (RNF-002). El envío real, los reintentos y la contabilidad de cupos corren en
+ * el `OutboxWorker`. Como la cola es durable, reiniciar el proceso ya no pierde
+ * mensajes. El dominio sigue viendo solo los métodos `encolar*`.
  */
 @Injectable()
 export class NotificacionesService implements OnModuleInit {
@@ -24,93 +31,148 @@ export class NotificacionesService implements OnModuleInit {
 
   constructor(
     private readonly queue: JobQueue,
-    @Inject(NOTIFICATION_ADAPTERS) private readonly adapters: NotificationSender[],
-    private readonly remitente: RemitenteResolver,
     private readonly cupos: CuposService,
     private readonly metrics: MetricsService,
   ) {}
 
   onModuleInit(): void {
-    this.queue.registrar('enviar-otp', (p) => this.hOtp(p as { negocioId: string; telefono: string; codigo: string }));
-    this.queue.registrar('enviar-confirmacion', (p) => this.hCita(p, 'confirmacion'));
-    this.queue.registrar('enviar-recordatorio', (p) => this.hCita(p, 'recordatorio'));
-    this.queue.registrar('enviar-aviso', (p) => this.hCita(p, 'aviso'));
+    // La mensajería ya no usa la cola en memoria; queda para jobs no-mensajería.
     this.queue.registrar('exportacion-pesada', (p) => this.hExportacion(p));
   }
 
   // ── API de encolado (la usa el dominio) ─────────────────────────────────────
-  encolarOtp(negocioId: string, telefono: string, codigo: string): void {
-    this.queue.enqueue('enviar-otp', { negocioId, telefono, codigo });
+  async encolarOtp(negocioId: string, telefono: string, codigo: string, ctx: Contexto = {}): Promise<void> {
+    await this.encolar(negocioId, {
+      tipo: 'otp',
+      canal: 'sms',
+      cupoCanal: 'sms',
+      destino: telefono,
+      cuerpo: plantillas.otp(codigo),
+      ...ctx,
+    });
   }
-  encolarConfirmacion(negocioId: string, telefono: string, datos: DatosCita): void {
-    this.queue.enqueue('enviar-confirmacion', this.payload(negocioId, telefono, datos));
+
+  async encolarConfirmacion(negocioId: string, telefono: string, datos: DatosCita, ctx: Contexto = {}): Promise<void> {
+    await this.encolarCita(negocioId, telefono, datos, 'confirmacion', ctx);
   }
-  encolarRecordatorio(negocioId: string, telefono: string, datos: DatosCita): void {
-    this.queue.enqueue('enviar-recordatorio', this.payload(negocioId, telefono, datos));
+
+  async encolarRecordatorio(negocioId: string, telefono: string, datos: DatosCita, ctx: Contexto = {}): Promise<void> {
+    await this.encolarCita(negocioId, telefono, datos, 'recordatorio', ctx);
   }
-  encolarAviso(negocioId: string, telefono: string, datos: DatosCita): void {
-    this.queue.enqueue('enviar-aviso', this.payload(negocioId, telefono, datos));
+
+  async encolarAviso(negocioId: string, telefono: string, datos: DatosCita, ctx: Contexto = {}): Promise<void> {
+    await this.encolarCita(negocioId, telefono, datos, 'aviso', ctx);
   }
+
+  /**
+   * Mensaje de marketing (NO transaccional): sujeto a bloqueo duro por cupo
+   * (D2). Es la costura que usarán las campañas de FASE-05 en adelante.
+   */
+  async encolarMarketing(negocioId: string, telefono: string, cuerpo: string, ctx: Contexto = {}): Promise<void> {
+    await this.encolar(negocioId, {
+      tipo: 'marketing',
+      canal: 'sms',
+      cupoCanal: 'sms',
+      transaccional: false,
+      destino: telefono,
+      cuerpo,
+      ...ctx,
+    });
+  }
+
+  /** Aviso por email al administrador (sobreconsumo de cupos, FASE-03). */
+  async encolarAlerta(negocioId: string, email: string, asunto: string, cuerpo: string): Promise<void> {
+    await this.encolar(negocioId, {
+      tipo: 'alerta',
+      canal: 'email',
+      cupoCanal: 'email',
+      destino: email,
+      asunto,
+      cuerpo,
+    });
+  }
+
   encolarExportacion(payload: Record<string, unknown>): void {
     this.queue.enqueue('exportacion-pesada', payload);
   }
 
-  // ── Handlers (corren en el worker) ──────────────────────────────────────────
-  private async hOtp(p: { negocioId: string; telefono: string; codigo: string }): Promise<void> {
-    await this.despachar(p.negocioId, 'sms', true, { canal: 'sms', to: p.telefono, cuerpo: plantillas.otp(p.codigo) });
+  // ── Interno ─────────────────────────────────────────────────────────────────
+  private encolarCita(
+    negocioId: string,
+    telefono: string,
+    datos: DatosCita,
+    tipo: 'confirmacion' | 'recordatorio' | 'aviso',
+    ctx: Contexto,
+  ): Promise<void> {
+    // v1: el canal por evento (SMS vs WhatsApp) llega en FASE-05; aquí SMS.
+    return this.encolar(negocioId, {
+      tipo,
+      canal: 'sms',
+      cupoCanal: 'sms',
+      destino: telefono,
+      cuerpo: plantillas[tipo](datos),
+      ...ctx,
+    });
   }
 
-  private async hCita(payload: unknown, tipo: 'confirmacion' | 'recordatorio' | 'aviso'): Promise<void> {
-    const p = payload as { negocioId: string; telefono: string; datos: DatosCitaSer };
-    const datos: DatosCita = { ...p.datos, inicio: new Date(p.datos.inicio) };
-    const cuerpo = plantillas[tipo](datos);
-    // v1: el canal por evento (SMS vs WhatsApp) llega en FASE-05; aquí SMS por defecto.
-    await this.despachar(p.negocioId, 'sms', true, { canal: 'sms', to: p.telefono, cuerpo });
+  /**
+   * Inserta la fila del outbox. Un fallo aquí NO debe tumbar la operación de
+   * negocio que la originó (la reserva ya está confirmada): se registra y sigue.
+   *
+   * Política de cupo D2 aplicada **antes de encolar**: el marketing sin cupo
+   * entra directo como `sin_cupo` (queda auditado, pero el worker no lo
+   * reclamará nunca); lo transaccional siempre se encola y ya decidirá el worker.
+   */
+  private async encolar(
+    negocioId: string,
+    fila: {
+      tipo: TipoMensaje;
+      canal: Canal;
+      cupoCanal: CanalCupo;
+      destino: string;
+      cuerpo?: string;
+      asunto?: string;
+      plantillaClave?: string;
+      variables?: Record<string, string>;
+      transaccional?: boolean;
+      sucursalId?: string | null;
+      citaId?: string | null;
+    },
+  ): Promise<void> {
+    const transaccional = fila.transaccional ?? true;
+    try {
+      const sinCupo = !transaccional && !(await this.cupos.verificar(negocioId, fila.cupoCanal)).dentroDeCupo;
+      await runInTenantTx({ negocioId, sucursalIds: null, rol: 'sistema' }, (tx) =>
+        tx.insert(mensaje).values({
+          negocioId,
+          sucursalId: fila.sucursalId ?? null,
+          canal: fila.canal,
+          cupoCanal: fila.cupoCanal,
+          tipo: fila.tipo,
+          transaccional,
+          destino: fila.destino,
+          cuerpo: fila.cuerpo,
+          asunto: fila.asunto,
+          plantillaClave: fila.plantillaClave,
+          variables: fila.variables,
+          citaId: fila.citaId ?? null,
+          ...(sinCupo ? { estado: 'sin_cupo' as const, error: `Cupo '${fila.cupoCanal}' agotado: marketing detenido.` } : {}),
+        }),
+      );
+      if (sinCupo) {
+        this.metrics.incPor(METRICAS.mensajesSinCupo, fila.canal);
+        this.logger.warn(`Marketing no encolado por cupo '${fila.cupoCanal}' agotado (negocio ${negocioId}).`);
+      } else {
+        this.metrics.incPor(METRICAS.mensajesEncolados, fila.canal);
+      }
+    } catch (e) {
+      this.logger.error(`No se pudo encolar '${fila.tipo}' (negocio ${negocioId}): ${(e as Error).message}`);
+    }
   }
 
   private async hExportacion(payload: unknown): Promise<void> {
     // v1: la generación CSV es sincrónica (FASE-10). El PDF pesado se integrará
     // con un generador real aquí; por ahora se registra el job.
     this.logger.log(`Exportación procesada: ${JSON.stringify(payload)}`);
-  }
-
-  /**
-   * Despacha un `MensajeSalida` con política de cupo (ADR-009): si se agotó el
-   * cupo del canal, el marketing se DETIENE (no transaccional); utility/
-   * confirmaciones/recordatorios se envían igual y se avisa al admin (no se
-   * cortan). Resuelve el `PerfilRemitente` (D6) y elige el adaptador cuyo
-   * `soporta(canal)` es true (el MockAdapter queda de fallback).
-   */
-  private async despachar(
-    negocioId: string,
-    cupoCanal: CanalCupo,
-    transaccional: boolean,
-    mensaje: MensajeSalida,
-  ): Promise<void> {
-    const estado = await this.cupos.verificar(negocioId, cupoCanal);
-    if (!estado.dentroDeCupo) {
-      if (!transaccional) {
-        this.logger.warn(`Cupo '${cupoCanal}' agotado (negocio ${negocioId}): marketing detenido.`);
-        return;
-      }
-      this.logger.warn(`Cupo '${cupoCanal}' agotado (negocio ${negocioId}): se envía igual (transaccional).`);
-    }
-    const adapter = this.adapters.find((a) => a.soporta(mensaje.canal));
-    if (!adapter) {
-      this.logger.error(`Sin adaptador para el canal '${mensaje.canal}'.`);
-      return;
-    }
-    const perfil = this.remitente.resolver(negocioId);
-    await adapter.enviar(mensaje, perfil);
-    await this.cupos.registrar(negocioId, cupoCanal);
-    this.metrics.inc(METRICAS.notificacionesEnviadas);
-  }
-
-  private payload(negocioId: string, telefono: string, datos: DatosCita) {
-    return {
-      negocioId,
-      telefono,
-      datos: { ...datos, inicio: datos.inicio.toISOString() } satisfies DatosCitaSer,
-    };
   }
 }

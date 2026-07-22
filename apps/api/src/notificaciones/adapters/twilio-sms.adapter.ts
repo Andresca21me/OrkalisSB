@@ -10,6 +10,7 @@ import { credencialesDe, getTwilioClient } from './twilio-client';
  * destino a E.164 (Twilio lo exige). Las credenciales salen del `PerfilRemitente`.
  */
 export class TwilioSmsAdapter implements NotificationSender {
+  readonly proveedor = 'twilio';
   private readonly logger = new Logger('TwilioSMS');
 
   constructor(private readonly statusCallbackUrl?: string) {}

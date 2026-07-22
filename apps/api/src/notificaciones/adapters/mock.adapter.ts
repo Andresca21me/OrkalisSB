@@ -9,6 +9,7 @@ import type { PerfilRemitente } from '../remitente/perfil-remitente';
  * fallback cuando faltan claves del proveedor de ese canal.
  */
 export class MockAdapter implements NotificationSender {
+  readonly proveedor = 'mock';
   private readonly logger = new Logger('MockNotificaciones');
   readonly enviados: { canal: Canal; to: string; contenido: string; modo: string }[] = [];
 

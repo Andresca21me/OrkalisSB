@@ -287,12 +287,32 @@ export interface Gasto {
 /** Canal lógico de cupo de mensajería (ADR-009). */
 export type CanalCupo = 'whatsapp_utility' | 'whatsapp_marketing' | 'sms' | 'email';
 
-/** Estado de cupo de un canal en el período actual (`GET /notificaciones/cupos`). */
+/**
+ * Estado de cupo de un canal en el **ciclo de cobro** vigente
+ * (`GET /notificaciones/cupos`). Los cupos se recargan en el aniversario de
+ * cobro del negocio, no el día 1 del mes (Plan-Mensajeria D1).
+ */
 export interface EstadoCupo {
   canal: CanalCupo;
   consumo: number;
   cupo: number;
+  restante: number;
   dentroDeCupo: boolean;
+  /** Inicio del ciclo vigente (ISO, inclusivo). */
+  cicloInicio: string;
+  /** Fin del ciclo vigente (ISO, exclusivo). */
+  cicloFin: string;
+}
+
+/** Aviso persistente para el admin (`GET /notificaciones/alertas`). */
+export interface AlertaAdmin {
+  id: string;
+  tipo: string;
+  severidad: 'aviso' | 'critico' | string;
+  titulo: string;
+  detalle: string | null;
+  leidaEn: string | null;
+  creadoEn: string;
 }
 
 /** Usuario interno con acceso (`GET /usuarios`). */

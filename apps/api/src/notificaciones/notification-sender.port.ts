@@ -27,6 +27,8 @@ export interface ResultadoEnvio {
 }
 
 export interface NotificationSender {
+  /** Nombre del proveedor ('twilio', 'sendgrid', 'mock') — se audita en el outbox. */
+  readonly proveedor: string;
   soporta(canal: Canal): boolean;
   enviar(mensaje: MensajeSalida, perfil: PerfilRemitente): Promise<ResultadoEnvio>;
 }

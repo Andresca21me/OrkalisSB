@@ -71,6 +71,13 @@
       "when": 1784699824933,
       "tag": "0009_skinny_mordo",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784734608569,
+      "tag": "0010_eager_fenris",
+      "breakpoints": true
     }
   ]
 }

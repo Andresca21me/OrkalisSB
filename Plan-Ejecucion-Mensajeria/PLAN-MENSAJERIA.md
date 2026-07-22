@@ -391,8 +391,8 @@ Marca ✅ al terminar cada fase (no avances si su verificación no pasa).
 |------|---------|-----------|------------|------------------------|--------|
 | 00 | `FASE-00-prerrequisitos-twilio.md` | P0 | — | AM-1, AM-2, AM-3, AM-5 | ✅ (WhatsApp AM-3 pend.) |
 | 01 | `FASE-01-cimientos-multicanal.md` | P0 | 00* | — | ✅ |
-| 02 | `FASE-02-outbox-auditoria-webhook.md` | P0 | 01 | AM-4 | ⬜ |
-| 03 | `FASE-03-limites-por-ciclo.md` | P1 | 02 | — | ⬜ |
+| 02 | `FASE-02-outbox-auditoria-webhook.md` | P0 | 01 | AM-4 | ✅ (URL webhook pend.) |
+| 03 | `FASE-03-limites-por-ciclo.md` | P1 | 02 | — | ✅ |
 | 04 | `FASE-04-plantillas-por-negocio.md` | P1 | 01, 00 | AM-3 | ⬜ |
 | 05 | `FASE-05-whatsapp-productivo.md` | P1 | 03, 04 | — | ⬜ |
 | 06 | `FASE-06-verificacion-especialistas.md` | P1 | 01, 00 | AM-2 | ⬜ |

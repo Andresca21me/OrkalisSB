@@ -69,11 +69,12 @@ export class RecordatoriosScheduler {
       if (!dentroDeVentana) continue;
 
       if (c.telefono) {
-        this.notificaciones.encolarRecordatorio(c.negocioId, c.telefono, {
-          sucursalNombre: c.sucursalNombre,
-          especialistaNombre: c.especialistaNombre,
-          inicio: c.inicio,
-        });
+        await this.notificaciones.encolarRecordatorio(
+          c.negocioId,
+          c.telefono,
+          { sucursalNombre: c.sucursalNombre, especialistaNombre: c.especialistaNombre, inicio: c.inicio },
+          { sucursalId: c.sucursalId, citaId: c.id },
+        );
         encolados++;
       }
       await adminDb.update(cita).set({ recordatorioEnviado: true }).where(eq(cita.id, c.id));

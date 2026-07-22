@@ -3,9 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.validation';
 import { JobQueue } from './job-queue';
 import { CuposService } from './cupos.service';
+import { AlertasService } from './alertas.service';
 import { NotificacionesController } from './notificaciones.controller';
 import { NotificacionesService } from './notificaciones.service';
 import { RecordatoriosScheduler } from './recordatorios.scheduler';
+import { OutboxWorker } from './outbox.worker';
+import { TwilioWebhooksController } from './webhooks.controller';
 import { NOTIFICATION_ADAPTERS, type NotificationSender } from './notification-sender.port';
 import { RemitenteResolver } from './remitente/remitente.resolver';
 import { TwilioSmsAdapter } from './adapters/twilio-sms.adapter';
@@ -20,16 +23,22 @@ import { MockVerifyAdapter } from './verify/mock-verify.adapter';
  * Notificaciones multicanal (Plan-Mensajeria FASE-01, ADR-007). Los adaptadores
  * se registran por entorno: Twilio (SMS/WhatsApp) y SendGrid (email) si hay
  * claves; el `MockAdapter` va SIEMPRE al final como fallback (soporta todos los
- * canales). El `NotificacionesService` despacha por `soporta(canal)` y resuelve
- * el `PerfilRemitente` con `RemitenteResolver` (D6). Cambiar de proveedor o
- * añadir un canal no toca el dominio, solo este factory.
+ * canales). El `OutboxWorker` despacha por `soporta(canal)` y resuelve el
+ * `PerfilRemitente` con `RemitenteResolver` (D6). Cambiar de proveedor o añadir
+ * un canal no toca el dominio, solo este factory.
+ *
+ * FASE-02: el envío ya no vive en una cola en memoria — `NotificacionesService`
+ * escribe en el outbox durable (`mensaje`), el `OutboxWorker` despacha con
+ * reintentos y `TwilioWebhooksController` recibe el estado real de entrega.
  */
 @Module({
-  controllers: [NotificacionesController],
+  controllers: [NotificacionesController, TwilioWebhooksController],
   providers: [
     JobQueue,
     CuposService,
+    AlertasService,
     NotificacionesService,
+    OutboxWorker,
     RecordatoriosScheduler,
     RemitenteResolver,
     {
@@ -64,6 +73,6 @@ import { MockVerifyAdapter } from './verify/mock-verify.adapter';
       inject: [ConfigService],
     },
   ],
-  exports: [NotificacionesService, JobQueue, CuposService, RemitenteResolver, VERIFY_PORT],
+  exports: [NotificacionesService, OutboxWorker, AlertasService, JobQueue, CuposService, RemitenteResolver, VERIFY_PORT],
 })
 export class NotificacionesModule {}

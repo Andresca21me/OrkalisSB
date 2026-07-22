@@ -45,6 +45,18 @@ export const canalMensajeriaEnum = pgEnum('canal_mensajeria', [
   'sms',
   'email',
 ]);
+/** Canal de transporte del outbox (espejo de `Canal` del puerto, FASE-02). */
+export const canalEnvioEnum = pgEnum('canal_envio', ['sms', 'whatsapp', 'email']);
+/** Ciclo de vida de una fila del outbox (FASE-02). */
+export const estadoMensajeEnum = pgEnum('estado_mensaje', [
+  'pendiente',
+  'enviando',
+  'enviado',
+  'entregado',
+  'fallido',
+  /** No se envió por cupo agotado (marketing, bloqueo duro D2). */
+  'sin_cupo',
+]);
 export const estadoCobroEnum = pgEnum('estado_cobro', ['pendiente', 'pagado', 'fallido']);
 
 /**

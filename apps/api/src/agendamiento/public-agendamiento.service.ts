@@ -255,7 +255,7 @@ export class PublicAgendamientoService {
   async enviarOtp(sucursalId: string, telefono: string): Promise<{ enviado: true; devCode?: string }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
     const codigo = await runInTenantTx(ctx, (tx) => this.otp.generar(tx, ctx.negocioId, telefono));
-    this.notificaciones.encolarOtp(ctx.negocioId, telefono, codigo); // envío por SMS (no bloquea)
+    await this.notificaciones.encolarOtp(ctx.negocioId, telefono, codigo, { sucursalId }); // outbox: persiste y sigue
     return { enviado: true, devCode: mensajeriaSimulada() ? codigo : undefined };
   }
 
@@ -383,8 +383,11 @@ export class PublicAgendamientoService {
       };
     });
 
-    // Post-commit: encola la confirmación (no bloquea, RNF-002).
-    this.notificaciones.encolarConfirmacion(ctx.negocioId, input.telefono, resultado.notif);
+    // Post-commit: encola la confirmación en el outbox (no habla con Twilio, RNF-002).
+    await this.notificaciones.encolarConfirmacion(ctx.negocioId, input.telefono, resultado.notif, {
+      sucursalId,
+      citaId: resultado.citaId,
+    });
     this.metrics.inc(METRICAS.reservasCreadas);
     return {
       citaId: resultado.citaId,
@@ -430,11 +433,12 @@ export class PublicAgendamientoService {
 
     // Aviso de cancelación al cliente (RF-048).
     if (r.telefono) {
-      this.notificaciones.encolarAviso(ctx.negocioId, r.telefono, {
-        sucursalNombre: r.sucursalNombre,
-        especialistaNombre: r.especialistaNombre,
-        inicio: r.inicio,
-      });
+      await this.notificaciones.encolarAviso(
+        ctx.negocioId,
+        r.telefono,
+        { sucursalNombre: r.sucursalNombre, especialistaNombre: r.especialistaNombre, inicio: r.inicio },
+        { sucursalId, citaId },
+      );
     }
     return { estado: r.estado };
   }

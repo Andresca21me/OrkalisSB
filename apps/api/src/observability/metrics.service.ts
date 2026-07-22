@@ -16,6 +16,15 @@ export class MetricsService {
     this.counters.set(metrica, (this.counters.get(metrica) ?? 0) + n);
   }
 
+  /**
+   * Incrementa una métrica y su desglose por etiqueta (`metrica_etiqueta`).
+   * Usado por el outbox para contar mensajes por canal (FASE-02).
+   */
+  incPor(metrica: string, etiqueta: string, n = 1): void {
+    this.inc(metrica, n);
+    this.inc(`${metrica}_${etiqueta}`, n);
+  }
+
   observarLatencia(ruta: string, ms: number): void {
     const arr = this.latencias.get(ruta) ?? [];
     arr.push(ms);
@@ -56,4 +65,11 @@ export const METRICAS = {
   exclusionViolaciones: 'concurrencia_exclusion_violaciones',
   notificacionesEnviadas: 'notificaciones_enviadas',
   loginExitosos: 'login_exitosos',
+  // Outbox de mensajería (FASE-02) — se desglosan por canal con `incPor`.
+  mensajesEncolados: 'mensajes_encolados',
+  mensajesEnviados: 'mensajes_enviados',
+  mensajesEntregados: 'mensajes_entregados',
+  mensajesFallidos: 'mensajes_fallidos',
+  mensajesSinCupo: 'mensajes_sin_cupo',
+  mensajesReintentados: 'mensajes_reintentados',
 } as const;

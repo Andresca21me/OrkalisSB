@@ -28,7 +28,12 @@
 - [x] `TWILIO_MESSAGING_SERVICE_SID` (se cablea en FASE-01)
 - [x] `TWILIO_VERIFY_SERVICE_SID` (se usa en FASE-06)
 - [ ] `TWILIO_WHATSAPP_FROM` + `TWILIO_WA_TPL_*` (AM-3: sender Meta + plantillas aprobadas)
-- [ ] `TWILIO_STATUS_CALLBACK_URL` (FASE-02, requiere URL pública)
+- [ ] `TWILIO_STATUS_CALLBACK_URL` (AM-4) — **único pendiente de FASE-02**. El endpoint
+  `POST /api/webhooks/twilio/status` ya existe y valida la firma; falta pegar la URL
+  pública (`https://<dominio>/api/webhooks/twilio/status`) como *Status Callback* del
+  Messaging Service en Twilio **y** en esta variable (mismo valor exacto: la firma se
+  calcula sobre la URL). Sin ella, los mensajes se quedan en `enviado` y no avanzan a
+  `entregado`.
 - [ ] (Opcional, email) `SENDGRID_API_KEY` + `MAIL_FROM`
 - Nota: el SDK `twilio` ya está instalado en `apps/api`. `@sendgrid/mail` es opcional
   (instalar antes de activar el envío de email real).

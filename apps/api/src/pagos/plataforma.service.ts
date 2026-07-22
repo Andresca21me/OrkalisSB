@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq } from 'drizzle-orm';
 import { EstadoSuscripcion, PlanSuscripcion } from '@orkalis/shared';
 import { adminDb } from '../db/admin-client';
 import { cobro, consumoMensajeria, negocio, sucursal, suscripcion } from '../db/schema';
 import { PlanService } from '../plans/plan.service';
+import { cicloDeCobro } from '../notificaciones/ciclo';
 import type { CuposMensajeria } from '../plans/plan-registry';
 import { SuscripcionEstadoService } from './suscripcion-estado.service';
 import { TransicionInvalidaError } from './suscripcion-estado';
@@ -58,7 +59,11 @@ export interface DetalleNegocio {
   numSucursales: number;
   cobros: CobroDetalle[];
   cupos: {
+    /** Mes calendario (compatibilidad con la vista del operador). */
     periodo: string;
+    /** Ventana real del ciclo de cobro contra la que se mide el consumo (D1). */
+    cicloInicio: Date;
+    cicloFin: Date;
     limites: CuposMensajeria;
     consumo: CuposMensajeria;
   };
@@ -160,6 +165,9 @@ export class PlataformaService {
         estado: suscripcion.estado,
         metodoUltimos4: suscripcion.metodoUltimos4,
         proximoCobro: suscripcion.proximoCobro,
+        diaCobro: suscripcion.diaCobro,
+        trialFin: suscripcion.trialFin,
+        creadoEn: suscripcion.creadoEn,
       })
       .from(suscripcion)
       .where(eq(suscripcion.negocioId, negocioId))
@@ -186,12 +194,24 @@ export class PlataformaService {
       pagadoEn: c.pagadoEn,
     }));
 
+    // Consumo del CICLO DE COBRO vigente (D1). Antes se sumaban todos los
+    // períodos históricos, lo que inflaba el consumo mes a mes.
+    const ciclo = cicloDeCobro({
+      diaCobro: sus.diaCobro,
+      proximoCobro: sus.proximoCobro,
+      trialFin: sus.trialFin,
+      creadoEn: sus.creadoEn,
+    });
     const periodo = this.periodo();
-    // Consumo de mensajería del período corriente, por canal.
     const consumoRows = await adminDb
       .select({ canal: consumoMensajeria.canal, cantidad: consumoMensajeria.cantidad })
       .from(consumoMensajeria)
-      .where(eq(consumoMensajeria.negocioId, negocioId));
+      .where(
+        and(
+          eq(consumoMensajeria.negocioId, negocioId),
+          eq(consumoMensajeria.cicloInicio, ciclo.inicio),
+        ),
+      );
     const consumo: CuposMensajeria = { whatsappUtility: 0, whatsappMarketing: 0, sms: 0, email: 0 };
     for (const r of consumoRows) {
       if (r.canal === 'whatsapp_utility') consumo.whatsappUtility += r.cantidad;
@@ -215,6 +235,8 @@ export class PlataformaService {
       cobros,
       cupos: {
         periodo,
+        cicloInicio: ciclo.inicio,
+        cicloFin: ciclo.fin,
         limites: this.plans.cuposMensajeria(plan, sus.num),
         consumo,
       },

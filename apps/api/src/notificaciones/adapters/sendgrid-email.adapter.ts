@@ -8,6 +8,7 @@ import type { PerfilRemitente } from '../remitente/perfil-remitente';
  * `PerfilRemitente` se recibe por uniformidad de la interfaz.
  */
 export class SendgridEmailAdapter implements NotificationSender {
+  readonly proveedor = 'sendgrid';
   private readonly logger = new Logger('SendgridEmail');
 
   constructor(
