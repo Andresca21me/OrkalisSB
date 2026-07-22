@@ -6,6 +6,7 @@ import { CuposService } from './cupos.service';
 import { AlertasService } from './alertas.service';
 import { PlantillasService } from './plantillas.service';
 import { MensajesService } from './mensajes.service';
+import { RouterCanalService } from './router-canal.service';
 import { NotificacionesController } from './notificaciones.controller';
 import { NotificacionesService } from './notificaciones.service';
 import { RecordatoriosScheduler } from './recordatorios.scheduler';
@@ -41,6 +42,7 @@ import { MockVerifyAdapter } from './verify/mock-verify.adapter';
     AlertasService,
     PlantillasService,
     MensajesService,
+    RouterCanalService,
     NotificacionesService,
     OutboxWorker,
     RecordatoriosScheduler,

@@ -89,6 +89,49 @@ export const REGISTRY: Record<string, DefinicionClave> = {
     defaults: { [PerfilNegocio.Salon]: 2, [PerfilNegocio.Barberia]: 2 },
     descripcion: 'Horas mínimas de antelación para cancelar una reserva.',
   }),
+  // ── Canal por evento (Plan-Mensajeria FASE-05) ─────────────────────────────
+  // 'auto' = usar WhatsApp si el negocio tiene sender, plantilla aprobada y
+  // cupo; si falta cualquiera de las tres, cae a SMS solo. 'sms' fuerza SMS.
+  'mensajeria.canal_confirmacion': def({
+    clave: 'mensajeria.canal_confirmacion',
+    tipo: 'enum',
+    enumValores: ['auto', 'sms', 'whatsapp'],
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: 'auto', [PerfilNegocio.Barberia]: 'auto' },
+    descripcion: 'Canal preferido para la confirmación de reserva.',
+  }),
+  'mensajeria.canal_recordatorio': def({
+    clave: 'mensajeria.canal_recordatorio',
+    tipo: 'enum',
+    enumValores: ['auto', 'sms', 'whatsapp'],
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: 'auto', [PerfilNegocio.Barberia]: 'auto' },
+    descripcion: 'Canal preferido para los recordatorios de cita.',
+  }),
+  'mensajeria.canal_aviso': def({
+    clave: 'mensajeria.canal_aviso',
+    tipo: 'enum',
+    enumValores: ['auto', 'sms', 'whatsapp'],
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: 'auto', [PerfilNegocio.Barberia]: 'auto' },
+    descripcion: 'Canal preferido para los avisos de cancelación al cliente.',
+  }),
+  'mensajeria.canal_aviso_especialista': def({
+    clave: 'mensajeria.canal_aviso_especialista',
+    tipo: 'enum',
+    enumValores: ['auto', 'sms', 'whatsapp'],
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: 'auto', [PerfilNegocio.Barberia]: 'auto' },
+    descripcion: 'Canal preferido para los avisos al especialista.',
+  }),
+  'mensajeria.canal_marketing': def({
+    clave: 'mensajeria.canal_marketing',
+    tipo: 'enum',
+    enumValores: ['auto', 'sms', 'whatsapp'],
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: 'auto', [PerfilNegocio.Barberia]: 'auto' },
+    descripcion: 'Canal preferido para las campañas de marketing.',
+  }),
   'agendamiento.recordatorio_24h': def({
     clave: 'agendamiento.recordatorio_24h',
     tipo: 'boolean',

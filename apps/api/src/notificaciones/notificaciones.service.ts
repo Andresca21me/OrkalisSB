@@ -5,7 +5,9 @@ import { JobQueue } from './job-queue';
 import type { Canal } from './notification-sender.port';
 import { CuposService, type CanalCupo } from './cupos.service';
 import { PlantillasService } from './plantillas.service';
+import { RouterCanalService } from './router-canal.service';
 import { plantillas, type DatosCita } from './templates';
+import { valoresDe } from './plantillas.render';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 
 /** Tipos de mensaje que emite el dominio (crece por fase). */
@@ -34,6 +36,7 @@ export class NotificacionesService implements OnModuleInit {
     private readonly queue: JobQueue,
     private readonly cupos: CuposService,
     private readonly plantillas: PlantillasService,
+    private readonly router: RouterCanalService,
     private readonly metrics: MetricsService,
   ) {}
 
@@ -80,10 +83,14 @@ export class NotificacionesService implements OnModuleInit {
    * (D2). Es la costura que usarán las campañas de FASE-05 en adelante.
    */
   async encolarMarketing(negocioId: string, telefono: string, cuerpo: string, ctx: Contexto = {}): Promise<void> {
+    const ruta = await this.router.resolver(negocioId, ctx.sucursalId ?? null, 'marketing', false);
     await this.encolar(negocioId, {
       tipo: 'marketing',
-      canal: 'sms',
-      cupoCanal: 'sms',
+      canal: ruta.canal,
+      cupoCanal: ruta.cupoCanal,
+      plantillaClave: ruta.plantillaContentSid,
+      canalPreferido: ruta.canalPreferido,
+      motivoFallback: ruta.motivoFallback,
       transaccional: false,
       destino: telefono,
       cuerpo,
@@ -115,15 +122,20 @@ export class NotificacionesService implements OnModuleInit {
     tipo: 'confirmacion' | 'recordatorio' | 'aviso' | 'aviso_especialista',
     ctx: Contexto,
   ): Promise<void> {
-    // El texto se resuelve AQUÍ (plantilla del negocio o default de plataforma)
-    // y se guarda ya renderizado en el outbox: editar la plantilla después no
-    // reescribe lo que ya estaba en cola.
-    // v1: el canal por evento (SMS vs WhatsApp) llega en FASE-05; aquí SMS.
+    // El canal se decide AQUÍ (FASE-05): WhatsApp si el negocio lo prefiere y
+    // hay sender, plantilla aprobada y cupo; si no, SMS, anotando el motivo.
+    const ruta = await this.router.resolver(negocioId, ctx.sucursalId ?? null, tipo, true);
+    // El texto se resuelve también aquí y se guarda ya renderizado en el outbox:
+    // editar la plantilla después no reescribe lo que ya estaba en cola.
     const cuerpo = await this.plantillas.cuerpoSms(negocioId, tipo, datos);
     await this.encolar(negocioId, {
       tipo,
-      canal: 'sms',
-      cupoCanal: 'sms',
+      canal: ruta.canal,
+      cupoCanal: ruta.cupoCanal,
+      plantillaClave: ruta.plantillaContentSid,
+      variables: ruta.canal === 'whatsapp' ? valoresDe(datos) : undefined,
+      canalPreferido: ruta.canalPreferido,
+      motivoFallback: ruta.motivoFallback,
       destino: telefono,
       cuerpo,
       ...ctx,
@@ -149,6 +161,8 @@ export class NotificacionesService implements OnModuleInit {
       asunto?: string;
       plantillaClave?: string;
       variables?: Record<string, string>;
+      canalPreferido?: Canal;
+      motivoFallback?: string;
       transaccional?: boolean;
       sucursalId?: string | null;
       citaId?: string | null;
@@ -170,6 +184,8 @@ export class NotificacionesService implements OnModuleInit {
           asunto: fila.asunto,
           plantillaClave: fila.plantillaClave,
           variables: fila.variables,
+          canalPreferido: fila.canalPreferido,
+          motivoFallback: fila.motivoFallback,
           citaId: fila.citaId ?? null,
           ...(sinCupo ? { estado: 'sin_cupo' as const, error: `Cupo '${fila.cupoCanal}' agotado: marketing detenido.` } : {}),
         }),

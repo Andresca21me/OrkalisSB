@@ -11,6 +11,9 @@ import { JobQueue } from './job-queue';
 import { CuposService } from './cupos.service';
 import { PlantillasService } from './plantillas.service';
 import { NotificacionesService } from './notificaciones.service';
+import { ConfigResolverService } from '../config-module/config-resolver.service';
+import { RemitenteResolver } from './remitente/remitente.resolver';
+import { RouterCanalService } from './router-canal.service';
 import { MetricsService } from '../observability/metrics.service';
 
 /**
@@ -59,7 +62,8 @@ describe('Cambios de plan ↔ cupos de mensajería (FASE-09)', () => {
       diaCobro: 10,
     });
     cupos = new CuposService(new PlanService());
-    notificaciones = new NotificacionesService(new JobQueue(), cupos, new PlantillasService(), new MetricsService());
+    const router = new RouterCanalService(new ConfigResolverService(), new RemitenteResolver({ get: () => undefined } as never), cupos);
+    notificaciones = new NotificacionesService(new JobQueue(), cupos, new PlantillasService(), router, new MetricsService());
   });
 
   afterAll(async () => {

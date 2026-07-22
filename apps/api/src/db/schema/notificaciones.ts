@@ -117,6 +117,10 @@ export const mensaje = pgTable(
       .references(() => negocio.id, { onDelete: 'cascade' }),
     sucursalId: uuid('sucursal_id').references(() => sucursal.id, { onDelete: 'set null' }),
     canal: canalEnvioEnum('canal').notNull(),
+    /** Canal que se quería usar, si hubo que degradar (FASE-05). */
+    canalPreferido: canalEnvioEnum('canal_preferido'),
+    /** Por qué se degradó de canal (auditoría del routing). */
+    motivoFallback: text('motivo_fallback'),
     cupoCanal: canalMensajeriaEnum('cupo_canal').notNull(),
     /** 'otp' | 'confirmacion' | 'recordatorio' | 'aviso' … (texto: crece por fase). */
     tipo: text('tipo').notNull(),

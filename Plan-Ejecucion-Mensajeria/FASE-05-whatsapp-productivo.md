@@ -1,6 +1,13 @@
 # FASE-05 · WhatsApp productivo (routing por evento y plan)
 
 > Parte de `PLAN-MENSAJERIA`. Abre `PLAN-MENSAJERIA.md` + este archivo.
+>
+> **Estado: ✅ el motor de routing está completo y en producción; WhatsApp sigue
+> inactivo hasta AM-3.** Hoy el enrutador manda todo por SMS **por la vía del
+> fallback** —exactamente el mismo camino que se usará cuando WhatsApp esté
+> disponible—, así que la ruta degradada está probada en producción desde el
+> primer día. Cuando lleguen los Content SID aprobados por Meta no hay que tocar
+> el dominio: basta con que existan el sender y la plantilla.
 
 ## Objetivo
 Enrutar cada evento de negocio al **canal correcto** (SMS / WhatsApp / Email) según la configuración del negocio y su plan, con **gating de marketing** por plan. Hasta ahora todo salía por SMS; aquí WhatsApp entra en producción para confirmaciones/recordatorios/avisos.
@@ -39,6 +46,16 @@ Enrutar cada evento de negocio al **canal correcto** (SMS / WhatsApp / Email) se
 - Routing por evento (config del negocio) y gating por plan.
 - Fallback cuando no hay cupo/plantilla.
 - Consumo por canal correcto en cada caso.
+
+## Cómo quedó implementado
+- **`notificaciones/router-canal.service.ts`**: decide el canal de cada evento antes de construir el `MensajeSalida`. Regla de fondo: **degradar antes que fallar**. Comprueba en orden (1) preferencia del negocio, (2) gating de marketing por plan, (3) sender de WhatsApp, (4) plantilla aprobada, (5) cupo del canal; si falla cualquiera, SMS con el motivo anotado. No lanza nunca.
+- **Config por evento con herencia** negocio/sucursal: `mensajeria.canal_{confirmacion,recordatorio,aviso,aviso_especialista,marketing}`, tipo `enum` con valores `auto | sms | whatsapp` (default `auto`). `auto` = WhatsApp si es viable, si no SMS.
+- **El fallback queda auditado** en el outbox: columnas nuevas `canal_preferido` y `motivo_fallback` (migración `0014`), visibles en el Registro de mensajes. Así se puede responder "¿por qué esto salió por SMS?" sin mirar logs.
+- **`whatsapp_utility` vs `whatsapp_marketing`** se imputan como cupos distintos según `transaccional`, que es lo que hace que la política D2 siga aplicando por canal.
+- **Marketing gateado por plan**: si `PLANES[plan].funciones.marketing` es false, ni se ofrece WhatsApp marketing.
+- Al enrutar por WhatsApp se adjuntan las **variables** de la plantilla (`valoresDe`), que es lo que Meta espera en lugar de texto libre.
+
+**Lo que falta de AM-3** (y solo eso): dar de alta el sender de WhatsApp (`TWILIO_WHATSAPP_FROM`) y cargar el **Content SID** de cada plantilla aprobada en `plantilla_mensaje` (`canal='whatsapp'`). En cuanto existan, el routing empieza a usarlos solo.
 
 ## Trazabilidad
 ADR-009 (canales/cupos), RF-047/048, Parte II/V del plan.

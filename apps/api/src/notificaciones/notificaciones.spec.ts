@@ -2,11 +2,11 @@ import { config as loadEnv } from 'dotenv';
 loadEnv();
 
 import { and, desc, eq } from 'drizzle-orm';
-import { EstadoCita, OrigenCita, PerfilNegocio, PlanSuscripcion } from '@orkalis/shared';
+import { EstadoCita, NivelConfig, OrigenCita, PerfilNegocio, PlanSuscripcion } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
 import { alertaAdmin, cita, citaRecordatorio, cliente, consumoMensajeria, especialista, especialistaSucursal, mensaje, negocio, sucursal, suscripcion } from '../db/schema';
-import { ConfigResolverService } from '../config-module/config-resolver.service';
+import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
 import { PlanService } from '../plans/plan.service';
 import { JobQueue } from './job-queue';
 import { CuposService } from './cupos.service';
@@ -15,6 +15,9 @@ import { AlertasService } from './alertas.service';
 import { MockAdapter } from './adapters/mock.adapter';
 import { RemitenteResolver } from './remitente/remitente.resolver';
 import { NotificacionesService } from './notificaciones.service';
+import { RouterCanalService } from './router-canal.service';
+import { ConfigWriteService } from '../config-module/config-write.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OutboxWorker, esTransitorio } from './outbox.worker';
 import { RecordatoriosScheduler } from './recordatorios.scheduler';
 import { AvisosEspecialistaService } from '../agendamiento/avisos-especialista.service';
@@ -49,6 +52,7 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
   let cupos: CuposService;
   let alertas: AlertasService;
   let plantillasSvc: PlantillasService;
+  let remitente: RemitenteResolver;
   let notificaciones: NotificacionesService;
   let outbox: OutboxWorker;
   let scheduler: RecordatoriosScheduler;
@@ -105,9 +109,10 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
     // Resolver con config vacío → perfil 'plataforma' con campos undefined (el
     // MockAdapter ignora el perfil, así que basta para las pruebas de dominio).
     const config = { get: () => undefined } as unknown as ConstructorParameters<typeof RemitenteResolver>[0];
-    const remitente = new RemitenteResolver(config);
+    remitente = new RemitenteResolver(config);
     plantillasSvc = new PlantillasService();
-    notificaciones = new NotificacionesService(new JobQueue(), cupos, plantillasSvc, new MetricsService());
+    const router = new RouterCanalService(new ConfigResolverService(), remitente, cupos);
+    notificaciones = new NotificacionesService(new JobQueue(), cupos, plantillasSvc, router, new MetricsService());
     notificaciones.onModuleInit();
     alertas = new AlertasService(notificaciones, cupos);
     outbox = new OutboxWorker([mock], remitente, cupos, alertas, new MetricsService());
@@ -386,6 +391,47 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       await expect(
         avisos.avisar(ctx(), '00000000-0000-4000-8000-000000000000', 'X'),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('routing de canal por evento (FASE-05)', () => {
+    it('sin sender de WhatsApp, todo cae a SMS y queda anotado el motivo', async () => {
+      // El perfil de estas pruebas no tiene whatsappFrom (AM-3 pendiente).
+      const router = new RouterCanalService(new ConfigResolverService(), remitente, cupos);
+      const ruta = await router.resolver(negocioId, sucursalId, 'confirmacion', true);
+      expect(ruta.canal).toBe('sms');
+      expect(ruta.cupoCanal).toBe('sms');
+      expect(ruta.canalPreferido).toBe('whatsapp'); // se quería WhatsApp
+      expect(ruta.motivoFallback).toMatch(/sender de WhatsApp/i);
+    });
+
+    it('el mensaje encolado registra el fallback (auditoría del routing)', async () => {
+      await notificaciones.encolarConfirmacion(negocioId, '3001234567', {
+        sucursalNombre: 'Sede',
+        especialistaNombre: 'Carlos',
+        inicio: new Date('2030-06-01T15:00:00Z'),
+      }, { sucursalId });
+      const m = await ultimoMensajeDe('confirmacion');
+      expect(m.canal).toBe('sms');
+      expect(m.canalPreferido).toBe('whatsapp');
+      expect(m.motivoFallback).toBeTruthy();
+    });
+
+    it('con el canal forzado a SMS no se anota fallback (no se intentó WhatsApp)', async () => {
+      const resolver = new ConfigResolverService();
+      // Igual que en producción: al guardar config se emite CONFIG_UPDATED y el
+      // resolver invalida su caché. Sin este cableado leería el valor viejo.
+      const events = new EventEmitter2();
+      events.on(CONFIG_UPDATED, (p: ConfigUpdatedEvent) => resolver.invalidar(p.negocioId));
+      const escritor = new ConfigWriteService(resolver, events);
+      const ctxAdmin = { negocioId, sucursalIds: null, rol: 'admin' as const };
+      await escritor.upsert(ctxAdmin, NivelConfig.Negocio, negocioId, 'mensajeria.canal_aviso', 'sms');
+
+      const router = new RouterCanalService(resolver, remitente, cupos);
+      const ruta = await router.resolver(negocioId, sucursalId, 'aviso', true);
+      expect(ruta.canal).toBe('sms');
+      expect(ruta.canalPreferido).toBeUndefined();
+      expect(ruta.motivoFallback).toBeUndefined();
     });
   });
 
