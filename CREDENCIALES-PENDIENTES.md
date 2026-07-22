@@ -20,8 +20,10 @@
 > `apps/api/.env`, el backend usa `TwilioAdapter` (no mock). En cuenta **trial**,
 > Twilio solo entrega a números **verificados** en el panel. Para volver a mock,
 > deja `TWILIO_AUTH_TOKEN` vacío y reinicia la API.
-> **Railway/producción: sin claves aún** — se activa en FASE-10 (go-live) con cuenta
-> paga o números verificados (en trial rompería el OTP de clientes reales).
+> **Railway/producción: sin claves aún.** La cuenta Twilio YA es de pago (crédito
+> cargado 2026-07-22), así que la restricción de "solo números verificados"
+> desapareció y el go-live es viable. Falta el paso de **cargar las claves en
+> Railway** — ver el checklist de go-live en `Plan-Ejecucion-Mensajeria/FASE-10`.
 - [x] `TWILIO_ACCOUNT_SID`
 - [x] `TWILIO_AUTH_TOKEN`
 - [x] `TWILIO_FROM_NUMBER` (`+1669…`, long code US trial)

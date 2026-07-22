@@ -20,6 +20,7 @@ import { RecordatoriosScheduler } from './recordatorios.scheduler';
 import { AvisosEspecialistaService } from '../agendamiento/avisos-especialista.service';
 import { plantillas } from './templates';
 import { MetricsService } from '../observability/metrics.service';
+import { MensajesService } from './mensajes.service';
 import type { Canal, MensajeSalida, NotificationSender, ResultadoEnvio } from './notification-sender.port';
 import type { PerfilRemitente } from './remitente/perfil-remitente';
 
@@ -385,6 +386,40 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       await expect(
         avisos.avisar(ctx(), '00000000-0000-4000-8000-000000000000', 'X'),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('registro de mensajes para el admin (FASE-10)', () => {
+    const svc = new MensajesService();
+    const ctx = () => ({ negocioId, sucursalIds: null, rol: 'admin' as const });
+
+    it('lista los mensajes del negocio, del más reciente al más antiguo', async () => {
+      const r = await svc.listar(ctx(), {});
+      expect(r.total).toBeGreaterThan(0);
+      expect(r.mensajes.length).toBeGreaterThan(0);
+      const fechas = r.mensajes.map((m) => new Date(m.creadoEn).getTime());
+      expect([...fechas].sort((a, b) => b - a)).toEqual(fechas);
+    });
+
+    it('filtra por estado y por canal', async () => {
+      const enviados = await svc.listar(ctx(), { estado: 'enviado' });
+      expect(enviados.mensajes.every((m) => m.estado === 'enviado')).toBe(true);
+      const sms = await svc.listar(ctx(), { canal: 'sms' });
+      expect(sms.mensajes.every((m) => m.canal === 'sms')).toBe(true);
+    });
+
+    it('el resumen cuenta por estado y calcula la tasa de fallo', async () => {
+      const r = await svc.resumen(ctx());
+      const suma = Object.values(r.porEstado).reduce((a, b) => a + b, 0);
+      expect(suma).toBe(r.total);
+      expect(r.tasaFallo).toBeGreaterThanOrEqual(0);
+      expect(r.tasaFallo).toBeLessThanOrEqual(1);
+    });
+
+    it('NO expone mensajes de otro negocio (RLS + filtro explícito)', async () => {
+      const otro = { negocioId: '00000000-0000-4000-8000-000000000001', sucursalIds: null, rol: 'admin' as const };
+      const r = await svc.listar(otro, {});
+      expect(r.total).toBe(0);
     });
   });
 

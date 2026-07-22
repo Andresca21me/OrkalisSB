@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { medirSms, VARIABLES_PLANTILLA, type CanalCupo, type EventoPlantilla, type PlantillaMensaje } from '@orkalis/shared';
 import { api } from '../../lib/api';
-import { fechaCorta, num } from '../../lib/format';
+import { fechaCorta, fechaHora, num } from '../../lib/format';
 import { marcarAlertaLeida, useAlertas, useCupos } from '../../lib/useCupos';
 import { guardarPlantilla, usePlantillas } from '../../lib/usePlantillas';
-import { Badge, Button, Dialog, ErrorState, Icon, Spinner, useToast } from '../../ui/ui';
+import { useMensajes, useResumenMensajes } from '../../lib/useMensajes';
+import { Badge, Button, Dialog, ErrorState, Icon, Select, Spinner, useToast } from '../../ui/ui';
 import { GField } from './gestion-ui';
 import { ConfigBanner, ConfigCard } from './config-ui';
 
@@ -266,6 +267,118 @@ function EditorPlantilla({ plantilla, onGuardado }: { plantilla: PlantillaMensaj
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Registro de mensajes (FASE-10) ───────────────────────────────────────────
+const ESTADO_TONO: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = {
+  entregado: 'success',
+  enviado: 'neutral',
+  pendiente: 'neutral',
+  enviando: 'neutral',
+  fallido: 'error',
+  sin_cupo: 'warning',
+};
+const ESTADO_LABEL: Record<string, string> = {
+  pendiente: 'En cola',
+  enviando: 'Enviando',
+  enviado: 'Enviado',
+  entregado: 'Entregado',
+  fallido: 'Falló',
+  sin_cupo: 'Sin cupo',
+};
+
+export function RegistroMensajes() {
+  const [canal, setCanal] = useState('');
+  const [estado, setEstado] = useState('');
+  const [pagina, setPagina] = useState(0);
+  const { data, cargando, error, recargar } = useMensajes({ canal, estado, pagina });
+  const resumen = useResumenMensajes();
+
+  const paginas = data ? Math.ceil(data.total / data.porPagina) : 0;
+  const tasa = resumen.data ? Math.round(resumen.data.tasaFallo * 100) : 0;
+
+  return (
+    <div>
+      <h1 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em' }}>Registro de mensajes</h1>
+      <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '4px 0 20px' }}>
+        Todo lo que la plataforma envió a tus clientes y a tu equipo, con su estado de entrega real.
+      </p>
+
+      {resumen.data && resumen.data.total > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <ConfigBanner tone={tasa >= 20 ? 'danger' : tasa > 0 ? 'warning' : 'info'} title={`${num(resumen.data.total)} mensajes en los últimos ${resumen.data.dias} días`}>
+            {tasa > 0
+              ? `Un ${tasa}% no llegó a destino (fallidos o sin cupo). Revisa abajo el detalle del error.`
+              : 'Ningún envío fallido en el período.'}
+          </ConfigBanner>
+        </div>
+      )}
+
+      <ConfigCard title="Historial" desc="Se muestran los últimos 30 días.">
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+          <Select value={canal} onChange={(e) => { setCanal(e.target.value); setPagina(0); }} style={{ maxWidth: 180 }}>
+            <option value="">Todos los canales</option>
+            <option value="sms">SMS</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="email">Email</option>
+          </Select>
+          <Select value={estado} onChange={(e) => { setEstado(e.target.value); setPagina(0); }} style={{ maxWidth: 180 }}>
+            <option value="">Todos los estados</option>
+            {Object.keys(ESTADO_LABEL).map((e) => <option key={e} value={e}>{ESTADO_LABEL[e]}</option>)}
+          </Select>
+        </div>
+
+        {error ? (
+          <ErrorState onRetry={recargar} />
+        ) : cargando || !data ? (
+          <div style={{ display: 'grid', placeItems: 'center', padding: 30 }}><Spinner /></div>
+        ) : data.mensajes.length === 0 ? (
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)', padding: '18px 0' }}>
+            No hay mensajes con esos filtros.
+          </p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: 'var(--text-tertiary)' }}>
+                  <th style={{ padding: '8px 10px', fontWeight: 600 }}>Fecha</th>
+                  <th style={{ padding: '8px 10px', fontWeight: 600 }}>Tipo</th>
+                  <th style={{ padding: '8px 10px', fontWeight: 600 }}>Destino</th>
+                  <th style={{ padding: '8px 10px', fontWeight: 600 }}>Mensaje</th>
+                  <th style={{ padding: '8px 10px', fontWeight: 600 }}>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.mensajes.map((m) => (
+                  <tr key={m.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                    <td className="data" style={{ padding: '10px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{fechaHora(m.creadoEn)}</td>
+                    <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{m.tipo.replace(/_/g, ' ')}</td>
+                    <td className="data" style={{ padding: '10px', whiteSpace: 'nowrap' }}>{m.destino}</td>
+                    <td style={{ padding: '10px', color: 'var(--text-secondary)', maxWidth: 340 }}>
+                      <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.cuerpo}</span>
+                      {m.error && <span style={{ color: 'var(--error)', fontSize: 'var(--text-xs)' }}>{m.error}</span>}
+                    </td>
+                    <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
+                      <Badge tone={ESTADO_TONO[m.estado] ?? 'neutral'} size="md">{ESTADO_LABEL[m.estado] ?? m.estado}</Badge>
+                      {m.sobreCupo && <span style={{ marginLeft: 6, fontSize: 'var(--text-xs)', color: 'var(--warning)' }}>sobre cupo</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {paginas > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+            <Button size="md" variant="ghost" disabled={pagina === 0} onClick={() => setPagina((p) => p - 1)}>Anteriores</Button>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Página {pagina + 1} de {paginas}</span>
+            <Button size="md" variant="ghost" disabled={pagina + 1 >= paginas} onClick={() => setPagina((p) => p + 1)}>Siguientes</Button>
+          </div>
+        )}
+      </ConfigCard>
     </div>
   );
 }

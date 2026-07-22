@@ -399,7 +399,7 @@ Marca ✅ al terminar cada fase (no avances si su verificación no pasa).
 | 07 | `FASE-07-avisos-especialista.md` | P2 | 06, 03, 05 | AM-3 (si WhatsApp) | ✅ (sin reagendamiento: no existe el flujo) |
 | 08 | `FASE-08-recordatorios-multiventana.md` | P2 | 02, 03 | — | ✅ |
 | 09 | `FASE-09-cambios-plan-cupos.md` | P2 | 03 | — | ✅ |
-| 10 | `FASE-10-pruebas-observabilidad-golive.md` | P3 | 00–09 | AM-4, AM-6 | ⬜ |
+| 10 | `FASE-10-pruebas-observabilidad-golive.md` | P3 | 00–09 | AM-4, AM-6 | 🟡 código ✅ / go-live pendiente |
 | 11 | `FASE-11-track-isv-marca-propia.md` | P-futuro | 01, 02, 05 | AM-7 | ⬜ |
 
 \* FASE-01 avanza en **mock** sin las claves de FASE-00; solo necesita FASE-00 para envío real.

@@ -367,3 +367,40 @@ export interface UsuarioInterno {
   /** Sucursales asignadas; vacío = admin (todas). */
   sucursalIds: string[];
 }
+
+// ── Registro de mensajes (FASE-10) ───────────────────────────────────────────
+
+/** Una fila del outbox tal como la ve el admin (`GET /notificaciones/mensajes`). */
+export interface MensajeRegistro {
+  id: string;
+  canal: 'sms' | 'whatsapp' | 'email';
+  tipo: string;
+  estado: 'pendiente' | 'enviando' | 'enviado' | 'entregado' | 'fallido' | 'sin_cupo';
+  destino: string;
+  cuerpo: string | null;
+  error: string | null;
+  intento: number;
+  sobreCupo: boolean;
+  /** Id en el proveedor: sirve para rastrear el envío en el panel de Twilio. */
+  proveedorId: string | null;
+  citaId: string | null;
+  creadoEn: string;
+  enviadoEn: string | null;
+  entregadoEn: string | null;
+}
+
+export interface PaginaMensajes {
+  total: number;
+  pagina: number;
+  porPagina: number;
+  mensajes: MensajeRegistro[];
+}
+
+/** Conteo por estado del período (`GET /notificaciones/mensajes/resumen`). */
+export interface ResumenMensajes {
+  dias: number;
+  total: number;
+  porEstado: Record<string, number>;
+  /** Fracción 0..1 de mensajes fallidos o sin cupo. */
+  tasaFallo: number;
+}

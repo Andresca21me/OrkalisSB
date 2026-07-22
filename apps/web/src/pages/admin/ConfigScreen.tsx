@@ -17,7 +17,7 @@ import { GNumber } from './gestion-ui';
 import { ConfigBanner, ConfigCard, ProvControl, ProvField, SettingRow, type Scope } from './config-ui';
 import { ConfigSucursales, ConfigUsuarios } from './config-org';
 import { ConfigReservas } from './config-reservas';
-import { ConfigNotif, ConfigDeveloper } from './config-cuenta';
+import { ConfigNotif, ConfigDeveloper, RegistroMensajes } from './config-cuenta';
 import { SuscripcionScreen } from './SuscripcionScreen';
 
 interface Sucursal { id: string; nombre: string; activa: boolean }
@@ -28,6 +28,7 @@ const SECCIONES = [
   { id: 'agenda', label: 'Agenda', icon: 'calendar', scoped: true },
   { id: 'horario', label: 'Días laborables', icon: 'calendar', scoped: false },
   { id: 'notif', label: 'Notificaciones', icon: 'bell', scoped: false },
+  { id: 'mensajes', label: 'Registro de mensajes', icon: 'message-circle', scoped: false },
   { id: 'sucursales', label: 'Sucursales', icon: 'store', scoped: false },
   { id: 'reservas', label: 'Reservas', icon: 'link', scoped: false },
   { id: 'usuarios', label: 'Usuarios', icon: 'users', scoped: false },
@@ -93,6 +94,7 @@ export function ConfigScreen() {
         {section === 'horario' && <ConfigHorario />}
         {section === 'financieros' && <ConfigFinancieros scope={scope} nivel={scope} ambitoId={ambitoId} sucursalIdParam={sucursalIdParam} />}
         {section === 'notif' && <ConfigNotif />}
+        {section === 'mensajes' && <RegistroMensajes />}
         {section === 'sucursales' && <ConfigSucursales sucursales={sucs.data ?? []} onChanged={() => void sucs.recargar()} />}
         {section === 'reservas' && <ConfigReservas sucursales={sucs.data ?? []} />}
         {section === 'usuarios' && <ConfigUsuarios sucursales={sucs.data ?? []} />}

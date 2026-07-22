@@ -1,4 +1,5 @@
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { CanalPlantilla, EventoPlantilla } from '@orkalis/shared';
 
 /** Eventos y canales aceptados en la ruta (`PUT /plantillas/:evento/:canal`). */
@@ -38,4 +39,17 @@ export class ListarPlantillasDto {
   @IsOptional()
   @IsIn(CANALES_VALIDOS)
   canal?: CanalPlantilla;
+}
+
+/** Filtros del registro de mensajes (FASE-10). */
+export class ListarMensajesDto {
+  @IsOptional() @IsIn(['sms', 'whatsapp', 'email']) canal?: 'sms' | 'whatsapp' | 'email';
+  @IsOptional()
+  @IsIn(['pendiente', 'enviando', 'enviado', 'entregado', 'fallido', 'sin_cupo'])
+  estado?: string;
+  @IsOptional() @IsString() tipo?: string;
+  /** ISO; por defecto, los últimos 30 días. */
+  @IsOptional() @IsString() desde?: string;
+  @IsOptional() @IsString() hasta?: string;
+  @IsOptional() @IsInt() @Min(0) @Type(() => Number) pagina?: number;
 }

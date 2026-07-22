@@ -6,7 +6,8 @@ import type { TenantContext } from '../db/tenant-context';
 import { CuposService, type EstadoCupo } from './cupos.service';
 import { AlertasService, type AlertaAdminDto } from './alertas.service';
 import { PlantillasService } from './plantillas.service';
-import { CANALES_VALIDOS, EVENTOS_VALIDOS, GuardarPlantillaDto, ListarPlantillasDto } from './dto/plantilla.dto';
+import { MensajesService } from './mensajes.service';
+import { CANALES_VALIDOS, EVENTOS_VALIDOS, GuardarPlantillaDto, ListarMensajesDto, ListarPlantillasDto } from './dto/plantilla.dto';
 
 /** Exposición HTTP de notificaciones (FASE-09, H5): cupos y avisos al admin. */
 @Controller('notificaciones')
@@ -16,6 +17,7 @@ export class NotificacionesController {
     private readonly cupos: CuposService,
     private readonly alertas: AlertasService,
     private readonly plantillas: PlantillasService,
+    private readonly mensajes: MensajesService,
   ) {}
 
   /** Consumo/cupo de cada canal en el ciclo de cobro vigente (ADR-009, D1). */
@@ -37,6 +39,20 @@ export class NotificacionesController {
   @HttpCode(204)
   async leer(@CurrentTenant() ctx: TenantContext, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.alertas.marcarLeida(ctx, id);
+  }
+
+  // ── Registro de mensajes (FASE-10) ──────────────────────────────────────────
+
+  /** Mensajes enviados con su estado de entrega, filtrable y paginado. */
+  @Get('mensajes')
+  getMensajes(@CurrentTenant() ctx: TenantContext, @Query() q: ListarMensajesDto) {
+    return this.mensajes.listar(ctx, q);
+  }
+
+  /** Conteo por estado del período (cabecera del registro y tasa de fallo). */
+  @Get('mensajes/resumen')
+  getResumenMensajes(@CurrentTenant() ctx: TenantContext) {
+    return this.mensajes.resumen(ctx);
   }
 
   // ── Plantillas de mensaje (FASE-04, D5) ─────────────────────────────────────
