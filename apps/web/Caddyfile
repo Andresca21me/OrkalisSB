@@ -3,14 +3,29 @@
 	root * /srv
 	encode gzip zstd
 
-	# Assets con hash → cache larga e inmutable.
-	@assets path /assets/*
-	header @assets Cache-Control "public, max-age=31536000, immutable"
+	# Assets con hash → cache larga e inmutable y, sobre todo, SIN fallback SPA.
+	#
+	# Antes `try_files … /index.html` alcanzaba también a /assets/*: si alguien
+	# tenía la app abierta cuando se desplegaba una versión nueva, su navegador
+	# pedía un chunk con el hash viejo, recibía index.html con 200 e `import()`
+	# intentaba ejecutar HTML como JavaScript → React.lazy fallaba y la pantalla
+	# quedaba en blanco. Con `handle`, el asset inexistente devuelve un 404 limpio
+	# y el ErrorBoundary del front lo detecta y recarga.
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
 
-	# index.html nunca se cachea (para que un deploy nuevo se vea al instante).
-	header /index.html Cache-Control "no-cache"
-
-	# Fallback SPA: cualquier ruta desconocida sirve index.html (react-router).
-	try_files {path} /index.html
-	file_server
+	# Todo lo demás es el documento del SPA (react-router resuelve la ruta en el
+	# cliente). La cabecera va DENTRO del handle a propósito: puesta fuera con el
+	# matcher `/index.html` solo aplicaba a esa ruta literal, así que `/`, `/admin`
+	# o `/alta` se servían sin Cache-Control y el navegador cacheaba el documento
+	# por heurística — dejando pegado un index.html que apunta a chunks ya
+	# borrados. Con `no-cache` el navegador revalida siempre y un deploy nuevo se
+	# ve en la siguiente carga.
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
 }

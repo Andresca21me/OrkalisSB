@@ -3,7 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { RolUsuario } from '@orkalis/shared';
 import { useAuth } from './lib/auth';
 import { applyVertical, loadLandingVertical, normalizeVertical } from './lib/theme';
-import { Spinner } from './ui/ui';
+import { Button, Spinner } from './ui/ui';
+import { ChunkErrorBoundary } from './lib/ChunkErrorBoundary';
 import { LoginPage } from './pages/LoginPage';
 
 /**
@@ -54,13 +55,14 @@ export function App() {
   const limitada = cuentaSuspendida;
 
   return (
-    <Suspense
-      fallback={
-        <Pantalla>
-          <Spinner size={28} />
-        </Pantalla>
-      }
-    >
+    <ChunkErrorBoundary fallback={(reintentar, esVersionNueva) => <PantallaError onReintentar={reintentar} esVersionNueva={esVersionNueva} />}>
+      <Suspense
+        fallback={
+          <Pantalla>
+            <Spinner size={28} />
+          </Pantalla>
+        }
+      >
       <Routes>
         {/* Catálogo del Design System — solo en desarrollo (FASE-01). */}
         {import.meta.env.DEV && <Route path="/_ui" element={<UiCatalog />} />}
@@ -93,7 +95,32 @@ export function App() {
             una sesión bloqueada va a la recuperación de acceso. */}
         <Route path="/*" element={enSesion ? <Inicio /> : limitada ? <Navigate to="/recuperar" replace /> : <SiteApp />} />
       </Routes>
-    </Suspense>
+      </Suspense>
+    </ChunkErrorBoundary>
+  );
+}
+
+/**
+ * Pantalla de rescate: sustituye a la ventana en blanco cuando el árbol de React
+ * se cae. El caso frecuente es "hay una versión nueva desplegada" y el
+ * ErrorBoundary ya habrá recargado solo; si aun así se llega aquí, al menos hay
+ * un mensaje y un botón en vez de nada.
+ */
+function PantallaError({ onReintentar, esVersionNueva }: { onReintentar: () => void; esVersionNueva: boolean }) {
+  return (
+    <Pantalla>
+      <div style={{ textAlign: 'center', maxWidth: 380, padding: 24 }}>
+        <h1 style={{ fontSize: 'var(--text-lg)', marginBottom: 8 }}>
+          {esVersionNueva ? 'Hay una versión nueva' : 'Algo salió mal'}
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', marginBottom: 20 }}>
+          {esVersionNueva
+            ? 'Actualizamos la aplicación mientras la tenías abierta. Recarga para continuar; no perdiste nada de lo que ya habías guardado.'
+            : 'No pudimos cargar esta pantalla. Recarga la página para volver a intentarlo.'}
+        </p>
+        <Button onClick={onReintentar} iconLeft="refresh-cw">Recargar</Button>
+      </div>
+    </Pantalla>
   );
 }
 
