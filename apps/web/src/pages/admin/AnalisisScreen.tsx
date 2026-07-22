@@ -21,12 +21,14 @@ import {
 import { GConfirm } from './gestion-ui';
 import { BreakdownBlock, FinTile, HBars, HealthBadge, RangePicker } from './finanzas-ui';
 import { GastoModal } from './finanzas-modals';
+import { useVocabulario } from '../../lib/vocabulario';
 
 interface Sucursal { id: string; nombre: string; activa: boolean }
 
 const PAGO_LABEL: Record<string, string> = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', nequi: 'Nequi', otro: 'Otro' };
 
 export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
+  const voc = useVocabulario();
   const { consolidado, sucursalActiva, sucursalActivaId } = useSucursal();
   const toast = useToast();
   const [rango, setRango] = useState<RangoDias>(() => presetRango('mes'));
@@ -101,7 +103,7 @@ export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
       ) : d ? (
         <>
           <div className="ork-cols-2" style={{ marginBottom: 16 }}>
-            <BreakdownBlock title="Ingresos del salón" icon="trending-up" iconColor="var(--success)"
+            <BreakdownBlock title={`Ingresos ${voc.delNegocio}`} icon="trending-up" iconColor="var(--success)"
               rows={[
                 { label: 'Facturado total', value: money(d.ingresosTotales) },
                 { label: 'Parte de profesionales', value: `− ${money(d.ganProfesionales)}`, tone: 'neg' },
@@ -117,7 +119,7 @@ export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
             <div style={{ display: 'flex', gap: 12, padding: '16px 18px', borderRadius: 'var(--radius-md)', background: 'var(--info-tint)', border: '1px solid rgba(59,130,246,0.22)' }}>
               <Icon name="info" size={18} color="var(--info)" style={{ flex: 'none', marginTop: 1 }} />
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '21px' }}>
-                Los <strong style={{ color: 'var(--text-primary)' }}>pagos a profesionales no son egreso</strong>: su parte ({money(d.ganProfesionales)} este período) ya se separó en origen según la repartición. Aquí solo ves lo que corresponde al salón.
+                Los <strong style={{ color: 'var(--text-primary)' }}>pagos a profesionales no son egreso</strong>: su parte ({money(d.ganProfesionales)} este período) ya se separó en origen según la repartición. Aquí solo ves lo que corresponde {voc.alNegocio}.
               </div>
             </div>
             <Card padding={18} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', background: d.gananciaNeta < 0 ? 'var(--error-tint)' : 'var(--surface-card)', borderColor: d.gananciaNeta < 0 ? 'rgba(239,68,68,0.3)' : 'var(--border-subtle)' }}>

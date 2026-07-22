@@ -19,6 +19,7 @@ import { ConfigSucursales, ConfigUsuarios } from './config-org';
 import { ConfigReservas } from './config-reservas';
 import { ConfigNotif, ConfigDeveloper, RegistroMensajes } from './config-cuenta';
 import { SuscripcionScreen } from './SuscripcionScreen';
+import { useVocabulario, type Vocabulario } from '../../lib/vocabulario';
 
 interface Sucursal { id: string; nombre: string; activa: boolean }
 
@@ -161,7 +162,7 @@ function ConfigNav({ section, onSelect }: { section: string; onSelect: (id: stri
 
 const MODULOS = [
   { clave: 'modulo.inventario', icon: 'package', title: 'Inventario y productos', desc: 'Stock, movimientos, alertas y ventas de producto.' },
-  { clave: 'modulo.particion_por_especialista', icon: 'users', title: 'Partición por especialista', desc: 'Reparte ganancias profesional/salón y habilita liquidaciones.' },
+  { clave: 'modulo.particion_por_especialista', icon: 'users', title: 'Partición por especialista', desc: (v: Vocabulario) => `Reparte ganancias profesional/${v.negocio} y habilita liquidaciones.` },
   { clave: 'modulo.cierre_periodo', icon: 'archive', title: 'Cierre de período', desc: 'Control quincenal y cierre mensual con archivo.' },
   { clave: 'agendamiento.aprobacion_manual', icon: 'shield-check', title: 'Aprobación manual de reservas', desc: 'Las reservas públicas entran como Solicitada y el equipo las aprueba.' },
 ];
@@ -181,6 +182,7 @@ const AGENDA_NUM = [
 
 function ConfigClaves({ seccion, scope, nivel, ambitoId, sucursalIdParam }: { seccion: 'modulos' | 'agenda'; scope: Scope; nivel: Procedencia; ambitoId: string; sucursalIdParam: string | null }) {
   const toast = useToast();
+  const voc = useVocabulario();
   const { data, cargando, error, recargar } = useConfig(sucursalIdParam);
   // Módulos que el PLAN habilita (Plan-Pagos FASE-08); los demás van con candado.
   const susc = useApi<{ limites: { modulos: string[] } }>(() => api.get('/suscripcion'));
@@ -216,7 +218,7 @@ function ConfigClaves({ seccion, scope, nivel, ambitoId, sucursalIdParam }: { se
             const esAvanzado = MODULOS_AVANZADOS.includes(m.clave);
             const permitidoPlan = !esAvanzado || modulosPlan == null || modulosPlan.includes(m.clave);
             return (
-              <SettingRow key={m.clave} first={i === 0} icon={m.icon} title={m.title} desc={m.desc}
+              <SettingRow key={m.clave} first={i === 0} icon={m.icon} title={m.title} desc={typeof m.desc === 'function' ? m.desc(voc) : m.desc}
                 prov={permitidoPlan && ef && <ProvControl scope={scope} procedencia={ef.procedencia} onOverride={() => override(m.clave, on)} onInherit={() => inherit(m.clave)} />}>
                 {permitidoPlan ? (
                   <div style={{ opacity: dim ? 0.5 : 1, pointerEvents: dim ? 'none' : 'auto' }}>
@@ -286,6 +288,7 @@ const FIN_PCT = [
 ];
 
 function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope: Scope; nivel: Procedencia; ambitoId: string; sucursalIdParam: string | null }) {
+  const voc = useVocabulario();
   const toast = useToast();
   const { data, cargando, error, recargar } = useConfig(sucursalIdParam);
   const [prof, setProf] = useState(50);
@@ -326,7 +329,7 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
       <ConfigCard title="Reparto del servicio" desc="El reparto profesional y del negocio debe sumar 100%." pad={22}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 28px' }}>
           <ProvField label="% Profesional"><span data-testid="repart-profesional"><GNumber value={prof} onChange={(v) => setProf(Math.min(100, v))} suffix="%" min={0} /></span></ProvField>
-          <ProvField label="% Negocio (salón)"><span data-testid="repart-salon"><GNumber value={salon} onChange={(v) => setProf(Math.max(0, 100 - v))} suffix="%" min={0} /></span></ProvField>
+          <ProvField label={`% Negocio (${voc.negocio})`}><span data-testid="repart-salon"><GNumber value={salon} onChange={(v) => setProf(Math.max(0, 100 - v))} suffix="%" min={0} /></span></ProvField>
         </div>
         <div style={{ marginTop: 14, padding: 14, borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}>
           <div style={{ display: 'flex', height: 10, borderRadius: 999, overflow: 'hidden', background: 'var(--border-subtle)' }}>

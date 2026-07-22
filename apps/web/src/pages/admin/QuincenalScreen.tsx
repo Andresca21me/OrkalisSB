@@ -6,6 +6,7 @@ import { crearCierre, useCierres } from '../../lib/useCierres';
 import { Button, Card, EmptyState, ErrorState, Icon, Spinner, useToast } from '../../ui/ui';
 import { FinTile } from './finanzas-ui';
 import { GConfirm, GSegmented } from './gestion-ui';
+import { useVocabulario } from '../../lib/vocabulario';
 
 type Quincena = 'primera' | 'segunda' | 'mes';
 
@@ -23,6 +24,7 @@ function rangosQuincena(): Record<Quincena, { desde: string; hasta: string; labe
 }
 
 export function QuincenalScreen() {
+  const voc = useVocabulario();
   const { consolidado, sucursalActiva, sucursalActivaId } = useSucursal();
   const toast = useToast();
   const [seg, setSeg] = useState<Quincena>('primera');
@@ -39,7 +41,7 @@ export function QuincenalScreen() {
 
   function exportarCsv() {
     if (!d) return;
-    const filas = [['concepto', 'valor'], ['Ingresos', d.ingresosTotales], ['Ingresos salón', d.ingresosSalon], ['Servicios', d.servicios], ['Ganancia neta', d.gananciaNeta]].map((x) => x.join(',')).join('\n');
+    const filas = [['concepto', 'valor'], ['Ingresos', d.ingresosTotales], [`Ingresos ${voc.negocio}`, d.ingresosSalon], ['Servicios', d.servicios], ['Ganancia neta', d.gananciaNeta]].map((x) => x.join(',')).join('\n');
     const blob = new Blob(['﻿' + filas + '\n'], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a'); link.href = url; link.download = `quincena-${seg}.csv`; link.click();
@@ -83,7 +85,7 @@ export function QuincenalScreen() {
         <div className="ork-kpis" style={{ marginBottom: 24 }}>
           <FinTile loading={a.cargando} label="Ingresos del período" icon="trending-up" value={money(d?.ingresosTotales ?? 0)} />
           <FinTile loading={a.cargando} label="Servicios realizados" icon="scissors" value={d?.servicios ?? 0} />
-          <FinTile loading={a.cargando} label="Ganancia del salón" icon="wallet" value={money(d?.ingresosSalon ?? 0)} />
+          <FinTile loading={a.cargando} label={`Ganancia ${voc.delNegocio}`} icon="wallet" value={money(d?.ingresosSalon ?? 0)} />
         </div>
       )}
 

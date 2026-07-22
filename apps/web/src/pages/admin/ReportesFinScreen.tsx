@@ -7,10 +7,12 @@ import { BarChart, Donut, type DonutDato, type SeriePunto } from '../../ui/Chart
 import { Badge, Button, Card, EmptyState, ErrorState, Icon, Spinner, useToast } from '../../ui/ui';
 import { compactCOP, FinTile, HBars, RangePicker } from './finanzas-ui';
 import { GSegmented } from './gestion-ui';
+import { useVocabulario } from '../../lib/vocabulario';
 
 const PAGO_LABEL: Record<string, string> = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', nequi: 'Nequi', otro: 'Otro' };
 
 export function ReportesFinScreen({ particion }: { particion: boolean }) {
+  const voc = useVocabulario();
   const { consolidado, sucursalActiva, sucursalActivaId } = useSucursal();
   const toast = useToast();
   const [tipo, setTipo] = useState('admin');
@@ -85,7 +87,7 @@ export function ReportesFinScreen({ particion }: { particion: boolean }) {
           <div className="ork-kpis" style={{ marginBottom: 20 }}>
             <FinTile label="Ingresos totales" icon="dollar-sign" value={money(d.ingresosTotales)} sub={<span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{d.servicios} servicios</span>} />
             <FinTile label="Ganaron los profesionales" icon="users" value={money(d.ganProfesionales)} />
-            <FinTile label="Ganó el salón" icon="wallet" value={money(d.ingresosSalon)} />
+            <FinTile label={`Ganó ${voc.elNegocio}`} icon="wallet" value={money(d.ingresosSalon)} />
             <FinTile label="Ventas de producto" icon="package" value={money(d.ventasProducto)} />
           </div>
 

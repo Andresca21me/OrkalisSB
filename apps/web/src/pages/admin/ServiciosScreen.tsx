@@ -30,6 +30,7 @@ import {
   useToast,
 } from '../../ui/ui';
 import { GField, GMoney, GNumber, GConfirm, type MoneyValue } from './gestion-ui';
+import { useVocabulario } from '../../lib/vocabulario';
 
 export function ServiciosScreen() {
   const { consolidado, sucursalActiva, sucursalActivaId } = useSucursal();
@@ -159,6 +160,7 @@ function ServiceCard({ s, onEdit, onDelete }: { s: Servicio; onEdit: () => void;
 }
 
 function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio: Servicio | null; defaultProfPct: number; onClose: () => void; onSaved: () => void }) {
+  const voc = useVocabulario();
   const toast = useToast();
   const [nombre, setNombre] = useState(servicio?.nombre ?? '');
   const [categoria, setCategoria] = useState(servicio?.categoria ?? '');
@@ -221,7 +223,7 @@ function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio
         </div>
 
         <div>
-          <div className="eyebrow" style={{ marginBottom: 10 }}>Repartición profesional / salón{!servicio && <span style={{ textTransform: 'none', fontWeight: 500, color: 'var(--text-tertiary)' }}> · sugerida por tu configuración ({defaultProfPct}% profesional). Puedes cambiarla.</span>}</div>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Repartición profesional / {voc.negocio}{!servicio && <span style={{ textTransform: 'none', fontWeight: 500, color: 'var(--text-tertiary)' }}> · sugerida por tu configuración ({defaultProfPct}% profesional). Puedes cambiarla.</span>}</div>
           <div style={{ padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}>
             <GField label="Modo">
               <Select value={splitType} onChange={(e) => setSplitType(e.target.value as SplitType)}>
@@ -233,10 +235,10 @@ function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio
               {splitType === SplitType.Porcentaje ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <GField label="% Profesional"><GNumber value={Number(splitValor) || 0} onChange={(v) => setSplitValor(Math.min(100, v))} min={0} suffix="%" /></GField>
-                  <GField label="% Salón"><GNumber value={100 - (Number(splitValor) || 0)} onChange={(v) => setSplitValor(Math.max(0, 100 - v))} min={0} suffix="%" /></GField>
+                  <GField label={`% ${voc.Negocio}`}><GNumber value={100 - (Number(splitValor) || 0)} onChange={(v) => setSplitValor(Math.max(0, 100 - v))} min={0} suffix="%" /></GField>
                 </div>
               ) : (
-                <GField label="Valor fijo al profesional" hint="El resto queda para el salón."><GMoney value={splitValor} onChange={setSplitValor} /></GField>
+                <GField label="Valor fijo al profesional" hint={`El resto queda para ${voc.elNegocio}.`}><GMoney value={splitValor} onChange={setSplitValor} /></GField>
               )}
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
@@ -245,7 +247,7 @@ function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio
                 <div className="data" style={{ fontWeight: 700, color: 'var(--brand)' }}>{money(previewProf)}</div>
               </div>
               <div style={{ flex: 1, padding: '10px 12px', borderRadius: 'var(--radius-xs)', background: 'var(--surface-card)', border: '1px solid var(--border-subtle)' }}>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Salón</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{voc.Negocio}</div>
                 <div className="data" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{money(previewSalon)}</div>
               </div>
             </div>

@@ -412,12 +412,23 @@ export function Typewriter({ frases, className, style }: { frases: string[]; cla
 
   const masLarga = frases.reduce((a, b) => (b.length > a.length ? b : a), '');
 
+  // Al cambiar de vertical llega otro array de frases. Sin este reinicio, el
+  // contador de letras se queda apuntando a una posición de la frase anterior
+  // —normalmente más larga— y la animación se congela hasta recargar.
+  useEffect(() => {
+    setI(0);
+    setN(0);
+    setBorrando(false);
+  }, [frases]);
+
   useEffect(() => {
     if (reducido || frases.length === 0) return;
     const frase = frases[i % frases.length];
     // Borrar es más rápido que escribir: así se siente natural y no aburre.
-    const completa = !borrando && n === frase.length;
-    const vacia = borrando && n === 0;
+    // Se compara con >= y no con ===: si el contador se pasara de largo por
+    // cualquier motivo, la animación se recupera sola en vez de quedarse muerta.
+    const completa = !borrando && n >= frase.length;
+    const vacia = borrando && n <= 0;
     const espera = completa ? 1900 : vacia ? 260 : borrando ? 32 : 62;
 
     const t = setTimeout(() => {
@@ -439,7 +450,7 @@ export function Typewriter({ frases, className, style }: { frases: string[]; cla
       {/* Texto real para lectores de pantalla (estable, no se teclea). */}
       <span className="sr-only">{frases[0]}</span>
       <span className="mkt-type-live" aria-hidden="true">
-        {frases[i % frases.length].slice(0, n)}
+        {frases[i % frases.length].slice(0, Math.max(0, n))}
         <span className="mkt-caret" style={{ height: '0.9em' }} />
       </span>
     </span>
