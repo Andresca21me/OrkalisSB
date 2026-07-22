@@ -3,6 +3,29 @@
 	root * /srv
 	encode gzip zstd
 
+	# ── Tarjeta de vista previa por negocio (Open Graph) ──────────────────────
+	#
+	# Los crawlers de WhatsApp, Facebook o Telegram NO ejecutan JavaScript: leen
+	# el HTML tal como llega. Como esto es un SPA estático, todas las rutas
+	# devuelven el mismo index.html y el enlace de un salón mostraría siempre la
+	# tarjeta genérica de Orkalis.
+	#
+	# Solo para esos bots y solo en /reservar/*, la petición se reenvía a la API,
+	# que genera el HTML con el nombre, la descripción y el logo del negocio. Las
+	# personas siguen recibiendo el SPA de siempre.
+	#
+	# Va ANTES que los demás handle: en Caddy se evalúan en orden.
+	@og {
+		path /reservar/*
+		header_regexp User-Agent (?i)(whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|slackbot|discordbot|linkedinbot|pinterest|redditbot|embedly|skypeuripreview|vkshare|w3c_validator|whatsapp-preview|googlebot|bingbot)
+	}
+	handle @og {
+		rewrite * /api/og{uri}
+		reverse_proxy {$API_ORIGIN:https://api.orkalis.com} {
+			header_up Host {upstream_hostport}
+		}
+	}
+
 	# Assets con hash → cache larga e inmutable y, sobre todo, SIN fallback SPA.
 	#
 	# Antes `try_files … /index.html` alcanzaba también a /assets/*: si alguien

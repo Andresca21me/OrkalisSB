@@ -85,6 +85,28 @@ export class ConfirmarVerificacionDto {
  * de emergencia por si alguien salta el redimensionado del navegador; el límite
  * real de bytes se valida en el servicio.
  */
+/** Descripción y color primario de la marca del negocio. */
+export class MarcaNegocioDto {
+  /** Tope de 200: por encima, WhatsApp y Google recortan la frase a mitad. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  descripcion?: string | null;
+
+  /** Hex #RRGGBB. Se revalida en el servicio antes de tocar la base. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^#[0-9a-fA-F]{6}$/, { message: 'El color debe venir en formato #RRGGBB.' })
+  colorPrimario?: string | null;
+}
+
+export class LogoNegocioDto {
+  @IsString()
+  @MaxLength(600_000)
+  @Matches(/^data:image\/(jpeg|png|webp);base64,/, { message: 'El logo debe ser JPEG, PNG o WebP.' })
+  dataUrl!: string;
+}
+
 export class FotoEspecialistaDto {
   @IsString()
   @MaxLength(600_000)

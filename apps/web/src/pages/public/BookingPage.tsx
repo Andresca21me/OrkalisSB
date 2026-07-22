@@ -10,7 +10,8 @@ import type {
   PublicServicio,
   RetencionResp,
 } from '@orkalis/shared';
-import { api, ApiError, urlFotoEspecialista } from '../../lib/api';
+import { api, ApiError, urlFotoEspecialista, urlLogoNegocio } from '../../lib/api';
+import { estilosDeMarca } from '../../lib/marca';
 import { useApi } from '../../lib/useApi';
 import { applyVertical, normalizeVertical } from '../../lib/theme';
 import { hoyISO, money, sumarDiasISO } from '../../lib/format';
@@ -205,9 +206,14 @@ export function BookingPage() {
   }
 
   const negocio = info.data.negocioNombre;
+  // El color del negocio se inyecta como variables CSS en la raíz: el sistema
+  // de diseño ya deriva de --blue todos los botones, tints y estados activos,
+  // así que no hay que tocar ni un componente. Sin color configurado, no se
+  // define nada y manda el tema del vertical.
+  const marca = estilosDeMarca(info.data.colorPrimario);
 
   return (
-    <MobileFrame>
+    <MobileFrame style={marca}>
       {step === 'inicio' && (
         <Inicio
           info={info.data}
@@ -292,6 +298,7 @@ export function BookingPage() {
 
 // ════════════════════ Inicio ════════════════════
 function Inicio({ info, servicios, onReservar, onGestionar }: { info: PublicInfo; servicios: ReturnType<typeof useApi<PublicServicio[]>>; onReservar: () => void; onGestionar: () => void }) {
+  const logoNegocio = urlLogoNegocio(info.negocioId, info.logoVersion);
   const populares = (servicios.data ?? []).slice(0, 3);
   return (
     <>
@@ -303,6 +310,13 @@ function Inicio({ info, servicios, onReservar, onGestionar }: { info: PublicInfo
               <Icon name="calendar" size={16} color="var(--accent)" />
               <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: 'var(--text-xs)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Reserva en línea</span>
             </div>
+            {logoNegocio && (
+              <img
+                src={logoNegocio}
+                alt={info.negocioNombre}
+                style={{ display: 'block', maxWidth: 148, maxHeight: 54, objectFit: 'contain', marginBottom: 12 }}
+              />
+            )}
             <h1 style={{ color: '#fff', fontSize: 'var(--text-2xl)', lineHeight: '34px', marginBottom: 8 }}>{info.negocioNombre}</h1>
             <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--text-sm)', margin: 0 }}>{info.sucursalNombre} · {info.perfil === 'barberia' ? 'Barbería' : 'Salón'}</p>
           </div>

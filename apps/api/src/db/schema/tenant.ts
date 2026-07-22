@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  customType,
   integer,
   pgTable,
   primaryKey,
@@ -26,8 +27,31 @@ export const negocio = pgTable('negocio', {
   nombre: text('nombre').notNull(),
   perfil: perfilNegocioEnum('perfil').notNull(),
   estadoSuscripcion: estadoSuscripcionEnum('estado_suscripcion').notNull().default('activa'),
+  // ── Marca del negocio (branding dinámico) ──────────────────────────────────
+  /** Frase para la tarjeta al compartir el enlace. Tope pensado para que
+   *  WhatsApp y Google no la recorten a mitad. */
+  descripcion: text('descripcion'),
+  /** Color primario en hex (#RRGGBB). Nulo = se usa el del vertical. */
+  colorPrimario: text('color_primario'),
   creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
   actualizadoEn: timestamp('actualizado_en', { withTimezone: true }),
+});
+
+/**
+ * Logo del negocio.
+ *
+ * En tabla aparte por lo mismo que la foto del especialista: `negocio` se lee en
+ * casi cada petición (sesión, tenant, reserva pública) y arrastrar la imagen ahí
+ * penalizaría todo el sistema. Aquí solo se lee cuando alguien pide el logo, y
+ * el navegador lo cachea con la versión en la URL.
+ */
+export const negocioLogo = pgTable('negocio_logo', {
+  negocioId: uuid('negocio_id')
+    .primaryKey()
+    .references(() => negocio.id, { onDelete: 'cascade' }),
+  mime: text('mime').notNull(),
+  datos: customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' })('datos').notNull(),
+  actualizadoEn: timestamp('actualizado_en', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const suscripcion = pgTable('suscripcion', {

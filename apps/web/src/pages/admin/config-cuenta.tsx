@@ -4,6 +4,11 @@ import { api } from '../../lib/api';
 import { fechaCorta, fechaHora, num } from '../../lib/format';
 import { marcarAlertaLeida, useAlertas, useCupos } from '../../lib/useCupos';
 import { guardarPlantilla, usePlantillas } from '../../lib/usePlantillas';
+import { borrarLogo, guardarMarca, subirLogo, useMarca } from '../../lib/useMarca';
+import { urlLogoNegocio } from '../../lib/api';
+import { colorDominante, prepararLogo } from '../../lib/imagen';
+import { contrasteBajo, textoSobre } from '../../lib/color';
+import { useAuth } from '../../lib/auth';
 import { useMensajes, useResumenMensajes } from '../../lib/useMensajes';
 import { Badge, Button, Dialog, ErrorState, Icon, Select, Spinner, useToast } from '../../ui/ui';
 import { GField } from './gestion-ui';
@@ -379,6 +384,150 @@ export function RegistroMensajes() {
           </div>
         )}
       </ConfigCard>
+    </div>
+  );
+}
+
+// ── Marca del negocio (branding dinámico) ────────────────────────────────────
+/** Tope de la descripción: por encima, WhatsApp y Google la recortan a mitad. */
+const MAX_DESC = 200;
+
+export function ConfigMarca() {
+  const toast = useToast();
+  const { usuario } = useAuth();
+  const { data, cargando, error, recargar } = useMarca();
+
+  const [desc, setDesc] = useState('');
+  const [color, setColor] = useState('');
+  const [logo, setLogo] = useState<string | null>(null);
+  const [logoQuitado, setLogoQuitado] = useState(false);
+  const [sugerido, setSugerido] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  // Al llegar los datos se rellena el formulario una sola vez.
+  useEffect(() => {
+    if (!data) return;
+    setDesc(data.descripcion ?? '');
+    setColor(data.colorPrimario ?? '');
+  }, [data]);
+
+  const negocioId = usuario?.negocioId ?? '';
+  const logoActual = data ? urlLogoNegocio(negocioId, data.logoVersion) : null;
+  const logoVisible = logoQuitado ? null : (logo ?? logoActual);
+  const colorEfectivo = color || 'var(--brand)';
+
+  async function elegirLogo(archivo: File | undefined) {
+    if (!archivo) return;
+    try {
+      const dataUrl = await prepararLogo(archivo);
+      setLogo(dataUrl);
+      setLogoQuitado(false);
+      // Se SUGIERE el color, no se impone: si el admin ya eligió uno a mano no
+      // se le pisa, y en cualquier caso puede cambiarlo después.
+      const dominante = await colorDominante(dataUrl);
+      if (dominante) {
+        setSugerido(dominante);
+        if (!color) setColor(dominante);
+      }
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  }
+
+  async function guardar() {
+    setGuardando(true);
+    try {
+      if (logo) await subirLogo(logo);
+      else if (logoQuitado) await borrarLogo();
+      await guardarMarca({ descripcion: desc.trim() || null, colorPrimario: color || null });
+      toast('Marca actualizada', 'success');
+      setLogo(null);
+      setLogoQuitado(false);
+      await recargar();
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  if (error) return <ErrorState onRetry={recargar} />;
+  if (cargando || !data) return <div style={{ display: 'grid', placeItems: 'center', padding: 40 }}><Spinner /></div>;
+
+  return (
+    <div>
+      <h1 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em' }}>Marca</h1>
+      <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '4px 0 20px' }}>
+        Tu logo, tu color y tu descripción. Es lo que ven tus clientes al reservar y al recibir tu enlace por WhatsApp.
+      </p>
+
+      <ConfigCard title="Logo" desc="Aparece en la cabecera de tu página de reservas y en la tarjeta al compartir el enlace.">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+          <div style={{ width: 96, height: 96, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--surface-sunken)', display: 'grid', placeItems: 'center', overflow: 'hidden', flex: 'none' }}>
+            {logoVisible
+              ? <img src={logoVisible} alt="Logo del negocio" style={{ maxWidth: '82%', maxHeight: '82%', objectFit: 'contain' }} />
+              : <Icon name="store" size={30} color="var(--text-tertiary)" />}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--brand)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+              <Icon name="image" size={15} color="var(--brand)" />
+              {logoVisible ? 'Cambiar logo' : 'Subir logo'}
+              <input type="file" accept="image/*" onChange={(e) => elegirLogo(e.target.files?.[0])} style={{ display: 'none' }} />
+            </label>
+            {logoVisible && <Button size="md" variant="ghost" onClick={() => { setLogo(null); setLogoQuitado(true); }}>Quitar</Button>}
+          </div>
+        </div>
+      </ConfigCard>
+
+      <ConfigCard title="Color principal" desc="Se aplica a los botones y a lo seleccionado en tu página de reservas.">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <input
+            type="color"
+            value={color || '#1a73e8'}
+            onChange={(e) => setColor(e.target.value)}
+            aria-label="Color principal"
+            style={{ width: 56, height: 40, padding: 2, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-card)', cursor: 'pointer' }}
+          />
+          <span className="data" style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{color || 'Sin definir (usa el de la plataforma)'}</span>
+          {sugerido && sugerido !== color && (
+            <Button size="md" variant="ghost" onClick={() => setColor(sugerido)}>Usar el de tu logo ({sugerido})</Button>
+          )}
+          {color && <Button size="md" variant="ghost" onClick={() => setColor('')}>Restablecer</Button>}
+        </div>
+
+        {/* Vista previa con el color real, para juzgarlo antes de guardarlo. */}
+        <div style={{ marginTop: 16, padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: 40, padding: '0 18px', borderRadius: 'var(--radius-sm)', background: colorEfectivo, color: textoSobre(color), fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
+            Confirmar reserva
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', height: 32, padding: '0 12px', borderRadius: 999, border: `1.5px solid ${colorEfectivo}`, color: colorEfectivo, fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+            10:30 a. m.
+          </span>
+          {color && contrasteBajo(color) && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-xs)', color: 'var(--warning)' }}>
+              <Icon name="alert-circle" size={13} color="var(--warning)" />
+              Es un color muy claro: el texto del botón se pone oscuro para que siga leyéndose.
+            </span>
+          )}
+        </div>
+      </ConfigCard>
+
+      <ConfigCard title="Descripción" desc="La frase que acompaña a tu enlace cuando lo compartes por WhatsApp o redes.">
+        <GField label="Descripción" optional hint={`${desc.length}/${MAX_DESC} caracteres`}>
+          <textarea
+            rows={3}
+            value={desc}
+            maxLength={MAX_DESC}
+            onChange={(e) => setDesc(e.target.value)}
+            placeholder="Ej.: Barbería clásica en Chapinero. Cortes, barba y afeitado tradicional. Reserva en línea en 30 segundos."
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', resize: 'vertical' }}
+          />
+        </GField>
+      </ConfigCard>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button loading={guardando} iconLeft="check" onClick={guardar}>Guardar marca</Button>
+      </div>
     </div>
   );
 }

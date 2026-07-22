@@ -16,6 +16,7 @@ import {
   especialistaFoto,
   especialistaSucursal,
   negocio,
+  negocioLogo,
   retencionFranja,
   servicio,
   sucursal,
@@ -65,8 +66,15 @@ export class PublicAgendamientoService {
     return { negocioId: suc.negocioId, sucursalIds: [sucursalId], rol: 'public' };
   }
 
+  /** Negocio dueño de la sucursal (lo necesita la tarjeta Open Graph). */
+  async negocioIdDeSucursal(sucursalId: string): Promise<string> {
+    const ctx = await this.ctxDeSucursal(sucursalId);
+    return ctx.negocioId;
+  }
+
   /** Info pública de la sucursal: negocio, perfil, sede, otras sedes y horario. */
   async info(sucursalId: string): Promise<{
+    negocioId: string;
     sucursalId: string;
     sucursalNombre: string;
     negocioNombre: string;
@@ -74,13 +82,27 @@ export class PublicAgendamientoService {
     sucursales: { id: string; nombre: string }[];
     diasLaborables: boolean[];
     serviciosDia: Record<string, boolean[]>;
+    negocioDescripcion: string | null;
+    colorPrimario: string | null;
+    logoVersion: string | null;
   }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
     return runInTenantTx(ctx, async (tx) => {
       const [neg] = await tx
-        .select({ nombre: negocio.nombre, perfil: negocio.perfil })
+        .select({
+          nombre: negocio.nombre,
+          perfil: negocio.perfil,
+          descripcion: negocio.descripcion,
+          colorPrimario: negocio.colorPrimario,
+        })
         .from(negocio)
         .where(eq(negocio.id, ctx.negocioId))
+        .limit(1);
+      // Solo la fecha del logo: los bytes se piden aparte y el navegador los cachea.
+      const [logo] = await tx
+        .select({ v: negocioLogo.actualizadoEn })
+        .from(negocioLogo)
+        .where(eq(negocioLogo.negocioId, ctx.negocioId))
         .limit(1);
       const sucs = await tx
         .select({ id: sucursal.id, nombre: sucursal.nombre })
@@ -89,6 +111,7 @@ export class PublicAgendamientoService {
       const actual = sucs.find((s) => s.id === sucursalId);
       const { diasLaborables, serviciosDia } = await this.horario.infoPublica(tx, sucursalId);
       return {
+        negocioId: ctx.negocioId,
         sucursalId,
         sucursalNombre: actual?.nombre ?? '',
         negocioNombre: neg?.nombre ?? '',
@@ -96,6 +119,9 @@ export class PublicAgendamientoService {
         sucursales: sucs,
         diasLaborables,
         serviciosDia,
+        negocioDescripcion: neg?.descripcion ?? null,
+        colorPrimario: neg?.colorPrimario ?? null,
+        logoVersion: logo?.v.toISOString() ?? null,
       };
     });
   }

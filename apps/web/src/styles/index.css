@@ -67,6 +67,10 @@
 .ork-btn-primary {
   position: relative;
   overflow: hidden;
+  /* Branding dinámico: si el negocio eligió un color claro, `--brand-on` trae
+     texto oscuro para que el botón siga siendo legible. Sin marca propia no
+     está definida y se conserva el blanco de siempre. */
+  color: var(--brand-on, #fff);
   background-image: linear-gradient(110deg, var(--blue) 0%, var(--blue-hover) 44%, var(--blue-pressed) 100%);
   background-size: 220% 100%;
   background-position: 0% 50%;

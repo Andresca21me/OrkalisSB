@@ -42,6 +42,7 @@ export interface GananciasEspecialista {
 
 /** `GET /public/:sucursalId/info`. */
 export interface PublicInfo {
+  negocioId: string;
   sucursalId: string;
   sucursalNombre: string;
   negocioNombre: string;
@@ -51,6 +52,10 @@ export interface PublicInfo {
   diasLaborables: boolean[];
   /** Por servicioId, actividad por día (índice 0=domingo … 6=sábado; true=disponible). */
   serviciosDia: Record<string, boolean[]>;
+  /** Marca del negocio (branding dinámico); null = se usan los valores por defecto. */
+  negocioDescripcion: string | null;
+  colorPrimario: string | null;
+  logoVersion: string | null;
 }
 
 /** Especialista público (para reservar). */

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Avatar, Icon, Logo } from './ui';
 import { useMediaQuery } from '../lib/useMediaQuery';
 
@@ -9,9 +9,9 @@ import { useMediaQuery } from '../lib/useMediaQuery';
  */
 
 /** Columna móvil centrada (máx. 480px) que ocupa el alto completo. */
-export function MobileFrame({ children }: { children: ReactNode }) {
+export function MobileFrame({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
-    <div className="ork-appframe-bg" style={{ background: 'var(--surface-sunken)', display: 'flex', justifyContent: 'center' }}>
+    <div className="ork-appframe-bg" style={{ background: 'var(--surface-sunken)', display: 'flex', justifyContent: 'center', ...style }}>
       <div
         className="ork-appframe"
         style={{

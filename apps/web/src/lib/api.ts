@@ -122,3 +122,13 @@ export function urlFotoEspecialista(id: string, fotoVersion: string | null | und
   if (!fotoVersion) return null;
   return `${BASE}/especialistas/${id}/foto?v=${encodeURIComponent(fotoVersion)}`;
 }
+
+
+/**
+ * URL pública del logo de un negocio. Igual que la foto del especialista, la
+ * versión va en la query para poder cachear la imagen y aun así verla cambiar.
+ */
+export function urlLogoNegocio(negocioId: string, logoVersion: string | null | undefined): string | null {
+  if (!logoVersion) return null;
+  return `${BASE}/negocios/${negocioId}/logo?v=${encodeURIComponent(logoVersion)}`;
+}
