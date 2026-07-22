@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsIn,
   IsInt,
+  Matches,
   IsOptional,
   IsString,
   IsUUID,
@@ -52,6 +53,34 @@ export class CrearEspecialistaDto {
   // especialista sin recurso, se ENLAZA a ese (rescata cuentas huérfanas).
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @MinLength(8) password?: string;
+}
+
+/**
+ * Paso 1 del alta verificada (FASE-06): datos + celular. El especialista NO se
+ * crea aquí; solo se guarda el borrador y se envía el código.
+ */
+export class IniciarVerificacionDto {
+  @IsString() @MinLength(2) nombre!: string;
+  @IsOptional() @IsString() apellidos?: string;
+  /** Móvil colombiano; se normaliza a E.164 en el servicio. */
+  @IsString() @Matches(/^(\+?57)?\s?3\d{2}[\s-]?\d{3}[\s-]?\d{4}$/, {
+    message: 'El celular debe ser un móvil colombiano de 10 dígitos (empieza por 3).',
+  })
+  celular!: string;
+  @IsOptional() @IsString() especialidad?: string;
+  @IsOptional() @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) sucursalIds?: string[];
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() @MinLength(8) password?: string;
+}
+
+/** Paso 2: el código recibido por SMS. */
+export class ConfirmarVerificacionDto {
+  @IsUUID('4') verificacionId!: string;
+  @IsString() @Matches(/^\d{4,8}$/, { message: 'El código son solo dígitos.' }) codigo!: string;
+}
+
+export class ReenviarVerificacionDto {
+  @IsUUID('4') verificacionId!: string;
 }
 
 export class EditarEspecialistaDto {

@@ -2,6 +2,10 @@
 
 > Parte de `PLAN-MENSAJERIA`. Abre `PLAN-MENSAJERIA.md` + este archivo.
 > Implementa **D3** (Twilio Verify para el especialista) y el nuevo flujo de alta de Parte VII.
+>
+> **Estado: ✅ implementada** (migración `0012`, modal de 2 pasos, 244 tests verdes).
+> En producción corre con el **Verify mock** hasta el go-live (FASE-10): sin claves
+> Twilio el código de prueba es `123456`.
 
 ## Objetivo
 Rediseñar el alta de especialistas: **celular obligatorio + verificación por código** antes de crear el registro. Hoy se crea el especialista de inmediato, sin celular ni verificación.
@@ -50,6 +54,16 @@ Rediseñar el alta de especialistas: **celular obligatorio + verificación por c
 - Unit del servicio con Verify mockeado (start/check, límites).
 - E2E del modal 2 pasos (feliz, código incorrecto, reenvío, expiración).
 - Verificación de que el cupo bloquea igual que antes.
+
+## Cómo quedó implementado
+- **Nada se crea hasta verificar**: `iniciar` solo guarda un borrador en `verificacion_especialista` y manda el código. Un alta abandonada no deja especialistas a medias ni consume cupo, y todo número guardado está verificado — que es justo lo que habilita FASE-07.
+- **La contraseña nunca se persiste en claro.** Si el alta incluye acceso al panel, `iniciar` hashea con argon2 y el borrador guarda **solo el hash**; `EquipoService` lo reutiliza en vez de re-hashear. Hay una prueba que falla si el claro aparece en el JSON del borrador.
+- **El cupo del plan se comprueba ANTES de enviar el SMS** (`EquipoService.verificarCupo`): no tiene sentido gastarle a un negocio un envío de Verify si de todos modos no podría añadir al especialista.
+- **Límites contra abuso**: 5 intentos de código (a los 5 → `cancelado`, y ya no acepta ni el código bueno), 3 reenvíos con 30 s de cooldown, TTL de 10 min, más `@Throttle` por endpoint. `expirarVencidas()` limpia las pendientes caducadas.
+- **Idempotencia**: confirmar dos veces no crea dos especialistas (la fila pasa a `verificado` y el segundo intento se rechaza). Cubierto por prueba de doble clic.
+- **Celular normalizado y validado** a E.164 con `aE164Colombia` + patrón `+573XXXXXXXXX`: un fijo se rechaza con un mensaje claro **sin** gastar envío.
+- **Migración tolerante**: `telefono`, `telefono_verificado_en` y `apellidos` son NULLABLE, así que los especialistas anteriores siguen funcionando sin celular.
+- **Front**: `SpecialistModal` pasa a dos pasos — datos + celular obligatorio → código de 6 dígitos con reenvío. Editar un especialista existente no pide verificación.
 
 ## Trazabilidad
 Parte VII del plan, D3, ADR-003 (verificación por código), HU-ADM-005 (gestión de equipo).

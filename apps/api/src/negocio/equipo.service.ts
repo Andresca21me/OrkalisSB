@@ -20,9 +20,20 @@ import { round2 } from '../finanzas/calculo';
 import { PlanService } from '../plans/plan.service';
 
 /** Credenciales opcionales del login del especialista (Gestión, Plan-Pagos). */
+/** Opciones del alta (FASE-06 añade teléfono verificado y apellidos). */
+export interface OpcionesCrearEspecialista {
+  telefono?: string;
+  telefonoVerificadoEn?: Date;
+  apellidos?: string;
+  credenciales?: CredencialesEspecialista;
+}
+
 export interface CredencialesEspecialista {
   email: string;
-  password: string;
+  /** Contraseña en claro (alta directa). Excluyente con `passwordHash`. */
+  password?: string;
+  /** Hash ya calculado (alta verificada de FASE-06: nunca se guardó el claro). */
+  passwordHash?: string;
 }
 
 type Especialista = typeof especialista.$inferSelect;
@@ -59,24 +70,22 @@ export class EquipoService {
     nombre: string,
     especialidad: string | undefined,
     sucursalIds: string[] = [],
-    credenciales?: CredencialesEspecialista,
+    opciones: OpcionesCrearEspecialista = {},
   ): Promise<Especialista> {
+    const credenciales = opciones.credenciales;
     return runInTenantTx(ctx, async (tx) => {
-      // Cupo: no exceder los especialistas pagados de la suscripción (FASE-08).
-      const cupo = await this.cupoDisponible(tx, ctx.negocioId);
-      const [{ c: activos }] = await tx
-        .select({ c: count() })
-        .from(especialista)
-        .where(eq(especialista.activo, true));
-      if (!this.plans.puedeAgregarEspecialista(activos, cupo)) {
-        throw new ForbiddenException(
-          `Alcanzaste el cupo de ${cupo} especialistas de tu plan. Sube tu plan para agregar más.`,
-        );
-      }
+      await this.asegurarCupo(tx, ctx.negocioId);
 
       const [e] = await tx
         .insert(especialista)
-        .values({ negocioId: ctx.negocioId, nombre, especialidad })
+        .values({
+          negocioId: ctx.negocioId,
+          nombre,
+          especialidad,
+          apellidos: opciones.apellidos,
+          telefono: opciones.telefono,
+          telefonoVerificadoEn: opciones.telefonoVerificadoEn,
+        })
         .returning();
       if (sucursalIds.length) {
         await this.validarSucursales(tx, sucursalIds);
@@ -123,7 +132,7 @@ export class EquipoService {
     tx: DrizzleTx,
     ctx: TenantContext,
     nombre: string,
-    { email, password }: CredencialesEspecialista,
+    { email, password, passwordHash: hashPrevio }: CredencialesEspecialista,
     sucursalIds: string[],
   ): Promise<string> {
     const correo = email.trim().toLowerCase();
@@ -147,7 +156,9 @@ export class EquipoService {
       return existe.id;
     }
 
-    const passwordHash = await argon2.hash(password);
+    // En el alta verificada (FASE-06) el hash ya viene calculado: la contraseña
+    // en claro nunca se persistió en el borrador de la verificación.
+    const passwordHash = hashPrevio ?? (await argon2.hash(password!));
     let nuevoId: string;
     try {
       const [u] = await tx
@@ -263,6 +274,28 @@ export class EquipoService {
   }
 
   /** Cupo efectivo de especialistas del negocio = max(pagados, incluidos). */
+  /**
+   * Comprueba el cupo del plan sin crear nada. La usa la verificación de
+   * FASE-06 para no gastarle al admin un SMS si igualmente no podría añadirlo.
+   */
+  async verificarCupo(ctx: TenantContext): Promise<void> {
+    await runInTenantTx(ctx, (tx) => this.asegurarCupo(tx, ctx.negocioId));
+  }
+
+  /** Lanza si el negocio ya alcanzó los especialistas pagados (FASE-08). */
+  private async asegurarCupo(tx: DrizzleTx, negocioId: string): Promise<void> {
+    const cupo = await this.cupoDisponible(tx, negocioId);
+    const [{ c: activos }] = await tx
+      .select({ c: count() })
+      .from(especialista)
+      .where(eq(especialista.activo, true));
+    if (!this.plans.puedeAgregarEspecialista(activos, cupo)) {
+      throw new ForbiddenException(
+        `Alcanzaste el cupo de ${cupo} especialistas de tu plan. Sube tu plan para agregar más.`,
+      );
+    }
+  }
+
   private async cupoDisponible(tx: DrizzleTx, negocioId: string): Promise<number> {
     const [sus] = await tx
       .select({ plan: suscripcion.plan, num: suscripcion.numEspecialistas })

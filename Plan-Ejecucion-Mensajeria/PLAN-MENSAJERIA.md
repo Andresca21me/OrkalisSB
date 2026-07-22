@@ -395,7 +395,7 @@ Marca ✅ al terminar cada fase (no avances si su verificación no pasa).
 | 03 | `FASE-03-limites-por-ciclo.md` | P1 | 02 | — | ✅ |
 | 04 | `FASE-04-plantillas-por-negocio.md` | P1 | 01, 00 | AM-3 | ✅ SMS (WhatsApp pend. AM-3) |
 | 05 | `FASE-05-whatsapp-productivo.md` | P1 | 03, 04 | — | ⬜ |
-| 06 | `FASE-06-verificacion-especialistas.md` | P1 | 01, 00 | AM-2 | ⬜ |
+| 06 | `FASE-06-verificacion-especialistas.md` | P1 | 01, 00 | AM-2 | ✅ |
 | 07 | `FASE-07-avisos-especialista.md` | P2 | 06, 03, 05 | AM-3 (si WhatsApp) | ⬜ |
 | 08 | `FASE-08-recordatorios-multiventana.md` | P2 | 02, 03 | — | ⬜ |
 | 09 | `FASE-09-cambios-plan-cupos.md` | P2 | 03 | — | ⬜ |

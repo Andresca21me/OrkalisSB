@@ -34,3 +34,31 @@ export function darDeBajaEspecialista(id: string): Promise<unknown> {
 export function previewLiquidacion(body: { desde: string; hasta: string; sucursalId: string }): Promise<LiquidacionResultado[]> {
   return api.post('/liquidaciones/preview', body);
 }
+
+// ── Alta con verificación de celular (FASE-06, D3) ───────────────────────────
+// El especialista NO se crea al iniciar: solo cuando el código es correcto.
+
+export interface IniciarVerificacionBody {
+  nombre: string;
+  apellidos?: string;
+  celular: string;
+  especialidad?: string;
+  sucursalIds?: string[];
+  email?: string;
+  password?: string;
+}
+
+/** Paso 1: guarda el borrador y envía el código por SMS. */
+export function iniciarVerificacion(body: IniciarVerificacionBody): Promise<{ verificacionId: string; expiraEn: string }> {
+  return api.post('/especialistas/verificacion/iniciar', body);
+}
+
+/** Paso 2: valida el código y crea el especialista. */
+export function confirmarVerificacion(verificacionId: string, codigo: string): Promise<EspecialistaEquipo> {
+  return api.post('/especialistas/verificacion/confirmar', { verificacionId, codigo });
+}
+
+/** Reenvía el código (cooldown 30 s, máximo 3 reenvíos). */
+export function reenviarCodigo(verificacionId: string): Promise<{ reenvios: number }> {
+  return api.post('/especialistas/verificacion/reenviar', { verificacionId });
+}

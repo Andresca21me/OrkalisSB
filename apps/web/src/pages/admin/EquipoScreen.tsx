@@ -6,10 +6,12 @@ import { useSucursal } from '../../lib/sucursal';
 import { money } from '../../lib/format';
 import {
   asignarSucursales,
-  crearEspecialista,
+  confirmarVerificacion,
   darDeBajaEspecialista,
   editarEspecialista,
+  iniciarVerificacion,
   previewLiquidacion,
+  reenviarCodigo,
   useEquipo,
 } from '../../lib/useEquipo';
 import { PageHead } from '../../ui/Shell';
@@ -190,7 +192,12 @@ function SpecialistCard({ s, sucNombre, onToggle, onEdit, onDelete }: { s: Espec
 function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { especialista: EspecialistaEquipo | null; sucursales: Sucursal[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [nombre, setNombre] = useState(especialista?.nombre ?? '');
+  const [apellidos, setApellidos] = useState('');
+  const [celular, setCelular] = useState('');
   const [especialidad, setEspecialidad] = useState(especialista?.especialidad ?? '');
+  // Alta en dos pasos (FASE-06): al crear hay que verificar el celular.
+  const [verificacionId, setVerificacionId] = useState<string | null>(null);
+  const [codigo, setCodigo] = useState('');
   const [disponible, setDisponible] = useState(especialista?.disponible ?? true);
   const [sel, setSel] = useState<string[]>(especialista?.sucursalIds ?? (sucursales[0] ? [sucursales[0].id] : []));
   const [notas, setNotas] = useState('');
@@ -204,10 +211,15 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
   const quiereLogin = email.trim() !== '' || password !== '';
   const loginOk = emailValid && password.length >= 8;
 
+  // Móvil colombiano: 10 dígitos empezando por 3 (se acepta con o sin +57).
+  const celularDigitos = celular.replace(/\D/g, '').replace(/^57/, '');
+  const celularOk = /^3\d{9}$/.test(celularDigitos);
+  const celularErr = touched && !especialista && !celularOk ? 'Celular de 10 dígitos que empiece por 3' : undefined;
+
   const nombreErr = touched && nombre.trim().length < 2 ? 'Escribe un nombre' : undefined;
   const sucErr = touched && sel.length === 0 ? 'Asigna al menos una sucursal' : undefined;
   const loginErr = touched && quiereLogin && !loginOk ? 'Correo válido y contraseña de 8+ caracteres' : undefined;
-  const valid = nombre.trim().length >= 2 && sel.length > 0 && (!quiereLogin || loginOk);
+  const valid = nombre.trim().length >= 2 && sel.length > 0 && (!quiereLogin || loginOk) && (Boolean(especialista) || celularOk);
 
   function toggleSuc(id: string) {
     setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -223,14 +235,18 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
         await asignarSucursales(especialista.id, sel);
         toast('Especialista actualizado', 'success');
       } else {
-        const creado = await crearEspecialista({
+        // Alta nueva: no se crea nada todavía; se envía el código al celular.
+        const { verificacionId: vid } = await iniciarVerificacion({
           nombre: nombre.trim(),
+          apellidos: apellidos.trim() || undefined,
+          celular: celularDigitos,
           especialidad: especialidad.trim() || undefined,
           sucursalIds: sel,
           ...(quiereLogin ? { email: email.trim(), password } : {}),
         });
-        if (!disponible) await editarEspecialista(creado.id, { disponible: false });
-        toast(quiereLogin ? 'Especialista creado con acceso al panel' : 'Especialista creado', 'success');
+        setVerificacionId(vid);
+        toast('Te enviamos un código al celular del especialista', 'success');
+        return; // el modal pasa al paso 2
       }
       onSaved();
     } catch (err) {
@@ -240,15 +256,75 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
     }
   }
 
+  async function verificar() {
+    if (!verificacionId || codigo.trim().length < 4) return;
+    setGuardando(true);
+    try {
+      const creado = await confirmarVerificacion(verificacionId, codigo.trim());
+      if (!disponible) await editarEspecialista(creado.id, { disponible: false });
+      toast(quiereLogin ? 'Especialista creado con acceso al panel' : 'Especialista creado', 'success');
+      onSaved();
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function reenviar() {
+    if (!verificacionId) return;
+    try {
+      await reenviarCodigo(verificacionId);
+      toast('Código reenviado', 'success');
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  }
+
+  // ── Paso 2: código de verificación ────────────────────────────────────────
+  if (verificacionId) {
+    return (
+      <Dialog open onClose={onClose} width={460} title="Verifica el celular"
+        subtitle={`Enviamos un código de 6 dígitos al ${celularDigitos}. El especialista se crea al confirmarlo.`}
+        footer={<>
+          <Button variant="ghost" onClick={() => setVerificacionId(null)}>Volver</Button>
+          <Button variant="primary" loading={guardando} disabled={codigo.trim().length < 4} onClick={verificar}>Verificar y crear</Button>
+        </>}>
+        <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <GField label="Código recibido">
+            <Input
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              placeholder="123456"
+              inputMode="numeric"
+              autoFocus
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', letterSpacing: '0.25em', textAlign: 'center' }}
+            />
+          </GField>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>El código vence en 10 minutos.</span>
+            <Button variant="ghost" size="md" onClick={reenviar}>Reenviar código</Button>
+          </div>
+        </div>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open onClose={onClose} width={580} title={especialista ? 'Editar especialista' : 'Nuevo especialista'} subtitle={especialista ? especialista.nombre : 'Registra a un miembro del equipo y asígnalo a una o varias sucursales.'}
       footer={<>
         <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-        <Button variant="primary" loading={guardando} onClick={guardar}>{especialista ? 'Guardar cambios' : 'Crear especialista'}</Button>
+        <Button variant="primary" loading={guardando} onClick={guardar}>{especialista ? 'Guardar cambios' : 'Enviar código'}</Button>
       </>}>
       <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <GField label="Nombre completo" span={2} error={nombreErr}><Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Andrés Mejía" /></GField>
+          <GField label="Nombre" error={nombreErr}><Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Andrés" /></GField>
+          <GField label="Apellidos" optional><Input value={apellidos} onChange={(e) => setApellidos(e.target.value)} placeholder="Ej.: Mejía" /></GField>
+          {!especialista && (
+            <GField label="Celular" span={2} error={celularErr} hint="Recibirá un código para confirmar el número; sin él no podremos avisarle de sus citas.">
+              <Input value={celular} onChange={(e) => setCelular(e.target.value)} placeholder="300 123 4567" inputMode="tel" />
+            </GField>
+          )}
           <GField label="Especialidad" optional span={2}><Input value={especialidad} onChange={(e) => setEspecialidad(e.target.value)} placeholder="Ej.: Barbero senior" /></GField>
         </div>
 
