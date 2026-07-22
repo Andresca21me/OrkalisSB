@@ -16,6 +16,7 @@ import {
 import { adminClient, adminDb } from './admin-client';
 import {
   atencion,
+  atencionPago,
   cita,
   citaServicio,
   cliente,
@@ -579,17 +580,21 @@ async function completar(
   await tx.insert(citaServicio).values({ citaId: ct.id, servicioId: srv.id, precioAplicado: cop(s.precio) });
 
   const { ganProf, ganSalon } = repartir(s.precio, s.splitType, s.splitValor);
-  await tx.insert(atencion).values({
-    negocioId,
-    sucursalId,
-    citaId: ct.id,
-    especialistaId,
-    total: cop(s.precio),
-    ganProf: cop(ganProf),
-    ganSalon: cop(ganSalon),
-    metodoPago,
-    snapshotParam: { splitType: s.splitType, splitValor: s.splitValor, servicio: s.nombre },
-  });
+  const [at] = await tx
+    .insert(atencion)
+    .values({
+      negocioId,
+      sucursalId,
+      citaId: ct.id,
+      especialistaId,
+      total: cop(s.precio),
+      ganProf: cop(ganProf),
+      ganSalon: cop(ganSalon),
+      metodoPago,
+      snapshotParam: { splitType: s.splitType, splitValor: s.splitValor, servicio: s.nombre },
+    })
+    .returning({ id: atencion.id });
+  await tx.insert(atencionPago).values({ atencionId: at.id, metodo: metodoPago, monto: cop(s.precio) });
 }
 
 // ---------------------------------------------------------------------------

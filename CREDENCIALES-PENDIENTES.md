@@ -15,17 +15,23 @@
 - [ ] Cuenta creada en railway.app
 - [ ] Token / credenciales de despliegue de producción (se entregan en FASE-14)
 
-### Twilio (SMS para OTP y recordatorios) — se usa en FASE-11
-> **FASE-11 implementada con MOCK.** Sin estas claves en `apps/api/.env`, el backend
-> usa el `MockAdapter` (loguea el SMS en consola y NO envía). Para envío real:
-> pegar las 3 variables `TWILIO_*` y reiniciar la API (el adaptador se elige por entorno).
-> En cuenta trial, Twilio solo envía a números **verificados** en su panel.
-- [ ] `TWILIO_ACCOUNT_SID`
-- [ ] `TWILIO_AUTH_TOKEN`
-- [ ] `TWILIO_FROM_NUMBER` (número trial)
+### Twilio (SMS / WhatsApp / Verify) — Plan-Mensajeria FASE-00+
+> **Local: envío real ACTIVADO** (2026-07-21). Con las 3 claves `TWILIO_*` en
+> `apps/api/.env`, el backend usa `TwilioAdapter` (no mock). En cuenta **trial**,
+> Twilio solo entrega a números **verificados** en el panel. Para volver a mock,
+> deja `TWILIO_AUTH_TOKEN` vacío y reinicia la API.
+> **Railway/producción: sin claves aún** — se activa en FASE-10 (go-live) con cuenta
+> paga o números verificados (en trial rompería el OTP de clientes reales).
+- [x] `TWILIO_ACCOUNT_SID`
+- [x] `TWILIO_AUTH_TOKEN`
+- [x] `TWILIO_FROM_NUMBER` (`+1669…`, long code US trial)
+- [x] `TWILIO_MESSAGING_SERVICE_SID` (se cablea en FASE-01)
+- [x] `TWILIO_VERIFY_SERVICE_SID` (se usa en FASE-06)
+- [ ] `TWILIO_WHATSAPP_FROM` + `TWILIO_WA_TPL_*` (AM-3: sender Meta + plantillas aprobadas)
+- [ ] `TWILIO_STATUS_CALLBACK_URL` (FASE-02, requiere URL pública)
 - [ ] (Opcional, email) `SENDGRID_API_KEY` + `MAIL_FROM`
-- Nota: los SDK `twilio` / `@sendgrid/mail` son dependencias opcionales; instalarlas
-  (`pnpm --filter api add twilio`) antes de activar el envío real.
+- Nota: el SDK `twilio` ya está instalado en `apps/api`. `@sendgrid/mail` es opcional
+  (instalar antes de activar el envío de email real).
 
 ### Wompi (pasarela de suscripción, sandbox) — se usa en FASE-12
 > **FASE-12 implementada en modo INACTIVO** (sin claves). El cálculo del cargo,

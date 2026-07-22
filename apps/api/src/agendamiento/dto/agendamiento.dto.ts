@@ -53,8 +53,14 @@ export class ProductoRealDto {
   @IsInt() @Min(1) cantidad!: number;
 }
 
+export class PagoLineaDto {
+  @IsEnum(MetodoPago) metodo!: MetodoPago;
+  @IsNumber() @Min(1) monto!: number;
+}
+
 export class CompletarDto {
-  @IsEnum(MetodoPago) metodoPago!: MetodoPago;
+  @IsArray() @ArrayNotEmpty() @ValidateNested({ each: true }) @Type(() => PagoLineaDto)
+  pagos!: PagoLineaDto[];
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ServicioRealDto)
   servicios?: ServicioRealDto[];
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ProductoRealDto)

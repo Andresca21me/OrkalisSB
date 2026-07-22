@@ -36,10 +36,16 @@ export function accionCita(id: string, evento: EventoCita): Promise<unknown> {
   return api.post(`/citas/${id}/${evento}`);
 }
 
-/** Completa la cita con cobro (guard de pago, ADR-006). */
+/** Una línea del pago (permite dividir el cobro en varios métodos). */
+export interface PagoLinea {
+  metodo: MetodoPago;
+  monto: number;
+}
+
+/** Completa la cita con cobro dividido en 1+ métodos (guard de pago, ADR-006). */
 export function completarCita(
   id: string,
-  body: { metodoPago: MetodoPago; servicios?: { servicioId: string; precio?: number }[]; productos?: { productoId: string; cantidad: number }[] },
+  body: { pagos: PagoLinea[]; servicios?: { servicioId: string; precio?: number }[]; productos?: { productoId: string; cantidad: number }[] },
 ): Promise<unknown> {
   return api.post(`/citas/${id}/completar`, body);
 }

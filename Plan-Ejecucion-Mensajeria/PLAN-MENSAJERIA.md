@@ -389,8 +389,8 @@ Marca ✅ al terminar cada fase (no avances si su verificación no pasa).
 
 | Fase | Archivo | Prioridad | Depende de | Requiere acción manual | Estado |
 |------|---------|-----------|------------|------------------------|--------|
-| 00 | `FASE-00-prerrequisitos-twilio.md` | P0 | — | AM-1, AM-2, AM-3, AM-5 | ⬜ |
-| 01 | `FASE-01-cimientos-multicanal.md` | P0 | 00* | — | ⬜ |
+| 00 | `FASE-00-prerrequisitos-twilio.md` | P0 | — | AM-1, AM-2, AM-3, AM-5 | ✅ (WhatsApp AM-3 pend.) |
+| 01 | `FASE-01-cimientos-multicanal.md` | P0 | 00* | — | ✅ |
 | 02 | `FASE-02-outbox-auditoria-webhook.md` | P0 | 01 | AM-4 | ⬜ |
 | 03 | `FASE-03-limites-por-ciclo.md` | P1 | 02 | — | ⬜ |
 | 04 | `FASE-04-plantillas-por-negocio.md` | P1 | 01, 00 | AM-3 | ⬜ |

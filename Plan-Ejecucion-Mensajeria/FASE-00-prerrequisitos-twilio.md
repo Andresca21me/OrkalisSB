@@ -31,6 +31,24 @@ Dejar Twilio operativo (SMS, WhatsApp, Verify) y **todas las credenciales dispon
 - **AM-5 (opcional) · SendGrid:** cuenta + remitente verificado. Entregar `SENDGRID_API_KEY`, `MAIL_FROM`.
 - Pegar todo en `.env` local y variables de Railway.
 
+### Estado de credenciales (2026-07-21)
+> ⚠️ **Nunca** pegues secretos (Auth Token) en archivos versionados. Van SOLO en
+> `apps/api/.env` (gitignored) y en las variables de Railway. Aquí solo el estado.
+
+| Credencial | Var | Estado |
+|---|---|---|
+| Account SID | `TWILIO_ACCOUNT_SID` | ✅ entregada → en `.env` local |
+| Auth Token (secreto) | `TWILIO_AUTH_TOKEN` | ✅ entregada → en `.env` local |
+| Número SMS | `TWILIO_FROM_NUMBER` | ✅ `+1669…` (long code US, trial) |
+| Messaging Service | `TWILIO_MESSAGING_SERVICE_SID` | ✅ entregada → en `.env` local |
+| Verify Service | `TWILIO_VERIFY_SERVICE_SID` | ✅ entregada → en `.env` local |
+| WhatsApp sender + plantillas | `TWILIO_WHATSAPP_FROM`, `TWILIO_WA_TPL_*` | ⬜ pendiente (AM-3, aprobación Meta) |
+| SendGrid (email) | `SENDGRID_API_KEY`, `MAIL_FROM` | ⬜ opcional (AM-5) |
+
+**Local:** envío real activado (mock apagado). **Railway/producción:** sin claves
+todavía — se activa en FASE-10 (go-live) con cuenta paga o números verificados,
+porque en trial solo entrega a números verificados y rompería el OTP de clientes.
+
 ## Riesgos y mitigaciones
 - **Aprobación WhatsApp lenta (Meta):** iniciarla al principio; las fases de código avanzan en paralelo con mock.
 - **Número trial con restricciones:** trial solo envía a números verificados; para pruebas reales verificar tu propio número o pasar a cuenta paga (FASE-10).

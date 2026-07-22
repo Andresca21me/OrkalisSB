@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { JobQueue } from './job-queue';
-import { NOTIFICATION_SENDER, type NotificationSender } from './notification-sender.port';
+import { NOTIFICATION_ADAPTERS, type MensajeSalida, type NotificationSender } from './notification-sender.port';
+import { RemitenteResolver } from './remitente/remitente.resolver';
 import { CuposService, type CanalCupo } from './cupos.service';
 import { plantillas, type DatosCita } from './templates';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
@@ -23,7 +24,8 @@ export class NotificacionesService implements OnModuleInit {
 
   constructor(
     private readonly queue: JobQueue,
-    @Inject(NOTIFICATION_SENDER) private readonly sender: NotificationSender,
+    @Inject(NOTIFICATION_ADAPTERS) private readonly adapters: NotificationSender[],
+    private readonly remitente: RemitenteResolver,
     private readonly cupos: CuposService,
     private readonly metrics: MetricsService,
   ) {}
@@ -55,14 +57,15 @@ export class NotificacionesService implements OnModuleInit {
 
   // ── Handlers (corren en el worker) ──────────────────────────────────────────
   private async hOtp(p: { negocioId: string; telefono: string; codigo: string }): Promise<void> {
-    await this.enviarSms(p.negocioId, 'sms', true, p.telefono, plantillas.otp(p.codigo));
+    await this.despachar(p.negocioId, 'sms', true, { canal: 'sms', to: p.telefono, cuerpo: plantillas.otp(p.codigo) });
   }
 
   private async hCita(payload: unknown, tipo: 'confirmacion' | 'recordatorio' | 'aviso'): Promise<void> {
     const p = payload as { negocioId: string; telefono: string; datos: DatosCitaSer };
     const datos: DatosCita = { ...p.datos, inicio: new Date(p.datos.inicio) };
-    const mensaje = plantillas[tipo](datos);
-    await this.enviarSms(p.negocioId, 'sms', true, p.telefono, mensaje);
+    const cuerpo = plantillas[tipo](datos);
+    // v1: el canal por evento (SMS vs WhatsApp) llega en FASE-05; aquí SMS por defecto.
+    await this.despachar(p.negocioId, 'sms', true, { canal: 'sms', to: p.telefono, cuerpo });
   }
 
   private async hExportacion(payload: unknown): Promise<void> {
@@ -72,27 +75,34 @@ export class NotificacionesService implements OnModuleInit {
   }
 
   /**
-   * Envía un SMS con política de cupo (ADR-009): si se agotó el cupo del canal,
-   * el marketing se DETIENE (no transaccional); utility/confirmaciones/
-   * recordatorios se envían igual y se avisa al admin (no se cortan).
+   * Despacha un `MensajeSalida` con política de cupo (ADR-009): si se agotó el
+   * cupo del canal, el marketing se DETIENE (no transaccional); utility/
+   * confirmaciones/recordatorios se envían igual y se avisa al admin (no se
+   * cortan). Resuelve el `PerfilRemitente` (D6) y elige el adaptador cuyo
+   * `soporta(canal)` es true (el MockAdapter queda de fallback).
    */
-  private async enviarSms(
+  private async despachar(
     negocioId: string,
-    canal: CanalCupo,
+    cupoCanal: CanalCupo,
     transaccional: boolean,
-    to: string,
-    mensaje: string,
+    mensaje: MensajeSalida,
   ): Promise<void> {
-    const estado = await this.cupos.verificar(negocioId, canal);
+    const estado = await this.cupos.verificar(negocioId, cupoCanal);
     if (!estado.dentroDeCupo) {
       if (!transaccional) {
-        this.logger.warn(`Cupo '${canal}' agotado (negocio ${negocioId}): marketing detenido.`);
+        this.logger.warn(`Cupo '${cupoCanal}' agotado (negocio ${negocioId}): marketing detenido.`);
         return;
       }
-      this.logger.warn(`Cupo '${canal}' agotado (negocio ${negocioId}): se envía igual (transaccional).`);
+      this.logger.warn(`Cupo '${cupoCanal}' agotado (negocio ${negocioId}): se envía igual (transaccional).`);
     }
-    await this.sender.enviarSms(to, mensaje);
-    await this.cupos.registrar(negocioId, canal);
+    const adapter = this.adapters.find((a) => a.soporta(mensaje.canal));
+    if (!adapter) {
+      this.logger.error(`Sin adaptador para el canal '${mensaje.canal}'.`);
+      return;
+    }
+    const perfil = this.remitente.resolver(negocioId);
+    await adapter.enviar(mensaje, perfil);
+    await this.cupos.registrar(negocioId, cupoCanal);
     this.metrics.inc(METRICAS.notificacionesEnviadas);
   }
 

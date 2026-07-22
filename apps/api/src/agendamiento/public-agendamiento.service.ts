@@ -299,17 +299,23 @@ export class PublicAgendamientoService {
         .paraOrigen(OrigenCita.AgendamientoPublico)
         .validar(tx, { negocioId: ctx.negocioId, sucursalId, especialistaId: ret.especialistaId, inicio, fin });
 
-      // get_or_create cliente por teléfono (RF-034).
+      // get_or_create cliente por teléfono (RF-034). Si ya existe y llega un
+      // nombre nuevo, se ACTUALIZA: el teléfono es la identidad, pero el cliente
+      // puede corregir/cambiar su nombre en una reserva posterior (antes se
+      // quedaba con el nombre de la primera reserva).
+      const nombreNuevo = input.nombre?.trim();
       let [cli] = await tx
-        .select({ id: cliente.id })
+        .select({ id: cliente.id, nombre: cliente.nombre })
         .from(cliente)
         .where(eq(cliente.telefono, input.telefono))
         .limit(1);
       if (!cli) {
         [cli] = await tx
           .insert(cliente)
-          .values({ negocioId: ctx.negocioId, nombre: input.nombre ?? 'Cliente', telefono: input.telefono })
-          .returning({ id: cliente.id });
+          .values({ negocioId: ctx.negocioId, nombre: nombreNuevo || 'Cliente', telefono: input.telefono })
+          .returning({ id: cliente.id, nombre: cliente.nombre });
+      } else if (nombreNuevo && nombreNuevo !== cli.nombre) {
+        await tx.update(cliente).set({ nombre: nombreNuevo }).where(eq(cliente.id, cli.id));
       }
 
       // precio estimado = suma de los servicios elegidos.

@@ -28,6 +28,12 @@ export interface ProductoReal {
   valor: number; // precio unitario
 }
 
+/** Una línea del pago (para dividir el cobro en varios métodos). */
+export interface PagoReal {
+  metodo: MetodoPago;
+  monto: number;
+}
+
 export interface ParametrosFinancieros {
   reparticionProfesional: number; // %
   reparticionSalon: number; // %
@@ -64,7 +70,7 @@ const METODOS_ELECTRONICOS: ReadonlySet<MetodoPago> = new Set([
 export function calcularAtencion(
   servicios: ServicioReal[],
   productos: ProductoReal[],
-  metodoPago: MetodoPago,
+  pagos: PagoReal[],
   p: ParametrosFinancieros,
 ): ResultadoCalculo {
   const totalServicios = round2(servicios.reduce((s, x) => s + x.precio, 0));
@@ -102,10 +108,12 @@ export function calcularAtencion(
   let ganSalon = round2(ganSalonServicios + totalProductos);
   const total = round2(totalServicios + totalProductos + tarifa);
 
-  // Comisión bancaria (pago electrónico) absorbida por el salón.
-  const comisionBancaria = METODOS_ELECTRONICOS.has(metodoPago)
-    ? round2((total * p.comisionBancaria) / 100)
-    : 0;
+  // Comisión bancaria: solo sobre la PORCIÓN electrónica del pago (soporta pago
+  // dividido en varios métodos). La absorbe el salón.
+  const montoElectronico = round2(
+    pagos.filter((x) => METODOS_ELECTRONICOS.has(x.metodo)).reduce((s, x) => s + x.monto, 0),
+  );
+  const comisionBancaria = round2((montoElectronico * p.comisionBancaria) / 100);
   ganSalon = round2(ganSalon - comisionBancaria);
 
   // Sin partición por especialista: no hay ganancia individual.
@@ -125,7 +133,8 @@ export function calcularAtencion(
     totalProductos,
     snapshot: {
       parametros: p,
-      metodoPago,
+      pagos,
+      montoElectronico,
       totalServicios,
       totalProductos,
       deduccion,

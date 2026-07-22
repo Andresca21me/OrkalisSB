@@ -3,6 +3,7 @@ import { SplitType } from '@orkalis/shared';
 import { useSucursal } from '../../lib/sucursal';
 import { hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { rangoDiaBogota, useCitas } from '../../lib/useCitas';
+import { efectivoDe, useConfig } from '../../lib/useConfig';
 import {
   crearServicio,
   editarServicio,
@@ -34,6 +35,9 @@ export function ServiciosScreen() {
   const { consolidado, sucursalActiva, sucursalActivaId } = useSucursal();
   const toast = useToast();
   const { data, cargando, error, recargar } = useServicios();
+  // Repartición estándar de la config (finanzas) → default al crear un servicio.
+  const cfg = useConfig(sucursalActivaId);
+  const defaultProfPct = Number(efectivoDe(cfg.data, 'finanzas.reparticion_profesional')?.valor ?? 50);
 
   const [sub, setSub] = useState('catalogo');
   const [query, setQuery] = useState('');
@@ -113,7 +117,7 @@ export function ServiciosScreen() {
         <RegistroTab sucursalId={sucursalActivaId} />
       )}
 
-      {formOpen && <ServiceModal servicio={editSv} onClose={() => { setFormOpen(false); setEditSv(null); }} onSaved={async () => { setFormOpen(false); setEditSv(null); await recargar(); }} />}
+      {formOpen && <ServiceModal servicio={editSv} defaultProfPct={defaultProfPct} onClose={() => { setFormOpen(false); setEditSv(null); }} onSaved={async () => { setFormOpen(false); setEditSv(null); await recargar(); }} />}
       <GConfirm open={!!delSv} title="Dar de baja el servicio" danger confirmLabel="Dar de baja" confirmIcon="trash-2"
         desc={delSv ? <span><strong style={{ color: 'var(--text-primary)' }}>{delSv.nombre}</strong> dejará de estar disponible para agendar, pero su historial se conserva (borrado lógico).</span> : ''}
         onClose={() => setDelSv(null)} onConfirm={() => delSv && eliminar(delSv)} />
@@ -154,14 +158,15 @@ function ServiceCard({ s, onEdit, onDelete }: { s: Servicio; onEdit: () => void;
   );
 }
 
-function ServiceModal({ servicio, onClose, onSaved }: { servicio: Servicio | null; onClose: () => void; onSaved: () => void }) {
+function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio: Servicio | null; defaultProfPct: number; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [nombre, setNombre] = useState(servicio?.nombre ?? '');
   const [categoria, setCategoria] = useState(servicio?.categoria ?? '');
   const [duracion, setDuracion] = useState<number>(servicio?.duracionMin ?? 30);
   const [precio, setPrecio] = useState<MoneyValue>(servicio ? Number(servicio.precio) : '');
   const [splitType, setSplitType] = useState<SplitType>(servicio?.splitType ?? SplitType.Porcentaje);
-  const [splitValor, setSplitValor] = useState<MoneyValue>(servicio ? Number(servicio.splitValor) : 50);
+  // Al crear: default = repartición de la config (editable). Al editar: el % del servicio.
+  const [splitValor, setSplitValor] = useState<MoneyValue>(servicio ? Number(servicio.splitValor) : defaultProfPct);
   const [touched, setTouched] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
@@ -216,7 +221,7 @@ function ServiceModal({ servicio, onClose, onSaved }: { servicio: Servicio | nul
         </div>
 
         <div>
-          <div className="eyebrow" style={{ marginBottom: 10 }}>Repartición profesional / salón</div>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Repartición profesional / salón{!servicio && <span style={{ textTransform: 'none', fontWeight: 500, color: 'var(--text-tertiary)' }}> · sugerida por tu configuración ({defaultProfPct}% profesional). Puedes cambiarla.</span>}</div>
           <div style={{ padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}>
             <GField label="Modo">
               <Select value={splitType} onChange={(e) => setSplitType(e.target.value as SplitType)}>

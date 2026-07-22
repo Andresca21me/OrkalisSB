@@ -3,7 +3,9 @@ import { hora, hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { useAuth } from '../../lib/auth';
 import { rangoDiaBogota, useCitas } from '../../lib/useCitas';
 import { useGanancias } from '../../lib/useEspecialista';
+import { diasATimestamps, etiquetaRango, presetRango, type RangoDias } from '../../lib/useReportes';
 import { AppHeader, ScrollArea } from '../../ui';
+import { RangeCalendar } from '../../ui/RangeCalendar';
 import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Icon, Skeleton, Segmented, Switch, useToast } from '../../ui/ui';
 import { DayStat, SectionLabel, Sheet, turnoCliente, turnoTotal } from './spec-ui';
 
@@ -21,20 +23,36 @@ function rango(p: Periodo): { desde: string; hasta: string } {
 // ── Ganancias ────────────────────────────────────────────────────────────────
 export function GananciasSpec({ especialistaId, sucursalId }: { especialistaId: string; sucursalId: string | null }) {
   const [periodo, setPeriodo] = useState<Periodo>('hoy');
-  const { desde, hasta } = useMemo(() => rango(periodo), [periodo]);
+  const [custom, setCustom] = useState<RangoDias | null>(null);
+  const [rangoSheet, setRangoSheet] = useState(false);
+  const { desde, hasta } = useMemo(() => (custom ? diasATimestamps(custom) : rango(periodo)), [custom, periodo]);
   const g = useGanancias(especialistaId, desde, hasta);
   const citas = useCitas({ desde, hasta, sucursalId, especialistaId });
 
   const completados = useMemo(() => (citas.data ?? []).filter((c) => c.estado === 'completada').sort((a, b) => b.inicio.localeCompare(a.inicio)), [citas.data]);
   const d = g.data;
   const avg = d && d.servicios ? Math.round(d.ganServicios / d.servicios) : 0;
-  const periodoLabel = periodo === 'hoy' ? 'hoy' : periodo === 'semana' ? 'esta semana' : 'este mes';
+  const esHoy = !custom && periodo === 'hoy';
+  const periodoLabel = custom ? etiquetaRango(custom) : periodo === 'hoy' ? 'hoy' : periodo === 'semana' ? 'esta semana' : 'este mes';
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <AppHeader title="Mis ganancias" />
       <div style={{ flex: 'none', padding: '14px 20px', background: 'var(--surface-card)', borderBottom: '1px solid var(--border-subtle)' }}>
-        <Segmented options={[{ value: 'hoy', label: 'Hoy' }, { value: 'semana', label: 'Semana' }, { value: 'mes', label: 'Mes' }]} value={periodo} onChange={(v) => setPeriodo(v as Periodo)} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Segmented options={[{ value: 'hoy', label: 'Hoy' }, { value: 'semana', label: 'Semana' }, { value: 'mes', label: 'Mes' }]} value={custom ? '' : periodo} onChange={(v) => { setCustom(null); setPeriodo(v as Periodo); }} />
+          </div>
+          <button type="button" onClick={() => setRangoSheet(true)} aria-label="Rango de fechas personalizado" style={{ flex: 'none', width: 40, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: `1px solid ${custom ? 'var(--brand)' : 'var(--border-default)'}`, background: custom ? 'var(--brand-tint)' : 'var(--surface-card)', cursor: 'pointer' }}>
+            <Icon name="calendar" size={18} color={custom ? 'var(--brand)' : 'var(--text-tertiary)'} />
+          </button>
+        </div>
+        {custom && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+            <span className="data" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--brand)' }}><Icon name="calendar" size={14} color="var(--brand)" />{etiquetaRango(custom)}</span>
+            <button type="button" onClick={() => setCustom(null)} aria-label="Quitar rango" style={{ marginLeft: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-tertiary)', display: 'inline-flex', padding: 4 }}><Icon name="x" size={16} color="var(--text-tertiary)" /></button>
+          </div>
+        )}
       </div>
 
       <ScrollArea>
@@ -42,7 +60,7 @@ export function GananciasSpec({ especialistaId, sucursalId }: { especialistaId: 
           <div style={{ padding: 20 }}><ErrorState onRetry={g.recargar} /></div>
         ) : g.cargando || !d ? (
           <div style={{ padding: 20 }}><Skeleton h={130} r={16} style={{ marginBottom: 18 }} /><div style={{ display: 'flex', gap: 10 }}>{[0, 1, 2].map((i) => <Skeleton key={i} h={72} r={8} style={{ flex: 1 }} />)}</div></div>
-        ) : periodo === 'hoy' && d.servicios === 0 ? (
+        ) : esHoy && d.servicios === 0 ? (
           <div style={{ padding: 20 }}><EmptyState icon="dollar-sign" title="Aún sin ganancias hoy" desc="Cuando completes tu primer turno del día verás aquí tu total y el desglose." /></div>
         ) : (
           <div style={{ padding: 20 }}>
@@ -61,7 +79,7 @@ export function GananciasSpec({ especialistaId, sucursalId }: { especialistaId: 
               <DayStat value={money(d.comisiones)} label="Comisiones" mono accent />
             </div>
 
-            <SectionLabel>Turnos completados {periodo === 'hoy' ? 'hoy' : `· ${completados.length}`}</SectionLabel>
+            <SectionLabel>Turnos completados {esHoy ? 'hoy' : `· ${completados.length}`}</SectionLabel>
             {completados.length === 0 ? (
               <Card padding={18}><div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>El detalle por turno del período aparece aquí.</div></Card>
             ) : (
@@ -84,6 +102,10 @@ export function GananciasSpec({ especialistaId, sucursalId }: { especialistaId: 
           </div>
         )}
       </ScrollArea>
+
+      <Sheet open={rangoSheet} onClose={() => setRangoSheet(false)} title="Elige el rango de fechas">
+        <RangeCalendar value={custom ?? presetRango('mes')} onApply={(r) => { setCustom(r); setRangoSheet(false); }} />
+      </Sheet>
     </div>
   );
 }

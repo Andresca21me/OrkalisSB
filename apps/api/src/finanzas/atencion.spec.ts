@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, NivelConfig, OrigenCita, PerfilNegocio } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { atencion, cita, citaServicio, especialista, especialistaSucursal, negocio, producto, servicio, sucursal } from '../db/schema';
+import { atencion, atencionPago, cita, citaServicio, especialista, especialistaSucursal, negocio, producto, servicio, sucursal } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
 import { ConfigWriteService } from '../config-module/config-write.service';
@@ -24,6 +24,9 @@ describe('AtencionService (completar / revertir transaccional)', () => {
   let resolver: ConfigResolverService;
   let writer: ConfigWriteService;
   let service: AtencionService;
+
+  /** Pago único en efectivo por el monto total. */
+  const efectivo = (monto: number) => [{ metodo: MetodoPago.Efectivo, monto }];
 
   // Crea una cita en_progreso con N líneas del servicio (precio 25000 c/u).
   async function citaEnProgreso(hora: number, lineas = 2): Promise<string> {
@@ -85,7 +88,7 @@ describe('AtencionService (completar / revertir transaccional)', () => {
   it('completar con 2 servicios + 1 producto calcula gan y descuenta stock', async () => {
     const citaId = await citaEnProgreso(1);
     const at = await service.completar(ctx, citaId, {
-      metodoPago: MetodoPago.Efectivo,
+      pagos: efectivo(70000),
       productos: [{ productoId: prodId, cantidad: 2 }],
     });
     expect(Number(at.total)).toBe(70000); // 50000 servicios + 20000 producto
@@ -100,21 +103,40 @@ describe('AtencionService (completar / revertir transaccional)', () => {
 
   it('completar sin método de pago es rechazado (guard de pago)', async () => {
     const citaId = await citaEnProgreso(2);
+    await expect(service.completar(ctx, citaId, { pagos: [] })).rejects.toThrow();
+  });
+
+  it('completar con pagos que no suman el total es rechazado', async () => {
+    const citaId = await citaEnProgreso(7); // 2 servicios = 50000
     await expect(
-      // @ts-expect-error metodoPago ausente a propósito
-      service.completar(ctx, citaId, { metodoPago: undefined }),
-    ).rejects.toThrow();
+      service.completar(ctx, citaId, { pagos: efectivo(40000) }),
+    ).rejects.toThrow(/no coincide con el total/);
+  });
+
+  it('pago dividido: guarda el desglose y el método dominante', async () => {
+    const citaId = await citaEnProgreso(8); // 2 servicios = 50000
+    const at = await service.completar(ctx, citaId, {
+      pagos: [
+        { metodo: MetodoPago.Efectivo, monto: 20000 },
+        { metodo: MetodoPago.Transferencia, monto: 30000 },
+      ],
+    });
+    expect(Number(at.total)).toBe(50000);
+    expect(at.metodoPago).toBe(MetodoPago.Transferencia); // dominante (mayor monto)
+    const pagos = await adminDb.select().from(atencionPago).where(eq(atencionPago.atencionId, at.id));
+    expect(pagos).toHaveLength(2);
+    expect(pagos.reduce((s, p) => s + Number(p.monto), 0)).toBe(50000);
   });
 
   it('completar dos veces el mismo turno no duplica la atención', async () => {
     const citaId = await citaEnProgreso(3);
-    await service.completar(ctx, citaId, { metodoPago: MetodoPago.Efectivo });
-    await expect(service.completar(ctx, citaId, { metodoPago: MetodoPago.Efectivo })).rejects.toThrow();
+    await service.completar(ctx, citaId, { pagos: efectivo(50000) });
+    await expect(service.completar(ctx, citaId, { pagos: efectivo(50000) })).rejects.toThrow();
   });
 
   it('revertir repone stock, deshace la atención y reabre el turno', async () => {
     const citaId = await citaEnProgreso(4);
-    await service.completar(ctx, citaId, { metodoPago: MetodoPago.Efectivo, productos: [{ productoId: prodId, cantidad: 3 }] });
+    await service.completar(ctx, citaId, { pagos: efectivo(80000), productos: [{ productoId: prodId, cantidad: 3 }] });
     let [p] = await adminDb.select({ cantidad: producto.cantidad }).from(producto).where(eq(producto.id, prodId));
     const tras = p.cantidad;
 
@@ -130,7 +152,7 @@ describe('AtencionService (completar / revertir transaccional)', () => {
 
   it('cambiar parámetros después de completar NO altera el snapshot previo', async () => {
     const citaId = await citaEnProgreso(5);
-    const at = await service.completar(ctx, citaId, { metodoPago: MetodoPago.Efectivo });
+    const at = await service.completar(ctx, citaId, { pagos: efectivo(50000) });
     const ganProfOriginal = Number(at.ganProf);
 
     // Cambia la repartición a 70/30 después de completar.
@@ -143,7 +165,7 @@ describe('AtencionService (completar / revertir transaccional)', () => {
   it('con partición por especialista OFF no se calcula ganancia individual', async () => {
     await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'modulo.particion_por_especialista', false);
     const citaId = await citaEnProgreso(6);
-    const at = await service.completar(ctx, citaId, { metodoPago: MetodoPago.Efectivo });
+    const at = await service.completar(ctx, citaId, { pagos: efectivo(50000) });
     expect(Number(at.ganProf)).toBe(0);
     expect(Number(at.ganSalon)).toBe(50000);
     await writer.remove(ctx, NivelConfig.Negocio, negocioId, 'modulo.particion_por_especialista');

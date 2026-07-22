@@ -5,6 +5,7 @@ import { EstadoCita, type MetodoPago, type PanelResumen, type ReporteAnalisis } 
 import { runInTenantTx } from '../db/tx';
 import {
   atencion,
+  atencionPago,
   cita,
   citaServicio,
   cliente,
@@ -125,12 +126,18 @@ export class ReportesService {
           total: atencion.total,
           ganProf: atencion.ganProf,
           ganSalon: atencion.ganSalon,
-          metodoPago: atencion.metodoPago,
           especialistaId: atencion.especialistaId,
           citaId: atencion.citaId,
           creadoEn: atencion.creadoEn,
         })
         .from(atencion)
+        .where(and(gte(atencion.creadoEn, desde), lte(atencion.creadoEn, hasta), sucursalId ? eq(atencion.sucursalId, sucursalId) : undefined));
+
+      // "Por método de pago" desde el desglose real (soporta pago dividido).
+      const pagos = await tx
+        .select({ metodo: atencionPago.metodo, monto: atencionPago.monto })
+        .from(atencionPago)
+        .innerJoin(atencion, eq(atencion.id, atencionPago.atencionId))
         .where(and(gte(atencion.creadoEn, desde), lte(atencion.creadoEn, hasta), sucursalId ? eq(atencion.sucursalId, sucursalId) : undefined));
 
       const ventas = await tx
@@ -152,8 +159,10 @@ export class ReportesService {
         ingAten += Number(a.total);
         ganProf += Number(a.ganProf);
         ganSalon += Number(a.ganSalon);
-        porMetodo.set(a.metodoPago, (porMetodo.get(a.metodoPago) ?? 0) + Number(a.total));
         porEspId.set(a.especialistaId, (porEspId.get(a.especialistaId) ?? 0) + Number(a.ganProf));
+      }
+      for (const p of pagos) {
+        porMetodo.set(p.metodo, (porMetodo.get(p.metodo) ?? 0) + Number(p.monto));
       }
 
       let ventasTotal = 0;

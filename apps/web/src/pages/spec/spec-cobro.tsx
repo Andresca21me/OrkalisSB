@@ -1,24 +1,24 @@
 import { useState } from 'react';
-import type { CitaAgenda, MetodoPago } from '@orkalis/shared';
+import type { CitaAgenda } from '@orkalis/shared';
 import { money } from '../../lib/format';
-import { completarCita } from '../../lib/useCitas';
+import { completarCita, type PagoLinea } from '../../lib/useCitas';
 import { AppHeader, FooterBar, ScrollArea } from '../../ui';
-import { Button, Card, Chip, Icon, useToast } from '../../ui/ui';
-import { PAGOS, SectionLabel, turnoCliente, turnoTotal } from './spec-ui';
+import { PagoSplit, pagoInicial, sumaPagos } from '../../ui/PagoSplit';
+import { Button, Card, Icon, useToast } from '../../ui/ui';
+import { SectionLabel, turnoCliente, turnoTotal } from './spec-ui';
 
 export function CobroSpec({ turno, onBack, onDone }: { turno: CitaAgenda; onBack: () => void; onDone: () => void }) {
   const toast = useToast();
-  const [pago, setPago] = useState<MetodoPago | null>(null);
-  const [intento, setIntento] = useState(false);
-  const [guardando, setGuardando] = useState(false);
   const total = turnoTotal(turno);
+  const [lineas, setLineas] = useState<PagoLinea[]>(() => pagoInicial(total));
+  const [guardando, setGuardando] = useState(false);
+  const cuadra = sumaPagos(lineas) === Math.round(total);
 
   async function confirmar() {
-    setIntento(true);
-    if (!pago) { toast('Elige un método de pago', 'warning'); return; }
+    if (!cuadra) { toast('El pago debe sumar exactamente el total', 'warning'); return; }
     setGuardando(true);
     try {
-      await completarCita(turno.id, { metodoPago: pago });
+      await completarCita(turno.id, { pagos: lineas });
       onDone();
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -46,10 +46,9 @@ export function CobroSpec({ turno, onBack, onDone }: { turno: CitaAgenda; onBack
           </Card>
 
           <div style={{ marginBottom: 10 }}><span className="eyebrow">Método de pago</span></div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: intento && !pago ? 8 : 16 }}>
-            {PAGOS.map((p) => <Chip key={p.id} active={pago === p.id} icon={p.icon} onClick={() => setPago(p.id)}>{p.label}</Chip>)}
-          </div>
-          {intento && !pago && <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--error)', fontSize: 'var(--text-xs)', marginBottom: 16 }}><Icon name="alert-circle" size={14} color="var(--error)" /> Selecciona un método de pago para completar.</div>}
+          <Card padding={14} style={{ marginBottom: 16 }}>
+            <PagoSplit total={total} lineas={lineas} onChange={setLineas} />
+          </Card>
 
           <Card padding={0}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px' }}>
@@ -61,7 +60,8 @@ export function CobroSpec({ turno, onBack, onDone }: { turno: CitaAgenda; onBack
       </ScrollArea>
 
       <FooterBar>
-        <Button size="lg" fullWidth loading={guardando} iconLeft="check" onClick={confirmar}>Confirmar cobro y completar</Button>
+        {!cuadra && <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--error)', fontSize: 'var(--text-xs)', marginBottom: 10 }}><Icon name="alert-circle" size={14} color="var(--error)" /> Los métodos deben sumar {money(total)} para completar.</div>}
+        <Button size="lg" fullWidth loading={guardando} disabled={!cuadra} iconLeft="check" onClick={confirmar}>Confirmar cobro y completar</Button>
       </FooterBar>
     </div>
   );

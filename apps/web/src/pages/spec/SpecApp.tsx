@@ -7,7 +7,7 @@ import { fechaLarga, hora, hoyISO, money } from '../../lib/format';
 import { accionCita, rangoDiaBogota, useCitas } from '../../lib/useCitas';
 import { setDisponibilidad } from '../../lib/useEspecialista';
 import { Avatar, Button, Card, EmptyState, ErrorState, Icon, Skeleton, useToast } from '../../ui/ui';
-import { MobileFrame, ScrollArea, SpecTabBar } from '../../ui';
+import { ScrollArea, SpecShell } from '../../ui';
 import { DayStat, EstadoBadgeSpec, SectionLabel, TurnoRow, ghostDarkBtn, turnoCliente, turnoDur, turnoTotal } from './spec-ui';
 import { AgendaSpec, DetalleTurno } from './spec-agenda';
 import { CobroSpec } from './spec-cobro';
@@ -57,9 +57,13 @@ export function SpecApp() {
     } catch (e) { setDisp(!next); toast((e as Error).message, 'error'); }
   }
 
+  // Cambiar de pestaña siempre cierra cualquier overlay a pantalla completa.
+  const irTab = (id: string) => { setOverlay(null); setTab(id); };
+  const shellNav = { tab, onTab: irTab, nombre: usuario?.nombre ?? '', disponible, onToggleDisp: toggleDisp, onLogout: () => void logout() };
+
   if (!especialistaId) {
     return (
-      <MobileFrame>
+      <SpecShell {...shellNav} desktopNav={false} mobileTabBar={false}>
         <ScrollArea style={{ padding: 24, display: 'grid', placeItems: 'center' }}>
           <div style={{ display: 'grid', gap: 18, justifyItems: 'center', textAlign: 'center' }}>
             <EmptyState icon="user-x" title="Sin perfil de especialista" desc="Tu cuenta no está enlazada a un recurso de agenda. Pide a tu administrador que te vincule como especialista (Gestión › Equipo)." />
@@ -68,28 +72,29 @@ export function SpecApp() {
             </Button>
           </div>
         </ScrollArea>
-      </MobileFrame>
+      </SpecShell>
     );
   }
 
-  // Overlays a pantalla completa (sin tab bar)
+  // Overlays a pantalla completa: en móvil ocultan la tab bar; en escritorio
+  // conservan la barra lateral (se sale con «atrás» o navegando).
   if (overlay) {
     const turno = turnoById(overlay.id);
     if (turno && overlay.type === 'detalle') {
       return (
-        <MobileFrame>
+        <SpecShell {...shellNav} mobileTabBar={false}>
           <DetalleTurno turno={turno} onBack={() => setOverlay(null)}
             onIniciar={() => accion(turno, 'iniciar')} onCompletar={() => setOverlay({ type: 'cobro', id: turno.id })}
             onCancelar={() => { void accion(turno, 'cancelar'); setOverlay(null); }} onNoAsistio={() => { void accion(turno, 'no-asistio'); setOverlay(null); }}
             onRevertir={() => { void accion(turno, 'revertir'); }} />
-        </MobileFrame>
+        </SpecShell>
       );
     }
     if (turno && overlay.type === 'cobro') {
       return (
-        <MobileFrame>
+        <SpecShell {...shellNav} mobileTabBar={false}>
           <CobroSpec turno={turno} onBack={() => setOverlay(null)} onDone={async () => { setOverlay(null); toast('Turno completado, ganancias calculadas', 'success'); await refrescar(); }} />
-        </MobileFrame>
+        </SpecShell>
       );
     }
   }
@@ -123,12 +128,7 @@ export function SpecApp() {
     );
   }
 
-  return (
-    <MobileFrame>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{body}</div>
-      <SpecTabBar active={tab} onChange={setTab} />
-    </MobileFrame>
-  );
+  return <SpecShell {...shellNav}>{body}</SpecShell>;
 }
 
 // ── Mi día ───────────────────────────────────────────────────────────────────

@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import type { MetodoPago } from '@orkalis/shared';
 import { useSucursal } from '../../lib/sucursal';
 import { money } from '../../lib/format';
-import { PERIODO_LABEL, rangoPeriodo, useAnalisis, type Periodo } from '../../lib/useReportes';
+import { diasATimestamps, etiquetaRango, presetRango, useAnalisis, type RangoDias } from '../../lib/useReportes';
 import { BarChart, Donut, type DonutDato, type SeriePunto } from '../../ui/Chart';
 import { Badge, Button, Card, EmptyState, ErrorState, Icon, Spinner, useToast } from '../../ui/ui';
-import { compactCOP, FinTile, HBars } from './finanzas-ui';
+import { compactCOP, FinTile, HBars, RangePicker } from './finanzas-ui';
 import { GSegmented } from './gestion-ui';
 
 const PAGO_LABEL: Record<string, string> = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', nequi: 'Nequi', otro: 'Otro' };
@@ -14,9 +14,10 @@ export function ReportesFinScreen({ particion }: { particion: boolean }) {
   const { consolidado, sucursalActiva, sucursalActivaId } = useSucursal();
   const toast = useToast();
   const [tipo, setTipo] = useState('admin');
-  const [period, setPeriod] = useState<Periodo>('mes');
-  const { desde, hasta } = useMemo(() => rangoPeriodo(period), [period]);
+  const [rango, setRango] = useState<RangoDias>(() => presetRango('mes'));
+  const { desde, hasta } = useMemo(() => diasATimestamps(rango), [rango]);
   const a = useAnalisis(desde, hasta, sucursalActivaId);
+  const rangoLabel = etiquetaRango(rango);
 
   const scope = consolidado ? 'Todo el negocio' : (sucursalActiva?.nombre ?? 'Sucursal');
   const d = a.data;
@@ -27,7 +28,7 @@ export function ReportesFinScreen({ particion }: { particion: boolean }) {
     const filas = [['servicio', 'total'], ...d.porServicio.map((s) => [s.nombre, s.total])].map((r) => r.join(',')).join('\n');
     const blob = new Blob(['﻿' + filas + '\n'], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url; link.download = `reporte-${period}.csv`; link.click();
+    const link = document.createElement('a'); link.href = url; link.download = `reporte-${rango.desde}_${rango.hasta}.csv`; link.click();
     URL.revokeObjectURL(url);
     toast('Reporte exportado (CSV)', 'success');
   }
@@ -56,7 +57,7 @@ export function ReportesFinScreen({ particion }: { particion: boolean }) {
         </div>
         <div>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginBottom: 6, fontWeight: 600 }}>Período</div>
-          <GSegmented value={period} onChange={(v) => setPeriod(v as Periodo)} options={[{ value: 'semana', label: 'Semana' }, { value: 'mes', label: 'Mes' }, { value: 'ano', label: 'Año' }]} />
+          <RangePicker value={rango} onChange={setRango} />
         </div>
       </div>
 
@@ -78,7 +79,7 @@ export function ReportesFinScreen({ particion }: { particion: boolean }) {
       ) : a.cargando ? (
         <div style={{ display: 'grid', placeItems: 'center', padding: 40 }}><Spinner /></div>
       ) : empty ? (
-        <Card padding={0}><EmptyState icon="bar-chart-2" title="Sin datos en el período" desc={`No hay actividad para “${PERIODO_LABEL[period]}”. Los gráficos aparecerán cuando se registren servicios.`} /></Card>
+        <Card padding={0}><EmptyState icon="bar-chart-2" title="Sin datos en el período" desc={`No hay actividad para “${rangoLabel}”. Los gráficos aparecerán cuando se registren servicios.`} /></Card>
       ) : d ? (
         <>
           <div className="ork-kpis" style={{ marginBottom: 20 }}>
@@ -90,7 +91,7 @@ export function ReportesFinScreen({ particion }: { particion: boolean }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <Card padding={18}>
-              <div className="eyebrow" style={{ marginBottom: 14 }}>Tendencia de ingresos · {PERIODO_LABEL[period]}</div>
+              <div className="eyebrow" style={{ marginBottom: 14 }}>Tendencia de ingresos · {rangoLabel}</div>
               {trend.length === 0 ? <SinDatos /> : <BarChart data={trend} formatY={compactCOP} />}
             </Card>
             <Card padding={18}>

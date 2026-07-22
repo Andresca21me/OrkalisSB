@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MetodoPago, type CitaAgenda } from '@orkalis/shared';
+import type { CitaAgenda } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
-import { completarCita, crearCita, type EventoCita } from '../../lib/useCitas';
+import { completarCita, crearCita, type EventoCita, type PagoLinea } from '../../lib/useCitas';
 import { hoyISO, money } from '../../lib/format';
+import { PagoSplit, pagoInicial, sumaPagos } from '../../ui/PagoSplit';
 import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, Select, StatTile } from '../../ui';
 
 const PALETA = ['#1A73E8', '#00A88A', '#7C3AED', '#F59E0B', '#EF4444', '#0EA5E9', '#475569', '#DB2777'];
@@ -166,25 +167,19 @@ export function MiniCalendar({ selectedIso, onPick }: { selectedIso: string; onP
 }
 
 // ── Modal de cobro (completar) ───────────────────────────────────────────────
-const METODOS: { v: MetodoPago; l: string }[] = [
-  { v: MetodoPago.Efectivo, l: 'Efectivo' },
-  { v: MetodoPago.Tarjeta, l: 'Tarjeta' },
-  { v: MetodoPago.Transferencia, l: 'Transferencia' },
-  { v: MetodoPago.Nequi, l: 'Nequi' },
-  { v: MetodoPago.Otro, l: 'Otro' },
-];
-
 export function CobroModal({ cita, onClose, onDone }: { cita: CitaAgenda; onClose: () => void; onDone: () => void }) {
-  const [metodo, setMetodo] = useState<MetodoPago>(MetodoPago.Efectivo);
+  const total = totalCita(cita);
+  const [lineas, setLineas] = useState<PagoLinea[]>(() => pagoInicial(total));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const total = totalCita(cita);
+  const cuadra = sumaPagos(lineas) === Math.round(total);
 
   async function completar() {
+    if (!cuadra) { setError(`Los métodos deben sumar ${money(total)}.`); return; }
     setGuardando(true);
     setError(null);
     try {
-      await completarCita(cita.id, { metodoPago: metodo });
+      await completarCita(cita.id, { pagos: lineas });
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -194,7 +189,7 @@ export function CobroModal({ cita, onClose, onDone }: { cita: CitaAgenda; onClos
   }
 
   return (
-    <Dialog open onClose={onClose} title="Completar y cobrar" subtitle={`${cita.clienteNombre ?? 'Cliente'} · ${horaCorta(cita.inicio)}`} footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button iconLeft="check" loading={guardando} onClick={() => void completar()}>Cobrar {money(total)}</Button></>}>
+    <Dialog open onClose={onClose} title="Completar y cobrar" subtitle={`${cita.clienteNombre ?? 'Cliente'} · ${horaCorta(cita.inicio)}`} footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button iconLeft="check" loading={guardando} disabled={!cuadra} onClick={() => void completar()}>Cobrar {money(total)}</Button></>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
         {cita.servicios.map((s, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
@@ -207,10 +202,8 @@ export function CobroModal({ cita, onClose, onDone }: { cita: CitaAgenda; onClos
           <span className="data" style={{ fontWeight: 800, fontFamily: 'var(--font-display)' }}>{money(total)}</span>
         </div>
       </div>
-      <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600, display: 'block', marginBottom: 6 }}>Método de pago</label>
-      <Select value={metodo} onChange={(e) => setMetodo(e.target.value as MetodoPago)}>
-        {METODOS.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}
-      </Select>
+      <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600, display: 'block', marginBottom: 8 }}>Método de pago <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>· puedes dividirlo</span></label>
+      <PagoSplit total={total} lineas={lineas} onChange={setLineas} />
       {error && <p style={{ color: 'var(--error)', fontSize: 'var(--text-sm)', marginTop: 12 }}>{error}</p>}
       <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 12 }}>El pago es obligatorio para cerrar el turno (guard de pago).</p>
     </Dialog>

@@ -7,7 +7,7 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, SplitType } from '@orkalis/shared';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
-import { atencion, atencionProducto, cita, citaServicio, producto, servicio } from '../db/schema';
+import { atencion, atencionPago, atencionProducto, cita, citaServicio, producto, servicio } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { ConfigResolverService } from '../config-module/config-resolver.service';
 import { transicionar } from '../agendamiento/cita-state-machine';
@@ -20,11 +20,20 @@ import {
 } from './calculo';
 
 export interface CompletarInput {
-  metodoPago: MetodoPago;
+  /** Desglose del pago: uno o más métodos que deben sumar el total. */
+  pagos: { metodo: MetodoPago; monto: number }[];
   /** Servicios reales (opcional: por defecto los ya registrados en la cita). */
   servicios?: { servicioId: string; precio?: number }[];
   /** Productos vendidos/consumidos (si inventario activo). */
   productos?: { productoId: string; cantidad: number }[];
+}
+
+/** Tolerancia de redondeo al validar que los pagos suman el total (1 peso). */
+const TOLERANCIA_PAGO = 1;
+
+/** Método dominante (mayor monto) para el campo legacy `atencion.metodo_pago`. */
+function metodoDominante(pagos: { metodo: MetodoPago; monto: number }[]): MetodoPago {
+  return pagos.reduce((max, p) => (p.monto > max.monto ? p : max)).metodo;
 }
 
 type Atencion = typeof atencion.$inferSelect;
@@ -42,8 +51,11 @@ export class AtencionService {
 
   /** Completa el turno: calcula, persiste atención + stock, transiciona. */
   async completar(ctx: TenantContext, citaId: string, input: CompletarInput): Promise<Atencion> {
-    if (!input.metodoPago) {
+    if (!input.pagos?.length) {
       throw new BadRequestException('No se puede completar sin registrar el pago.');
+    }
+    if (input.pagos.some((p) => !(p.monto > 0))) {
+      throw new BadRequestException('Cada método de pago debe tener un monto mayor a cero.');
     }
 
     // Carga la cita y resuelve parámetros ANTES de abrir la transacción de cierre.
@@ -89,7 +101,15 @@ export class AtencionService {
         }
       }
 
-      const r = calcularAtencion(servicios, productosReales, input.metodoPago, params);
+      const r = calcularAtencion(servicios, productosReales, input.pagos, params);
+
+      // El desglose de pago debe cuadrar con el total cobrado (± redondeo).
+      const sumaPagos = input.pagos.reduce((s, p) => s + p.monto, 0);
+      if (Math.abs(sumaPagos - r.total) > TOLERANCIA_PAGO) {
+        throw new BadRequestException(
+          `La suma de los pagos (${sumaPagos.toFixed(2)}) no coincide con el total (${r.total.toFixed(2)}).`,
+        );
+      }
 
       // Persistir cita_servicio finales si se enviaron servicios explícitos.
       if (input.servicios?.length) {
@@ -113,10 +133,15 @@ export class AtencionService {
           total: r.total.toFixed(2),
           ganProf: r.ganProf.toFixed(2),
           ganSalon: r.ganSalon.toFixed(2),
-          metodoPago: input.metodoPago,
+          metodoPago: metodoDominante(input.pagos), // legacy: método dominante
           snapshotParam: r.snapshot,
         })
         .returning();
+
+      // Desglose de pago (uno o varios métodos).
+      await tx.insert(atencionPago).values(
+        input.pagos.map((p) => ({ atencionId: at.id, metodo: p.metodo, monto: p.monto.toFixed(2) })),
+      );
 
       // Productos: registrar y descontar stock.
       for (const lp of lineasProducto) {

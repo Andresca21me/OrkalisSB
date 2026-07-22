@@ -98,3 +98,17 @@ export const atencionProducto = pgTable('atencion_producto', {
   cantidad: integer('cantidad').notNull(),
   valor: numeric('valor', { precision: 12, scale: 2 }).notNull(),
 });
+
+/**
+ * Desglose del pago de una atención (Plan-Finanzas). Permite dividir el cobro en
+ * varios métodos (efectivo + transferencia…). La suma de `monto` = `atencion.total`.
+ * `atencion.metodo_pago` guarda el método dominante (mayor monto) por compatibilidad.
+ */
+export const atencionPago = pgTable('atencion_pago', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  atencionId: uuid('atencion_id')
+    .notNull()
+    .references(() => atencion.id, { onDelete: 'cascade' }),
+  metodo: metodoPagoEnum('metodo').notNull(),
+  monto: numeric('monto', { precision: 12, scale: 2 }).notNull(),
+});

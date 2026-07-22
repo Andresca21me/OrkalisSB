@@ -1,12 +1,20 @@
 import { config as loadEnv } from 'dotenv';
 loadEnv();
 
+// Estas pruebas de agendamiento asumen mensajería SIMULADA: usan el `devCode`
+// que `enviarOtp` solo expone en modo mock. Se desacoplan del `.env` del
+// desarrollador (que ya puede tener claves Twilio reales) forzando aquí el modo
+// mock, para que el OTP de prueba siga disponible.
+delete process.env.TWILIO_ACCOUNT_SID;
+delete process.env.TWILIO_AUTH_TOKEN;
+delete process.env.TWILIO_FROM_NUMBER;
+
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, NivelConfig, OrigenCita, PerfilNegocio } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { cita, disponibilidad, especialista, especialistaSucursal, negocio, servicio, sucursal } from '../db/schema';
+import { cita, cliente, disponibilidad, especialista, especialistaSucursal, negocio, servicio, sucursal } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
 import { ConfigWriteService } from '../config-module/config-write.service';
@@ -19,6 +27,7 @@ import { AgendamientoService } from './agendamiento.service';
 import { JobQueue } from '../notificaciones/job-queue';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { MockAdapter } from '../notificaciones/adapters/mock.adapter';
+import { RemitenteResolver } from '../notificaciones/remitente/remitente.resolver';
 import { CuposService } from '../notificaciones/cupos.service';
 import { PlanService } from '../plans/plan.service';
 import { MetricsService } from '../observability/metrics.service';
@@ -78,7 +87,8 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     const validadores = new ValidadorFactory();
     const queue = new JobQueue();
     const metrics = new MetricsService();
-    const notificaciones = new NotificacionesService(queue, new MockAdapter(), new CuposService(new PlanService()), metrics);
+    const remitente = new RemitenteResolver({ get: () => undefined } as unknown as ConstructorParameters<typeof RemitenteResolver>[0]);
+    const notificaciones = new NotificacionesService(queue, [new MockAdapter()], remitente, new CuposService(new PlanService()), metrics);
     notificaciones.onModuleInit();
     const horario = new HorarioService();
     pub = new PublicAgendamientoService(
@@ -136,6 +146,24 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
       servicioIds: [servId],
     });
     expect(res.estado).toBe(EstadoCita.Confirmada);
+  });
+
+  it('reserva repetida con el mismo teléfono ACTUALIZA el nombre del cliente', async () => {
+    const tel = '3001110009';
+    // 1ª reserva a nombre de Camilo (franja libre 09:00).
+    const a = await pub.retener(sucursalId, espId, instante(FECHA, 9 * 60), instante(FECHA, 9 * 60 + 30));
+    const otpA = await pub.enviarOtp(sucursalId, tel);
+    await pub.confirmar(sucursalId, { retencionId: a.retencionId, telefono: tel, nombre: 'Camilo', codigoOtp: otpA.devCode!, servicioIds: [servId] });
+    // 2ª reserva mismo teléfono, ahora a nombre de Pedro (franja libre 10:00).
+    const b = await pub.retener(sucursalId, espId, instante(FECHA, 10 * 60), instante(FECHA, 10 * 60 + 30));
+    const otpB = await pub.enviarOtp(sucursalId, tel);
+    await pub.confirmar(sucursalId, { retencionId: b.retencionId, telefono: tel, nombre: 'Pedro', codigoOtp: otpB.devCode!, servicioIds: [servId] });
+
+    const [c] = await adminDb
+      .select({ nombre: cliente.nombre })
+      .from(cliente)
+      .where(and(eq(cliente.telefono, tel), eq(cliente.negocioId, negocioId)));
+    expect(c.nombre).toBe('Pedro'); // antes se quedaba en 'Camilo'
   });
 
   it('con aprobación manual ON la reserva entra como SOLICITADA', async () => {

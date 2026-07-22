@@ -11,6 +11,7 @@ import { PlanService } from '../plans/plan.service';
 import { JobQueue } from './job-queue';
 import { CuposService } from './cupos.service';
 import { MockAdapter } from './adapters/mock.adapter';
+import { RemitenteResolver } from './remitente/remitente.resolver';
 import { NotificacionesService } from './notificaciones.service';
 import { RecordatoriosScheduler } from './recordatorios.scheduler';
 import { plantillas } from './templates';
@@ -45,7 +46,11 @@ describe('Notificaciones (FASE-11)', () => {
     queue = new JobQueue();
     mock = new MockAdapter();
     cupos = new CuposService(new PlanService());
-    notificaciones = new NotificacionesService(queue, mock, cupos, new MetricsService());
+    // Resolver con config vacío → perfil 'plataforma' con campos undefined (el
+    // MockAdapter ignora el perfil, así que basta para las pruebas de dominio).
+    const config = { get: () => undefined } as unknown as ConstructorParameters<typeof RemitenteResolver>[0];
+    const remitente = new RemitenteResolver(config);
+    notificaciones = new NotificacionesService(queue, [mock], remitente, cupos, new MetricsService());
     notificaciones.onModuleInit();
     const resolver = new ConfigResolverService();
     scheduler = new RecordatoriosScheduler(resolver, notificaciones);

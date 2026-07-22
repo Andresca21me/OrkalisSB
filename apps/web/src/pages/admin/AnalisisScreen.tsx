@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { useSucursal } from '../../lib/sucursal';
 import { money } from '../../lib/format';
-import { rangoPeriodo, useAnalisis, type Periodo } from '../../lib/useReportes';
+import { diasATimestamps, presetRango, useAnalisis, type RangoDias } from '../../lib/useReportes';
 import { eliminarGasto, useGastos } from '../../lib/useGastos';
 import { useValoracion } from '../../lib/useInventario';
 import { Donut, type DonutDato } from '../../ui/Chart';
@@ -19,7 +19,7 @@ import {
   useToast,
 } from '../../ui/ui';
 import { GConfirm } from './gestion-ui';
-import { BreakdownBlock, FinTile, HBars, HealthBadge, PeriodSwitch } from './finanzas-ui';
+import { BreakdownBlock, FinTile, HBars, HealthBadge, RangePicker } from './finanzas-ui';
 import { GastoModal } from './finanzas-modals';
 
 interface Sucursal { id: string; nombre: string; activa: boolean }
@@ -29,8 +29,8 @@ const PAGO_LABEL: Record<string, string> = { efectivo: 'Efectivo', tarjeta: 'Tar
 export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
   const { consolidado, sucursalActiva, sucursalActivaId } = useSucursal();
   const toast = useToast();
-  const [period, setPeriod] = useState<Periodo>('mes');
-  const { desde, hasta } = useMemo(() => rangoPeriodo(period), [period]);
+  const [rango, setRango] = useState<RangoDias>(() => presetRango('mes'));
+  const { desde, hasta } = useMemo(() => diasATimestamps(rango), [rango]);
   const a = useAnalisis(desde, hasta, sucursalActivaId);
   const gastos = useGastos(sucursalActivaId);
   const valoracion = useValoracion(inventarioOn ? sucursalActivaId : undefined);
@@ -65,7 +65,7 @@ export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
     const blob = new Blob(['﻿' + filas + '\n'], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url; link.download = `analisis-${period}.csv`; link.click();
+    link.href = url; link.download = `analisis-${rango.desde}_${rango.hasta}.csv`; link.click();
     URL.revokeObjectURL(url);
     toast('Análisis exportado (CSV)', 'success');
   }
@@ -80,7 +80,7 @@ export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
           <h1 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em' }}>Análisis financiero</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <PeriodSwitch value={period} onChange={setPeriod} />
+          <RangePicker value={rango} onChange={setRango} />
           <Button variant="secondary" iconLeft="download" disabled={!d} onClick={exportarCsv}>CSV</Button>
         </div>
       </div>
