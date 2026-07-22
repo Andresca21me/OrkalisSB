@@ -5,7 +5,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { EstadoCita, OrigenCita, PerfilNegocio, PlanSuscripcion } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { alertaAdmin, cita, cliente, consumoMensajeria, especialista, especialistaSucursal, mensaje, negocio, sucursal, suscripcion } from '../db/schema';
+import { alertaAdmin, cita, citaRecordatorio, cliente, consumoMensajeria, especialista, especialistaSucursal, mensaje, negocio, sucursal, suscripcion } from '../db/schema';
 import { ConfigResolverService } from '../config-module/config-resolver.service';
 import { PlanService } from '../plans/plan.service';
 import { JobQueue } from './job-queue';
@@ -388,11 +388,10 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
     });
   });
 
-  it('scheduler: encola recordatorio dentro de la ventana y lo marca; ignora los lejanos', async () => {
-    const dentro = new Date(Date.now() + 60 * 60 * 1000); // +1h (ventana default 24h)
-    const lejos = new Date(Date.now() + 100 * 86400_000); // +100 días
-    const mk = (inicio: Date) =>
-      adminDb
+  describe('recordatorios multiventana (FASE-08)', () => {
+    const crearCita = async (enHoras: number) => {
+      const inicio = new Date(Date.now() + enHoras * 3600_000);
+      const [c] = await adminDb
         .insert(cita)
         .values({
           negocioId,
@@ -405,23 +404,60 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
           origen: OrigenCita.AgendamientoPublico,
         })
         .returning({ id: cita.id });
-    const [cDentro] = await mk(dentro);
-    const [cLejos] = await mk(lejos);
+      return c.id;
+    };
+    // Orden fijo (24 h → 2 h → config) para que las aserciones se lean como el
+    // paso del tiempo; ordenar por texto pondría "h24" antes que "h2".
+    const ORDEN = ['h24', 'h2', 'config'];
+    /** Recordatorios encolados PARA ESTA cita (el escaneo recorre todas). */
+    const recordatoriosDe = async (citaId: string) =>
+      (await adminDb
+        .select()
+        .from(mensaje)
+        .where(and(eq(mensaje.citaId, citaId), eq(mensaje.tipo, 'recordatorio')))).length;
+    const ventanasDe = async (citaId: string) =>
+      (await adminDb.select().from(citaRecordatorio).where(eq(citaRecordatorio.citaId, citaId)))
+        .sort((a, b) => ORDEN.indexOf(a.ventana) - ORDEN.indexOf(b.ventana))
+        .map((r) => `${r.ventana}:${r.enviadoEn ? 'enviado' : 'omitido'}`);
 
-    const encolados = await scheduler.escanearRecordatorios();
-    expect(encolados).toBeGreaterThanOrEqual(1);
+    it('una cita lejana (>24 h) todavía no dispara ninguna ventana', async () => {
+      const id = await crearCita(100 * 24);
+      await scheduler.escanearRecordatorios();
+      expect(await ventanasDe(id)).toEqual([]);
+    });
 
-    const [d] = await adminDb.select({ r: cita.recordatorioEnviado }).from(cita).where(eq(cita.id, cDentro.id));
-    const [l] = await adminDb.select({ r: cita.recordatorioEnviado }).from(cita).where(eq(cita.id, cLejos.id));
-    expect(d.r).toBe(true); // dentro de ventana → notificado
-    expect(l.r).toBe(false); // lejano → no notificado
+    it('a 23 h envía SOLO la ventana de 24 h; la de 2 h sigue pendiente', async () => {
+      const id = await crearCita(23);
+      await scheduler.escanearRecordatorios();
+      expect(await ventanasDe(id)).toEqual(['h24:enviado']);
+    });
 
-    // El recordatorio quedó trazado contra su cita.
-    const [rec] = await adminDb.select().from(mensaje).where(eq(mensaje.citaId, cDentro.id));
-    expect(rec.tipo).toBe('recordatorio');
+    it('al llegar a 1 h envía la de 2 h, sin repetir la de 24 h', async () => {
+      const id = await crearCita(22);
+      await scheduler.escanearRecordatorios(); // dispara h24
+      // Se simula el paso del tiempo adelantando el reloj del escaneo.
+      await scheduler.escanearRecordatorios(new Date(Date.now() + 21 * 3600_000));
+      expect(await ventanasDe(id)).toEqual(['h24:enviado', 'h2:enviado']);
+    });
 
-    // Segundo escaneo no reencola el ya notificado.
-    const segunda = await scheduler.escanearRecordatorios();
-    expect(segunda).toBeGreaterThanOrEqual(0);
+    it('reserva creada con 1 h de antelación: un solo aviso, no dos', async () => {
+      const id = await crearCita(1);
+      await scheduler.escanearRecordatorios();
+      await outbox.drain();
+
+      // La de 2 h se envía; la de 24 h se registra como omitida (ya inalcanzable).
+      expect(await ventanasDe(id)).toEqual(['h24:omitido', 'h2:enviado']);
+      expect(await recordatoriosDe(id)).toBe(1); // UN solo aviso, no dos
+    });
+
+    it('reescanear (o reiniciar el proceso) NO duplica recordatorios', async () => {
+      const id = await crearCita(21);
+      await scheduler.escanearRecordatorios();
+      await scheduler.escanearRecordatorios();
+      await scheduler.escanearRecordatorios();
+      await outbox.drain();
+      expect(await ventanasDe(id)).toEqual(['h24:enviado']);
+      expect(await recordatoriosDe(id)).toBe(1); // los reescaneos no repiten
+    });
   });
 });

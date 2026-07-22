@@ -1,6 +1,8 @@
 # FASE-08 · Recordatorios 24h + 2h configurables
 
 > Parte de `PLAN-MENSAJERIA`. Abre `PLAN-MENSAJERIA.md` + este archivo.
+>
+> **Estado: ✅ implementada** (migración `0013`, 251 tests verdes). Sin acciones manuales.
 
 ## Objetivo
 Soportar **múltiples ventanas de recordatorio** (24h y 2h antes, además de una configurable) sin duplicados. Hoy `cita.recordatorio_enviado` es un booleano único con una sola ventana (`ventana_recordatorio_horas`).
@@ -38,6 +40,13 @@ Soportar **múltiples ventanas de recordatorio** (24h y 2h antes, además de una
 - Unit del scanner por ventana (dentro/fuera de rango, ya enviado).
 - No-duplicado tras reinicio del scheduler.
 - Config: desactivar 2h y ver que solo sale 24h.
+
+## Cómo quedó implementado
+- **Tabla `cita_recordatorio`** con **PK `(cita_id, ventana)`**: esa clave —y no el código— es lo que garantiza que un reinicio a mitad de escaneo no duplique avisos. Se inserta con `onConflictDoNothing`, así que si dos procesos compiten, gana el primero y el segundo no reenvía.
+- **`enviado_en` NULO = ventana consumida sin enviar.** Cubre el riesgo que señalaba la fase: una reserva creada con 1 h de antelación tiene vencidas a la vez la ventana de 24 h y la de 2 h. La regla es **enviar solo la más cercana a la cita** y registrar las mayores como inalcanzables — un aviso, no dos.
+- **Config con herencia negocio/sucursal**: `agendamiento.recordatorio_24h` y `agendamiento.recordatorio_2h` (booleanos, por defecto activos) más `ventana_recordatorio_horas` como ventana libre. Si la libre coincide en horas con una fija activa, se ignora para no duplicar.
+- **`cita.recordatorio_enviado` queda deprecada pero NO se elimina.** Borrar la columna en la misma migración habría hecho crashear al contenedor viejo, que sigue sirviendo unos segundos durante el despliegue y aún la consulta. Se elimina en una limpieza posterior (patrón expand/contract). El backfill inserta una fila `config` para las citas que ya la tenían marcada, para que nadie reciba un recordatorio repetido tras el deploy.
+- El escaneo hace **una sola consulta** de ventanas ya resueltas para todo el lote, en vez de una por cita.
 
 ## Trazabilidad
 RF-047 (recordatorios), `Plan-Ejecucion-V1/FASE-11` (scheduler), Parte III del plan.

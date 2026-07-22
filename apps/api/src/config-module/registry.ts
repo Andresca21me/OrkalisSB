@@ -89,6 +89,20 @@ export const REGISTRY: Record<string, DefinicionClave> = {
     defaults: { [PerfilNegocio.Salon]: 2, [PerfilNegocio.Barberia]: 2 },
     descripcion: 'Horas mínimas de antelación para cancelar una reserva.',
   }),
+  'agendamiento.recordatorio_24h': def({
+    clave: 'agendamiento.recordatorio_24h',
+    tipo: 'boolean',
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: true, [PerfilNegocio.Barberia]: true },
+    descripcion: 'Enviar recordatorio 24 horas antes de la cita.',
+  }),
+  'agendamiento.recordatorio_2h': def({
+    clave: 'agendamiento.recordatorio_2h',
+    tipo: 'boolean',
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: true, [PerfilNegocio.Barberia]: true },
+    descripcion: 'Enviar recordatorio 2 horas antes de la cita.',
+  }),
   'agendamiento.ventana_recordatorio_horas': def({
     clave: 'agendamiento.ventana_recordatorio_horas',
     tipo: 'numero',

@@ -92,6 +92,13 @@
       "when": 1784743252526,
       "tag": "0012_complex_old_lace",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784745425270,
+      "tag": "0013_known_steel_serpent",
+      "breakpoints": true
     }
   ]
 }
