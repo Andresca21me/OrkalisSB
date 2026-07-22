@@ -4,8 +4,12 @@ import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { useSucursal } from '../../lib/sucursal';
 import { money } from '../../lib/format';
+import { urlFotoEspecialista } from '../../lib/api';
+import { prepararFoto } from '../../lib/imagen';
 import {
   asignarSucursales,
+  borrarFotoEspecialista,
+  subirFotoEspecialista,
   confirmarVerificacion,
   darDeBajaEspecialista,
   editarEspecialista,
@@ -156,7 +160,7 @@ function SpecialistCard({ s, sucNombre, onToggle, onEdit, onDelete }: { s: Espec
   return (
     <Card padding={0} testId={`esp-row-${s.id}`} style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '16px 16px 0', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <Avatar name={s.nombre} size={46} />
+        <Avatar name={s.nombre} size={46} src={urlFotoEspecialista(s.id, s.fotoVersion)} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--text-primary)' }}>{s.nombre}</div>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 2 }}>{s.especialidad || 'Sin especialidad'}</div>
@@ -198,6 +202,11 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
   // Alta en dos pasos (FASE-06): al crear hay que verificar el celular.
   const [verificacionId, setVerificacionId] = useState<string | null>(null);
   const [codigo, setCodigo] = useState('');
+  // Vista previa en base64. Se sube DESPUÉS de que el especialista exista: al
+  // crear no hay id todavía (el alta pasa por la verificación del celular).
+  const [foto, setFoto] = useState<string | null>(null);
+  const [fotoQuitada, setFotoQuitada] = useState(false);
+  const fotoActual = especialista ? urlFotoEspecialista(especialista.id, especialista.fotoVersion) : null;
   const [disponible, setDisponible] = useState(especialista?.disponible ?? true);
   const [sel, setSel] = useState<string[]>(especialista?.sucursalIds ?? (sucursales[0] ? [sucursales[0].id] : []));
   const [notas, setNotas] = useState('');
@@ -221,6 +230,30 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
   const loginErr = touched && quiereLogin && !loginOk ? 'Correo válido y contraseña de 8+ caracteres' : undefined;
   const valid = nombre.trim().length >= 2 && sel.length > 0 && (!quiereLogin || loginOk) && (Boolean(especialista) || celularOk);
 
+  /**
+   * Aplica el cambio de foto tras existir el especialista. Un fallo aquí NO
+   * puede tumbar el alta: el especialista ya está creado y perder su foto es
+   * mucho menos grave que perderlo a él.
+   */
+  async function guardarFoto(id: string) {
+    try {
+      if (foto) await subirFotoEspecialista(id, foto);
+      else if (fotoQuitada) await borrarFotoEspecialista(id);
+    } catch (err) {
+      toast(`Se guardó el especialista, pero la foto falló: ${(err as Error).message}`, 'warning');
+    }
+  }
+
+  async function elegirFoto(archivo: File | undefined) {
+    if (!archivo) return;
+    try {
+      setFoto(await prepararFoto(archivo));
+      setFotoQuitada(false);
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  }
+
   function toggleSuc(id: string) {
     setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
@@ -233,6 +266,7 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
       if (especialista) {
         await editarEspecialista(especialista.id, { nombre: nombre.trim(), especialidad: especialidad.trim() || undefined, disponible });
         await asignarSucursales(especialista.id, sel);
+        await guardarFoto(especialista.id);
         toast('Especialista actualizado', 'success');
       } else {
         // Alta nueva: no se crea nada todavía; se envía el código al celular.
@@ -262,6 +296,7 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
     try {
       const creado = await confirmarVerificacion(verificacionId, codigo.trim());
       if (!disponible) await editarEspecialista(creado.id, { disponible: false });
+      await guardarFoto(creado.id);
       toast(quiereLogin ? 'Especialista creado con acceso al panel' : 'Especialista creado', 'success');
       onSaved();
     } catch (err) {
@@ -318,6 +353,23 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
       </>}>
       <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* Foto: se ve como se verá luego (círculo), para que el admin
+              entienda que se recorta al centro. */}
+          <GField label="Foto" optional span={2} hint="Se recorta en cuadrado y se reduce en tu equipo antes de subirla.">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Avatar name={nombre || '?'} size={64} src={fotoQuitada ? null : (foto ?? fotoActual)} />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--brand)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                  <Icon name="image" size={15} color="var(--brand)" />
+                  {foto || (fotoActual && !fotoQuitada) ? 'Cambiar foto' : 'Subir foto'}
+                  <input type="file" accept="image/*" onChange={(e) => elegirFoto(e.target.files?.[0])} style={{ display: 'none' }} />
+                </label>
+                {(foto || (fotoActual && !fotoQuitada)) && (
+                  <Button size="md" variant="ghost" onClick={() => { setFoto(null); setFotoQuitada(true); }}>Quitar</Button>
+                )}
+              </div>
+            </div>
+          </GField>
           <GField label="Nombre" error={nombreErr}><Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Andrés" /></GField>
           <GField label="Apellidos" optional><Input value={apellidos} onChange={(e) => setApellidos(e.target.value)} placeholder="Ej.: Mejía" /></GField>
           {!especialista && (

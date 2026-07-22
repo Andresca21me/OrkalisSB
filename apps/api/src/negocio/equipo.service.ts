@@ -3,11 +3,13 @@ import { and, count, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import * as argon2 from 'argon2';
 import { ForbiddenException } from '@nestjs/common';
 import { PlanSuscripcion, RolUsuario, type GananciasEspecialista } from '@orkalis/shared';
+import { adminDb } from '../db/admin-client';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
 import {
   atencion,
   disponibilidad,
   especialista,
+  especialistaFoto,
   especialistaSucursal,
   sucursal,
   suscripcion,
@@ -49,9 +51,15 @@ export class EquipoService {
   constructor(private readonly plans: PlanService) {}
 
   /** Lista el equipo con las sucursales asignadas a cada especialista (FASE-07). */
-  listar(ctx: TenantContext): Promise<(Especialista & { sucursalIds: string[] })[]> {
+  listar(ctx: TenantContext): Promise<(Especialista & { sucursalIds: string[]; fotoVersion: string | null })[]> {
     return runInTenantTx(ctx, async (tx) => {
       const esps = await tx.select().from(especialista);
+      // Solo la marca de tiempo, nunca los bytes: el listado se pide a cada rato
+      // y arrastrar las imágenes lo haría lento sin ninguna ganancia.
+      const fotos = await tx
+        .select({ id: especialistaFoto.especialistaId, v: especialistaFoto.actualizadoEn })
+        .from(especialistaFoto);
+      const versionPorEsp = new Map(fotos.map((f) => [f.id, f.v.toISOString()]));
       const rels = await tx
         .select({ especialistaId: especialistaSucursal.especialistaId, sucursalId: especialistaSucursal.sucursalId })
         .from(especialistaSucursal);
@@ -61,7 +69,7 @@ export class EquipoService {
         arr.push(r.sucursalId);
         porEsp.set(r.especialistaId, arr);
       }
-      return esps.map((e) => ({ ...e, sucursalIds: porEsp.get(e.id) ?? [] }));
+      return esps.map((e) => ({ ...e, sucursalIds: porEsp.get(e.id) ?? [], fotoVersion: versionPorEsp.get(e.id) ?? null }));
     });
   }
 
@@ -274,6 +282,63 @@ export class EquipoService {
   }
 
   /** Cupo efectivo de especialistas del negocio = max(pagados, incluidos). */
+  // ── Foto de perfil ──────────────────────────────────────────────────────────
+
+  /**
+   * Guarda la foto a partir de un data URL (`data:image/jpeg;base64,…`).
+   *
+   * La imagen ya llega recortada y reducida desde el navegador; aquí se valida
+   * de todas formas, porque el endpoint es público a ojos de cualquiera con un
+   * token de admin y no se puede confiar en que el cliente hizo su parte.
+   */
+  async guardarFoto(ctx: TenantContext, especialistaId: string, dataUrl: string): Promise<{ fotoVersion: string }> {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl.trim());
+    if (!m) throw new BadRequestException('La foto debe ser una imagen JPEG, PNG o WebP.');
+    const datos = Buffer.from(m[2], 'base64');
+    if (datos.length === 0) throw new BadRequestException('La foto llegó vacía.');
+    if (datos.length > 400_000) {
+      throw new BadRequestException('La foto pesa demasiado (máximo 400 KB ya optimizada).');
+    }
+
+    const actualizadoEn = new Date();
+    return runInTenantTx(ctx, async (tx) => {
+      // Comprobar que el especialista es de ESTE negocio antes de escribir: RLS
+      // ya lo impediría, pero así el error es entendible en vez de un fallo seco.
+      const [e] = await tx.select({ id: especialista.id }).from(especialista).where(eq(especialista.id, especialistaId)).limit(1);
+      if (!e) throw new NotFoundException('Especialista no encontrado.');
+
+      await tx
+        .insert(especialistaFoto)
+        .values({ especialistaId, mime: m[1], datos, actualizadoEn })
+        .onConflictDoUpdate({
+          target: especialistaFoto.especialistaId,
+          set: { mime: m[1], datos, actualizadoEn },
+        });
+      return { fotoVersion: actualizadoEn.toISOString() };
+    });
+  }
+
+  /** Quita la foto: el avatar vuelve a la inicial sobre color. */
+  async borrarFoto(ctx: TenantContext, especialistaId: string): Promise<void> {
+    await runInTenantTx(ctx, (tx) =>
+      tx.delete(especialistaFoto).where(eq(especialistaFoto.especialistaId, especialistaId)),
+    );
+  }
+
+  /**
+   * Bytes de la foto para servirla. Se lee con la conexión admin porque el
+   * endpoint es PÚBLICO (la reserva del cliente final no tiene sesión) y esas
+   * fotos ya se muestran en el enlace público de reservas.
+   */
+  async leerFoto(especialistaId: string): Promise<{ mime: string; datos: Buffer; actualizadoEn: Date } | null> {
+    const [f] = await adminDb
+      .select()
+      .from(especialistaFoto)
+      .where(eq(especialistaFoto.especialistaId, especialistaId))
+      .limit(1);
+    return f ? { mime: f.mime, datos: f.datos, actualizadoEn: f.actualizadoEn } : null;
+  }
+
   /**
    * Comprueba el cupo del plan sin crear nada. La usa la verificación de
    * FASE-06 para no gastarle al admin un SMS si igualmente no podría añadirlo.

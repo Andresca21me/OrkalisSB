@@ -7,6 +7,7 @@ import {
   IsIn,
   IsInt,
   Matches,
+  MaxLength,
   IsOptional,
   IsString,
   IsUUID,
@@ -77,6 +78,18 @@ export class IniciarVerificacionDto {
 export class ConfirmarVerificacionDto {
   @IsUUID('4') verificacionId!: string;
   @IsString() @Matches(/^\d{4,8}$/, { message: 'El código son solo dígitos.' }) codigo!: string;
+}
+
+/**
+ * Foto de perfil en formato data URL. El tope de 600 000 caracteres es un freno
+ * de emergencia por si alguien salta el redimensionado del navegador; el límite
+ * real de bytes se valida en el servicio.
+ */
+export class FotoEspecialistaDto {
+  @IsString()
+  @MaxLength(600_000)
+  @Matches(/^data:image\/(jpeg|png|webp);base64,/, { message: 'La foto debe ser JPEG, PNG o WebP.' })
+  dataUrl!: string;
 }
 
 export class ReenviarVerificacionDto {

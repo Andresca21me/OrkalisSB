@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, customType, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { negocio, sucursal, usuario } from './tenant';
 import { estadoVerificacionEnum } from './_shared';
 
@@ -43,6 +43,28 @@ export const especialistaSucursal = pgTable(
     pk: primaryKey({ columns: [t.especialistaId, t.sucursalId] }),
   }),
 );
+
+/**
+ * Foto de perfil del especialista.
+ *
+ * Va en su propia tabla, y no como columna de `especialista`, por una razón
+ * práctica: la agenda pide el listado del equipo constantemente y arrastrar unos
+ * KB de imagen por fila en cada consulta lo haría lento sin necesidad. Aquí la
+ * imagen solo se lee cuando alguien pide la foto concreta, y el navegador la
+ * cachea.
+ *
+ * `actualizado_en` hace de versión: la URL de la foto la incluye, así se puede
+ * cachear para siempre y aun así cambiar en cuanto el admin sube otra.
+ */
+export const especialistaFoto = pgTable('especialista_foto', {
+  especialistaId: uuid('especialista_id')
+    .primaryKey()
+    .references(() => especialista.id, { onDelete: 'cascade' }),
+  /** 'image/jpeg' | 'image/png' | 'image/webp'. */
+  mime: text('mime').notNull(),
+  datos: customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' })('datos').notNull(),
+  actualizadoEn: timestamp('actualizado_en', { withTimezone: true }).notNull().defaultNow(),
+});
 
 /**
  * Alta de especialista en curso, pendiente de verificar el celular (FASE-06, D3).

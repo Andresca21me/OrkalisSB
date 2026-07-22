@@ -58,6 +58,8 @@ export interface PublicEspecialista {
   id: string;
   nombre: string;
   especialidad: string | null;
+  /** Fecha de la foto (hace de versión en la URL) o null si no tiene. */
+  fotoVersion: string | null;
 }
 
 /** Servicio público (precio como string numérico). */
@@ -197,6 +199,8 @@ export interface EspecialistaEquipo {
   activo: boolean;
   /** Sucursales asignadas (vía `especialista_sucursal`). */
   sucursalIds: string[];
+  /** Fecha de la foto (hace de versión en la URL) o null si no tiene. */
+  fotoVersion: string | null;
 }
 
 /** Producto de inventario (`GET /inventario/productos`). Dinero como string numérico. */

@@ -10,7 +10,7 @@ import type {
   PublicServicio,
   RetencionResp,
 } from '@orkalis/shared';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, urlFotoEspecialista } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { applyVertical, normalizeVertical } from '../../lib/theme';
 import { hoyISO, money, sumarDiasISO } from '../../lib/format';
@@ -456,7 +456,7 @@ function Especialistas({ negocio, equipo, value, onPick, onBack, onContinue }: {
             {(equipo.data ?? []).map((e) => (
               <Card key={e.id} interactive selected={value === e.id} padding={14} onClick={() => onPick(e.id)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <Avatar name={e.nombre} size={44} />
+                  <Avatar name={e.nombre} size={44} src={urlFotoEspecialista(e.id, e.fotoVersion)} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{e.nombre}</div>
                     {e.especialidad && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 1 }}>{e.especialidad}</div>}

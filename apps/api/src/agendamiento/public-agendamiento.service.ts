@@ -13,6 +13,7 @@ import {
   citaServicio,
   cliente,
   especialista,
+  especialistaFoto,
   especialistaSucursal,
   negocio,
   retencionFranja,
@@ -175,15 +176,29 @@ export class PublicAgendamientoService {
   }
 
   /** Especialistas activos asignados a la sucursal (para reservar). */
-  async especialistasPublicos(sucursalId: string): Promise<{ id: string; nombre: string; especialidad: string | null }[]> {
+  async especialistasPublicos(sucursalId: string): Promise<{ id: string; nombre: string; especialidad: string | null; fotoVersion: string | null }[]> {
     const ctx = await this.ctxDeSucursal(sucursalId);
-    return runInTenantTx(ctx, (tx) =>
-      tx
-        .select({ id: especialista.id, nombre: especialista.nombre, especialidad: especialista.especialidad })
+    return runInTenantTx(ctx, async (tx) => {
+      const filas = await tx
+        .select({
+          id: especialista.id,
+          nombre: especialista.nombre,
+          especialidad: especialista.especialidad,
+          // LEFT JOIN a la foto: solo la fecha, que hace de versión en la URL.
+          // Los bytes se piden aparte, para que el navegador los cachee.
+          fotoEn: especialistaFoto.actualizadoEn,
+        })
         .from(especialista)
         .innerJoin(especialistaSucursal, eq(especialistaSucursal.especialistaId, especialista.id))
-        .where(and(eq(especialistaSucursal.sucursalId, sucursalId), eq(especialista.activo, true), eq(especialista.disponible, true))),
-    );
+        .leftJoin(especialistaFoto, eq(especialistaFoto.especialistaId, especialista.id))
+        .where(and(eq(especialistaSucursal.sucursalId, sucursalId), eq(especialista.activo, true), eq(especialista.disponible, true)));
+      return filas.map((f) => ({
+        id: f.id,
+        nombre: f.nombre,
+        especialidad: f.especialidad,
+        fotoVersion: f.fotoEn?.toISOString() ?? null,
+      }));
+    });
   }
 
   /** Catálogo de servicios activos del negocio (para reservar). */

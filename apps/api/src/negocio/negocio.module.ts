@@ -4,7 +4,7 @@ import { NegocioController } from './negocio.controller';
 import { NegocioService } from './negocio.service';
 import { SucursalController } from './sucursal.controller';
 import { SucursalService } from './sucursal.service';
-import { EquipoController } from './equipo.controller';
+import { EquipoController, EspecialistaFotoController } from './equipo.controller';
 import { EquipoService } from './equipo.service';
 import { VerificacionEspecialistaService } from './verificacion-especialista.service';
 import { SuscripcionController } from './suscripcion.controller';
@@ -19,7 +19,7 @@ import { UsuariosService } from './usuarios.service';
 @Module({
   // El alta verificada (FASE-06) usa el puerto Verify y el RemitenteResolver.
   imports: [NotificacionesModule],
-  controllers: [NegocioController, SucursalController, EquipoController, SuscripcionController, UsuariosController],
+  controllers: [NegocioController, SucursalController, EquipoController, EspecialistaFotoController, SuscripcionController, UsuariosController],
   providers: [NegocioService, SucursalService, EquipoService, VerificacionEspecialistaService, SuscripcionService, UsuariosService],
   exports: [SuscripcionService],
 })

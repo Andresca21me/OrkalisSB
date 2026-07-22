@@ -281,7 +281,30 @@ export function EstadoBadge({ estado }: { estado: string }) {
   );
 }
 
-export function Avatar({ name = '', size = 40 }: { name?: string; size?: number }) {
+/**
+ * Avatar del especialista: su foto si la tiene, y si no la inicial sobre un
+ * color derivado del nombre (así el mismo especialista mantiene siempre el
+ * mismo color, en vez de cambiar en cada carga).
+ *
+ * Si la imagen falla al cargar se vuelve a la inicial en lugar de dejar el
+ * hueco roto: un avatar partido se ve peor que una inicial.
+ */
+export function Avatar({ name = '', size = 40, src }: { name?: string; size?: number; src?: string | null }) {
+  const [falló, setFalló] = useState(false);
+  if (src && !falló) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        onError={() => setFalló(true)}
+        style={{ width: size, height: size, borderRadius: '9999px', objectFit: 'cover', flex: 'none', background: 'var(--surface-sunken)' }}
+      />
+    );
+  }
+  return <AvatarInicial name={name} size={size} />;
+}
+
+function AvatarInicial({ name = '', size = 40 }: { name?: string; size?: number }) {
   const initials = name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   const palette = ['#1A73E8', '#0F1923', '#475569', '#00A88A', '#3B82F6', '#334155'];
   let hash = 0;

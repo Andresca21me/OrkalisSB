@@ -110,3 +110,15 @@ export const api = {
     ejecutar<T>(path, { method: 'PUT', body, auth }),
   del: <T>(path: string, auth = true) => ejecutar<T>(path, { method: 'DELETE', auth }),
 };
+
+
+/**
+ * URL pública de la foto de un especialista. `fotoVersion` (la fecha de la
+ * última subida) va en la query, de modo que la respuesta se puede cachear un
+ * año y aun así cambiar en cuanto el admin sube otra foto.
+ * Devuelve `null` si no tiene foto, para que el avatar caiga a la inicial.
+ */
+export function urlFotoEspecialista(id: string, fotoVersion: string | null | undefined): string | null {
+  if (!fotoVersion) return null;
+  return `${BASE}/especialistas/${id}/foto?v=${encodeURIComponent(fotoVersion)}`;
+}

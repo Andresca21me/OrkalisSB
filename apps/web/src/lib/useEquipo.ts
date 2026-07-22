@@ -62,3 +62,13 @@ export function confirmarVerificacion(verificacionId: string, codigo: string): P
 export function reenviarCodigo(verificacionId: string): Promise<{ reenvios: number }> {
   return api.post('/especialistas/verificacion/reenviar', { verificacionId });
 }
+
+/** Sube o reemplaza la foto del especialista (data URL ya reducido). */
+export function subirFotoEspecialista(id: string, dataUrl: string): Promise<{ fotoVersion: string }> {
+  return api.put(`/especialistas/${id}/foto`, { dataUrl });
+}
+
+/** Quita la foto: el avatar vuelve a la inicial sobre color. */
+export function borrarFotoEspecialista(id: string): Promise<unknown> {
+  return api.del(`/especialistas/${id}/foto`);
+}
