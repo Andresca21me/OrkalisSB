@@ -51,16 +51,19 @@ const CUADRADOS: Cuadrado[] = [
 
 export function RisingSquares({
   color = 'var(--brand)',
+  className,
   style,
 }: {
   /** Color base; se usa con alfa baja para que no compita con el contenido. */
   color?: string;
+  /** Para mostrarla/ocultarla por breakpoint desde quien la usa. */
+  className?: string;
   style?: CSSProperties;
 }) {
   return (
     <div
       aria-hidden="true"
-      className="ork-rising"
+      className={`ork-rising ${className ?? ''}`}
       style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', ...style }}
     >
       {CUADRADOS.map((c, i) => (

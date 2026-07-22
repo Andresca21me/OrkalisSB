@@ -93,8 +93,14 @@ export function LoginPage() {
       </aside>
 
       {/* ── Tarjeta de ingreso ── */}
-      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
-        <div style={{ width: '100%', maxWidth: 400 }}>
+      <main style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', overflow: 'hidden' }}>
+        {/* En móvil el panel navy se oculta por espacio, y con él se perdía la
+            lluvia inversa. Se repite aquí sobre el fondo claro —con el color de
+            marca en vez del acento, que sobre blanco sí contrasta— para no
+            perder la estética. En escritorio no se muestra: ya está en el navy
+            y duplicarla ensuciaría el formulario. */}
+        <RisingSquares color="var(--brand)" className="ork-rising-movil" />
+        <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 400 }}>
           <button type="button" onClick={() => navigate('/')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, marginBottom: 22, fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)' }}>
             <Icon name="chevron-left" size={16} color="var(--text-secondary)" /> Volver al inicio
           </button>
@@ -168,9 +174,11 @@ export function LoginPage() {
       </main>
 
       <style>{`
+        .ork-rising-movil { display: none; }
         @media (max-width: 860px) {
           .ork-brandpane { display: none !important; }
           .ork-mobilelogo { display: block !important; }
+          .ork-rising-movil { display: block; }
         }
       `}</style>
     </div>
