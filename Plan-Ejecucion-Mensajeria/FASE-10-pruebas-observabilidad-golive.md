@@ -2,7 +2,12 @@
 
 > Parte de `PLAN-MENSAJERIA`. Abre `PLAN-MENSAJERIA.md` + este archivo.
 >
-> **Estado: código ✅ / go-live ⬜.** Los pasos 1–3 y 5 están hechos (263 tests
+> **Estado: código ✅ / go-live ✅ (2026-07-22).** Las cinco `TWILIO_*` están
+> cargadas en el servicio API de Railway y el mock quedó apagado (verificado en
+> el log de arranque). Falta solo la **prueba de humo con un número real**, que
+> es manual. Lo de abajo se conserva como referencia del procedimiento.
+>
+> **Nota histórica:** Los pasos 1–3 y 5 están hechos (263 tests
 > verdes). El **go-live (AM-6) NO está aplicado**: producción sigue en mock a
 > propósito, porque activar las claves reales manda SMS a clientes reales y gasta
 > saldo. El checklist de abajo es lo que falta.
