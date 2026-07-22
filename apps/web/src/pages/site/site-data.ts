@@ -8,6 +8,12 @@
 export type Vertical = 'barberia' | 'salon';
 export type Ciclo = 'mensual' | 'anual';
 
+/**
+ * Catálogo mostrado en la landing. **Debe cuadrar con `plans/plan-registry.ts`
+ * del backend**: `included` es el nº de especialistas sin coste extra, y si aquí
+ * dice menos, el simulador de precio cobra extras que el backend no cobra.
+ * Hay una prueba que compara ambos catálogos (`cupos-plan.spec.ts`).
+ */
 export interface Plan {
   id: string;
   name: string;
@@ -26,7 +32,7 @@ export const PLANS: Plan[] = [
   { id: 'basico', name: 'Básico', base: 80000, perExtra: 15000, included: 2, sucursales: 1, blurb: 'Empieza a recibir reservas en línea y ordena tu día.', cta: 'Empezar', perks: ['Reservas 24/7 con enlace público', 'Agenda en vivo por especialista', 'Recordatorios por WhatsApp + SMS', 'Clientes y CRM básico', '1 sucursal'] },
   { id: 'pro', name: 'Pro', base: 130000, perExtra: 18000, included: 2, sucursales: 1, highlight: true, blurb: 'Para negocios que ya viven de su agenda.', cta: 'Empezar', perks: ['Todo lo de Básico', 'Inventario y venta de productos', 'Servicios y repartición por especialista', 'Nómina y liquidaciones quincenales', 'Más cupos de mensajería', '1 sucursal'] },
   { id: 'premium', name: 'Premium', base: 210000, perExtra: 22000, included: 2, sucursales: 2, blurb: 'Crece a una segunda sede con reportes finos.', cta: 'Empezar', perks: ['Todo lo de Pro', 'Hasta 2 sucursales', 'Reportes avanzados y exportables', 'Parámetros financieros por sucursal', 'Soporte prioritario'] },
-  { id: 'empresarial', name: 'Empresarial', base: 720000, perExtra: 25000, included: 2, sucursales: Infinity, contact: true, blurb: 'Cadenas y franquicias con varias sedes.', cta: 'Contactar ventas', perks: ['Todo lo de Premium', 'Sucursales ilimitadas', 'Roles y permisos avanzados', 'Acompañamiento de implementación', 'SLA y soporte dedicado'] },
+  { id: 'empresarial', name: 'Empresarial', base: 720000, perExtra: 25000, included: 15, sucursales: Infinity, contact: true, blurb: 'Cadenas y franquicias con varias sedes.', cta: 'Contactar ventas', perks: ['Todo lo de Premium', 'Sucursales ilimitadas', 'Roles y permisos avanzados', 'Acompañamiento de implementación', 'SLA y soporte dedicado'] },
 ];
 
 export function planById(id: string): Plan {
