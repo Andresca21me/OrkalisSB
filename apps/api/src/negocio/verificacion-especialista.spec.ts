@@ -12,6 +12,7 @@ import { EquipoService } from './equipo.service';
 import { VerificacionEspecialistaService } from './verificacion-especialista.service';
 import { RemitenteResolver } from '../notificaciones/remitente/remitente.resolver';
 import { CODIGO_VERIFY_MOCK, MockVerifyAdapter } from '../notificaciones/verify/mock-verify.adapter';
+import { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
 
 /** Verify mock que además cuenta los envíos (para probar cooldown/reenvíos). */
 class VerifySpy extends MockVerifyAdapter {
@@ -42,7 +43,7 @@ describe('Alta de especialista con celular verificado (FASE-06, D3)', () => {
 
     verify = new VerifySpy();
     const remitente = new RemitenteResolver({ get: () => undefined } as never);
-    servicio = new VerificacionEspecialistaService(new EquipoService(new PlanService()), remitente, verify);
+    servicio = new VerificacionEspecialistaService(new EquipoService(new PlanService()), remitente, verify, new MensajeriaEstadoService());
   });
 
   afterAll(async () => {

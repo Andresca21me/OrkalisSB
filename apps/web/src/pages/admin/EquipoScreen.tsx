@@ -201,6 +201,9 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
   const [especialidad, setEspecialidad] = useState(especialista?.especialidad ?? '');
   // Alta en dos pasos (FASE-06): al crear hay que verificar el celular.
   const [verificacionId, setVerificacionId] = useState<string | null>(null);
+  // Con la mensajería sin envíos, el servidor devuelve el código para enseñarlo
+  // aquí: no hay SMS que esperar y sin esto el alta se quedaría a medias.
+  const [codigoVisible, setCodigoVisible] = useState<string | null>(null);
   const [codigo, setCodigo] = useState('');
   // Vista previa en base64. Se sube DESPUÉS de que el especialista exista: al
   // crear no hay id todavía (el alta pasa por la verificación del celular).
@@ -270,7 +273,7 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
         toast('Especialista actualizado', 'success');
       } else {
         // Alta nueva: no se crea nada todavía; se envía el código al celular.
-        const { verificacionId: vid } = await iniciarVerificacion({
+        const { verificacionId: vid, codigoVisible: visible } = await iniciarVerificacion({
           nombre: nombre.trim(),
           apellidos: apellidos.trim() || undefined,
           celular: celularDigitos,
@@ -279,7 +282,11 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
           ...(quiereLogin ? { email: email.trim(), password } : {}),
         });
         setVerificacionId(vid);
-        toast('Te enviamos un código al celular del especialista', 'success');
+        setCodigoVisible(visible ?? null);
+        toast(
+          visible ? 'La mensajería está pausada: el código se muestra en pantalla' : 'Te enviamos un código al celular del especialista',
+          visible ? 'info' : 'success',
+        );
         return; // el modal pasa al paso 2
       }
       onSaved();
@@ -309,7 +316,8 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
   async function reenviar() {
     if (!verificacionId) return;
     try {
-      await reenviarCodigo(verificacionId);
+      const { codigoVisible: visible } = await reenviarCodigo(verificacionId);
+      setCodigoVisible(visible ?? null);
       toast('Código reenviado', 'success');
     } catch (err) {
       toast((err as Error).message, 'error');
@@ -320,12 +328,23 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
   if (verificacionId) {
     return (
       <Dialog open onClose={onClose} width={460} title="Verifica el celular"
-        subtitle={`Enviamos un código de 6 dígitos al ${celularDigitos}. El especialista se crea al confirmarlo.`}
+        subtitle={codigoVisible
+          ? 'La mensajería está pausada, así que no se envió ningún SMS. Usa el código de abajo para terminar el alta.'
+          : `Enviamos un código de 6 dígitos al ${celularDigitos}. El especialista se crea al confirmarlo.`}
         footer={<>
           <Button variant="ghost" onClick={() => setVerificacionId(null)}>Volver</Button>
           <Button variant="primary" loading={guardando} disabled={codigo.trim().length < 4} onClick={verificar}>Verificar y crear</Button>
         </>}>
         <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {codigoVisible && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--info-tint)' }}>
+              <Icon name="info" size={16} color="var(--info)" />
+              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+                Código:{' '}
+                <strong className="data" style={{ fontSize: 'var(--text-md)', letterSpacing: '0.15em', color: 'var(--text-primary)' }}>{codigoVisible}</strong>
+              </span>
+            </div>
+          )}
           <GField label="Código recibido">
             <Input
               value={codigo}
@@ -352,7 +371,7 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
         <Button variant="primary" loading={guardando} onClick={guardar}>{especialista ? 'Guardar cambios' : 'Enviar código'}</Button>
       </>}>
       <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
           {/* Foto: se ve como se verá luego (círculo), para que el admin
               entienda que se recorta al centro. */}
           <GField label="Foto" optional span={2} hint="Se recorta en cuadrado y se reduce en tu equipo antes de subirla.">
@@ -411,7 +430,7 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginTop: -4, lineHeight: 1.5 }}>
               Si das correo y contraseña, el especialista podrá <strong>iniciar sesión en su panel</strong> (su agenda y ganancias). Su recurso de agenda y su cuenta quedan enlazados. Puedes dejarlo en blanco y agregar el acceso más adelante.
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
               <GField label="Correo" optional error={loginErr}><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nombre@negocio.co" /></GField>
               <GField label="Contraseña" optional hint="Mínimo 8 caracteres."><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></GField>
             </div>
@@ -466,7 +485,7 @@ function LiquidationPanel({ sucursales }: { sucursales: Sucursal[] }) {
   return (
     <div>
       <Card padding={18} style={{ marginBottom: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr auto', gap: 16, alignItems: 'end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, alignItems: 'end' }}>
           <GField label="Sucursal"><Select value={sucId} onChange={(e) => setSucId(e.target.value)}>{sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}</Select></GField>
           <GField label="Período"><Select value={periodoKey} onChange={(e) => setPeriodoKey(e.target.value)}>{periodos.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</Select></GField>
           <Button variant="secondary" iconLeft="download" disabled={!rows || rows.length === 0} onClick={exportarCsv}>Exportar CSV</Button>

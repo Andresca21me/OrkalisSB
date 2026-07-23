@@ -86,6 +86,13 @@ export const verificacionEspecialista = pgTable('verificacion_especialista', {
   estado: estadoVerificacionEnum('estado').notNull().default('pendiente'),
   intentos: integer('intentos').notNull().default(0),
   reenvios: integer('reenvios').notNull().default(0),
+  /**
+   * Código generado por NOSOTROS, hasheado, cuando la mensajería está en modo
+   * sin mensajes. Normalmente el código lo gestiona Twilio Verify y nunca lo
+   * conocemos; si no hay envíos, se genera aquí y se le enseña al admin en
+   * pantalla para que pueda terminar el alta. `null` = verificación por Verify.
+   */
+  codigoLocalHash: text('codigo_local_hash'),
   /** Para el cooldown entre reenvíos. */
   ultimoEnvioEn: timestamp('ultimo_envio_en', { withTimezone: true }).notNull().defaultNow(),
   expiraEn: timestamp('expira_en', { withTimezone: true }).notNull(),

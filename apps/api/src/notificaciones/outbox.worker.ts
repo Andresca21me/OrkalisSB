@@ -1,10 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { sql } from 'drizzle-orm';
+import { medirSms } from '@orkalis/shared';
 import { adminDb } from '../db/admin-client';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 import { AlertasService } from './alertas.service';
 import { CuposService, type CanalCupo } from './cupos.service';
+import { esErrorDeSaldo, MensajeriaEstadoService } from './mensajeria-estado.service';
 import { NOTIFICATION_ADAPTERS, type Canal, type MensajeSalida, type NotificationSender } from './notification-sender.port';
 import { RemitenteResolver } from './remitente/remitente.resolver';
 
@@ -65,10 +67,14 @@ export class OutboxWorker {
     private readonly cupos: CuposService,
     private readonly alertas: AlertasService,
     private readonly metrics: MetricsService,
+    private readonly estado: MensajeriaEstadoService,
   ) {}
 
   @Interval(5_000)
   async tick(): Promise<void> {
+    if (this.estado.pausada()) {
+      this.estado.avisarPausaUnaVez('Mensajería pausada por saldo: SMS y WhatsApp quedan en espera (el email sigue).');
+    }
     if (this.corriendo) return; // sin solapamiento dentro del mismo proceso
     this.corriendo = true;
     try {
@@ -110,11 +116,17 @@ export class OutboxWorker {
    * `FOR UPDATE SKIP LOCKED` evita que dos workers tomen la misma fila.
    */
   private async reclamar(): Promise<FilaMensaje[]> {
+    // Con el saldo pausado, SMS y WhatsApp no se reclaman: se quedan
+    // `pendiente` y saldrán al reanudar. El email va por otro proveedor y otra
+    // cuenta, así que sigue su curso — es además el canal por el que se avisa al
+    // administrador de que algo pasa.
+    const pausada = this.estado.pausada();
     const filas = await adminDb.execute<FilaMensaje>(sql`
       UPDATE "mensaje" SET "estado" = 'enviando', "intento" = "intento" + 1, "actualizado_en" = now()
       WHERE "id" IN (
         SELECT "id" FROM "mensaje"
         WHERE "estado" = 'pendiente' AND "proximo_intento_en" <= now()
+          AND (NOT ${pausada} OR "canal" NOT IN ('sms', 'whatsapp'))
         ORDER BY "creado_en"
         LIMIT ${OutboxWorker.LOTE}
         FOR UPDATE SKIP LOCKED
@@ -172,6 +184,10 @@ export class OutboxWorker {
       // El consumo se suma SOLO tras el envío definitivo (nunca por intento
       // fallido), con el canal de cupo real del mensaje.
       const trasEnviar = await this.cupos.registrar(fila.negocio_id, fila.cupo_canal);
+      // Saldo de PLATAFORMA (distinto del cupo del plan, que es por negocio):
+      // se descuentan segmentos, que es la unidad que factura el proveedor. El
+      // `MockAdapter` no cuesta nada, así que no descuenta.
+      if (adapter.proveedor !== 'mock') await this.estado.registrarEnvio(segmentosDe(fila));
       this.metrics.incPor(METRICAS.mensajesEnviados, fila.canal);
       this.metrics.inc(METRICAS.notificacionesEnviadas); // compatibilidad
       await this.alertas.avisarCupo(fila.negocio_id, trasEnviar);
@@ -195,6 +211,14 @@ export class OutboxWorker {
   /** Transitorio y con intentos disponibles → backoff; si no → fallido. */
   private async tratarError(fila: FilaMensaje, e: Error): Promise<void> {
     const motivo = e.message ?? String(e);
+    // Sin crédito no hay reintento que valga: se apaga el interruptor para que
+    // el resto de la cola no siga estrellándose contra el mismo muro, y la
+    // plataforma pasa a mostrar los códigos en pantalla.
+    if (esErrorDeSaldo(e)) {
+      await this.estado.pausar(`El proveedor rechazó el envío por saldo: ${motivo}`);
+      await this.marcarFallido(fila, motivo);
+      return;
+    }
     if (esTransitorio(e) && fila.intento < OutboxWorker.MAX_INTENTOS) {
       const segundos = 30 * 2 ** (fila.intento - 1); // 30s, 60s, 120s
       await adminDb.execute(sql`
@@ -264,6 +288,22 @@ export class OutboxWorker {
  * proveedor (5xx) y problemas de red; no para credenciales, número inválido o
  * plantilla rechazada — reintentarlos solo gasta cupo.
  */
+/**
+ * Segmentos que factura el proveedor por esta fila.
+ *
+ * Un SMS no es una unidad de cobro: por encima de 160 caracteres (o de 70 si
+ * lleva tildes en `á í ó ú`, que están fuera del GSM-7) se parte en varios y se
+ * cobra cada trozo. Contar mensajes en vez de segmentos subestimaría el gasto
+ * justo en los mensajes largos, que son los caros.
+ *
+ * WhatsApp y email no se cobran por segmento; se apuntan como 1 para que el
+ * contador siga siendo una cota superior del gasto en SMS.
+ */
+function segmentosDe(fila: FilaMensaje): number {
+  if (fila.canal !== 'sms' || !fila.cuerpo) return 1;
+  return medirSms(fila.cuerpo).segmentos || 1;
+}
+
 export function esTransitorio(e: unknown): boolean {
   const status = (e as { status?: number }).status;
   if (typeof status === 'number') return status === 429 || status >= 500;

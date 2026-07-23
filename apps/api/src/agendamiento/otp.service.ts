@@ -4,20 +4,24 @@ import * as argon2 from 'argon2';
 import { and, desc, eq } from 'drizzle-orm';
 import type { DrizzleTx } from '../db/tx';
 import { otpCodigo } from '../db/schema';
-import { mensajeriaSimulada } from '../notificaciones/messaging-mode';
+import { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
 
 const TTL_MIN = 5;
 const MAX_INTENTOS = 5;
 
 /**
  * OTP por SMS para identificar al cliente final sin cuenta (FASE-08, ADR-003).
- * El envío real (Twilio) es FASE-11. Mientras la mensajería esté SIMULADA (sin
- * claves Twilio, ver messaging-mode.ts) se loguea y se retorna el código para
- * poder probar el flujo; con Twilio real, el código nunca se expone.
+ *
+ * Cuando la mensajería no está operativa —sin claves de Twilio o con el
+ * interruptor de saldo apagado— el SMS no sale, así que el código se registra en
+ * el log y se le devuelve a quien reserva para que pueda continuar. Con la
+ * mensajería en marcha el código nunca se expone.
  */
 @Injectable()
 export class OtpService {
   private readonly logger = new Logger('OTP');
+
+  constructor(private readonly estado: MensajeriaEstadoService) {}
 
   /** Genera y persiste (hasheado) un OTP. Devuelve el código en claro (dev). */
   async generar(tx: DrizzleTx, negocioId: string, telefono: string): Promise<string> {
@@ -29,8 +33,8 @@ export class OtpService {
       codigoHash,
       expiraEn: new Date(Date.now() + TTL_MIN * 60_000),
     });
-    if (mensajeriaSimulada()) {
-      this.logger.log(`OTP para ${telefono}: ${codigo} (simulado, sin Twilio)`);
+    if (this.estado.sinMensajes()) {
+      this.logger.log(`OTP para ${telefono}: ${codigo} (sin envío: mensajería no operativa)`);
     }
     return codigo;
   }

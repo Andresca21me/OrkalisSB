@@ -26,6 +26,7 @@ import { MetricsService } from '../observability/metrics.service';
 import { MensajesService } from './mensajes.service';
 import type { Canal, MensajeSalida, NotificationSender, ResultadoEnvio } from './notification-sender.port';
 import type { PerfilRemitente } from './remitente/perfil-remitente';
+import { MensajeriaEstadoService } from './mensajeria-estado.service';
 
 /** Adaptador que falla a voluntad, para probar reintentos y errores permanentes. */
 class FallaAdapter implements NotificationSender {
@@ -91,6 +92,8 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       });
   };
 
+  const estadoMensajeria = new MensajeriaEstadoService();
+
   beforeAll(async () => {
     await adminDb.delete(negocio).where(eq(negocio.nombre, NOMBRE));
     const [neg] = await adminDb.insert(negocio).values({ nombre: NOMBRE, perfil: PerfilNegocio.Barberia }).returning();
@@ -112,12 +115,12 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
     remitente = new RemitenteResolver(config);
     plantillasSvc = new PlantillasService();
     const router = new RouterCanalService(new ConfigResolverService(), remitente, cupos);
-    notificaciones = new NotificacionesService(new JobQueue(), cupos, plantillasSvc, router, new MetricsService());
+    notificaciones = new NotificacionesService(new JobQueue(), cupos, plantillasSvc, router, new MetricsService(), estadoMensajeria);
     notificaciones.onModuleInit();
     alertas = new AlertasService(notificaciones, cupos);
-    outbox = new OutboxWorker([mock], remitente, cupos, alertas, new MetricsService());
+    outbox = new OutboxWorker([mock], remitente, cupos, alertas, new MetricsService(), estadoMensajeria);
     const resolver = new ConfigResolverService();
-    scheduler = new RecordatoriosScheduler(resolver, notificaciones);
+    scheduler = new RecordatoriosScheduler(resolver, notificaciones, estadoMensajeria);
   });
 
   afterAll(async () => {
@@ -161,6 +164,60 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
     expect(enviado.enviadoEn).not.toBeNull();
   });
 
+  describe('con el saldo de plataforma pausado', () => {
+    // Lo que se protege: al acabarse el crédito de Twilio la plataforma debe
+    // seguir siendo usable. Nada de SMS, pero el email —que va por otro
+    // proveedor y otra cuenta— tiene que seguir saliendo, porque es por donde se
+    // avisa al administrador de lo que está pasando.
+    beforeAll(async () => {
+      await estadoMensajeria.pausar('Prueba: sin crédito');
+    });
+    afterAll(async () => {
+      await estadoMensajeria.reanudar(0);
+    });
+
+    it('un SMS ni siquiera se encola', async () => {
+      const antes = await adminDb.select({ id: mensaje.id }).from(mensaje).where(eq(mensaje.negocioId, negocioId));
+      await notificaciones.encolarConfirmacion(
+        negocioId,
+        '3007776666',
+        { sucursalNombre: 'Sede', especialistaNombre: 'Nadie', inicio: new Date('2030-03-10T19:00:00Z') },
+        { sucursalId },
+      );
+      const despues = await adminDb.select({ id: mensaje.id }).from(mensaje).where(eq(mensaje.negocioId, negocioId));
+      expect(despues).toHaveLength(antes.length);
+    });
+
+    it('el email al administrador SÍ sale (es otro proveedor y otro saldo)', async () => {
+      await notificaciones.encolarAlerta(negocioId, 'admin@test.local', 'Aviso', 'Cuerpo del aviso');
+      const fila = await ultimoMensaje();
+      expect(fila.canal).toBe('email');
+      expect(fila.estado).toBe('pendiente');
+
+      await outbox.drain();
+      expect((await ultimoMensaje()).estado).toBe('enviado');
+    });
+
+    it('un SMS que ya estaba encolado se queda esperando, no se pierde', async () => {
+      // Los que el dominio dio por buenos justo antes del corte se conservan:
+      // saldrán al reanudar, en vez de desaparecer sin dejar rastro.
+      const [fila] = await adminDb
+        .insert(mensaje)
+        .values({ negocioId, sucursalId, canal: 'sms', cupoCanal: 'sms', tipo: 'aviso', destino: '3005554444', cuerpo: 'Espero a la recarga' })
+        .returning({ id: mensaje.id });
+
+      await outbox.drain();
+      const [sinTocar] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
+      expect(sinTocar.estado).toBe('pendiente');
+
+      await estadoMensajeria.reanudar(0);
+      await outbox.drain();
+      const [tras] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
+      expect(tras.estado).toBe('enviado');
+      await estadoMensajeria.pausar('Prueba: sin crédito'); // se restaura para el resto del bloque
+    });
+  });
+
   it('DURABILIDAD: un pendiente escrito antes de "reiniciar" se envía al arrancar el worker', async () => {
     // Simula el crash: la fila quedó en el outbox y el proceso murió.
     const [fila] = await adminDb
@@ -169,7 +226,7 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       .returning({ id: mensaje.id });
 
     // Worker nuevo (proceso reiniciado): retoma lo pendiente sin ayuda de nadie.
-    const otroWorker = new OutboxWorker([mock], new RemitenteResolver({ get: () => undefined } as never), cupos, alertas, new MetricsService());
+    const otroWorker = new OutboxWorker([mock], new RemitenteResolver({ get: () => undefined } as never), cupos, alertas, new MetricsService(), estadoMensajeria);
     await otroWorker.drain();
 
     const [m] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
@@ -207,7 +264,7 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
 
   it('fallo transitorio reprograma con backoff; permanente marca fallido sin reintentar', async () => {
     const transitorio = new FallaAdapter(Object.assign(new Error('rate limited'), { status: 429 }));
-    const wTrans = new OutboxWorker([transitorio], new RemitenteResolver({ get: () => undefined } as never), cupos, alertas, new MetricsService());
+    const wTrans = new OutboxWorker([transitorio], new RemitenteResolver({ get: () => undefined } as never), cupos, alertas, new MetricsService(), estadoMensajeria);
     const [t] = await adminDb
       .insert(mensaje)
       .values({ negocioId, canal: 'sms', cupoCanal: 'sms', tipo: 'aviso', destino: '3001112222', cuerpo: 'reintenta' })
@@ -220,7 +277,7 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
     expect(mt.proximoIntentoEn.getTime()).toBeGreaterThan(Date.now());
 
     const permanente = new FallaAdapter(Object.assign(new Error('The To number is not valid'), { status: 400 }));
-    const wPerm = new OutboxWorker([permanente], new RemitenteResolver({ get: () => undefined } as never), cupos, alertas, new MetricsService());
+    const wPerm = new OutboxWorker([permanente], new RemitenteResolver({ get: () => undefined } as never), cupos, alertas, new MetricsService(), estadoMensajeria);
     const [p] = await adminDb
       .insert(mensaje)
       .values({ negocioId, canal: 'sms', cupoCanal: 'sms', tipo: 'aviso', destino: 'no-valido', cuerpo: 'no reintenta' })

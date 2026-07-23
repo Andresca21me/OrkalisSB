@@ -66,6 +66,32 @@ export interface CobroGenerado {
   estado: string;
 }
 
+/** Estado del interruptor de mensajería (saldo del proveedor, de plataforma). */
+export interface EstadoMensajeria {
+  activa: boolean;
+  presupuesto: number;
+  consumidos: number;
+  restantes: number | null;
+  motivo: string | null;
+  pausadaEn: string | null;
+  operativa: boolean;
+  twilioConfigurado: boolean;
+}
+
+/** Lee y gobierna el interruptor de mensajería desde la consola. */
+export function useMensajeriaPlataforma() {
+  const { data, cargando, error, recargar } = useApi<EstadoMensajeria>(() => api.get('/plataforma/mensajeria'));
+  return {
+    estado: data,
+    cargando,
+    error,
+    recargar,
+    pausar: (motivo?: string) => api.post<EstadoMensajeria>('/plataforma/mensajeria/pausar', { motivo }),
+    reanudar: (presupuesto?: number) =>
+      api.post<EstadoMensajeria>('/plataforma/mensajeria/reanudar', presupuesto == null ? {} : { presupuesto }),
+  };
+}
+
 /**
  * Datos y acciones del Operador de Plataforma (FASE-13). Scope global (no
  * tenant-scoped); el backend exige el rol `OperadorPlataforma`.

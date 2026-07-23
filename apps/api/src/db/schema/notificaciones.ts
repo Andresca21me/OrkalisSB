@@ -153,3 +153,36 @@ export const mensaje = pgTable(
     idxProveedor: index('mensaje_proveedor_id_idx').on(t.proveedorId),
   }),
 );
+
+/**
+ * Saldo de mensajería de la PLATAFORMA (no de un negocio): el interruptor que
+ * apaga los envíos cuando se acaba el crédito comprado al proveedor.
+ *
+ * **Por qué existe.** El crédito de Twilio es finito y compartido por todos los
+ * negocios. Cuando se agota, cada envío falla: los OTP no llegan y nadie puede
+ * reservar ni dar de alta a un especialista — la plataforma entera queda
+ * inservible por algo que no tiene que ver con ella. Con este interruptor, al
+ * quedarse sin saldo se pasa a **modo sin mensajes**: los códigos se muestran en
+ * pantalla y los recordatorios se dejan de encolar, y todo lo demás sigue igual.
+ *
+ * Es una tabla de **una sola fila** (`id = 1`, garantizado por el CHECK de la
+ * migración). Vive en base de datos y no en una variable de entorno porque tiene
+ * que poder apagarse sola a mitad de un envío y volver a encenderse desde la
+ * consola sin redesplegar.
+ *
+ * No lleva `negocio_id` ni política de tenant: la migración le pone RLS con una
+ * política que niega todo, de forma que solo el rol dueño (`adminDb`) la ve.
+ */
+export const mensajeriaSaldo = pgTable('mensajeria_saldo', {
+  id: integer('id').primaryKey().default(1),
+  /** false = modo sin mensajes (nada sale hacia el proveedor). */
+  activa: boolean('activa').notNull().default(true),
+  /** Segmentos comprados en el ciclo actual. 0 = sin tope (solo apagado manual). */
+  presupuesto: integer('presupuesto').notNull().default(0),
+  /** Segmentos ya gastados. Se cuentan segmentos, que es lo que factura Twilio. */
+  consumidos: integer('consumidos').notNull().default(0),
+  /** Por qué se apagó: presupuesto agotado, rechazo del proveedor o mano humana. */
+  motivo: text('motivo'),
+  pausadaEn: timestamp('pausada_en', { withTimezone: true }),
+  actualizadoEn: timestamp('actualizado_en', { withTimezone: true }).notNull().defaultNow(),
+});

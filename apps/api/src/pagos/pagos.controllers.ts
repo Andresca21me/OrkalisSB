@@ -5,7 +5,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { FacturacionService } from './facturacion.service';
 import { PlataformaService } from './plataforma.service';
 import { CobroCronService } from './cobro-cron.service';
-import { CortesiaDto } from './dto/plataforma.dto';
+import { CortesiaDto, PausarMensajeriaDto, ReanudarMensajeriaDto } from './dto/plataforma.dto';
+import { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
 import type { NotificacionMP } from './mercadopago.client';
 
 /**
@@ -40,7 +41,39 @@ export class PlataformaController {
     private readonly plataforma: PlataformaService,
     private readonly facturacion: FacturacionService,
     private readonly cobroCron: CobroCronService,
+    private readonly mensajeria: MensajeriaEstadoService,
   ) {}
+
+  // ── Interruptor de mensajería ───────────────────────────────────────────────
+  //
+  // El crédito del proveedor es de la plataforma, no de un negocio, así que se
+  // gobierna desde aquí. Al agotarse, la plataforma pasa a modo sin mensajes
+  // (los códigos se enseñan en pantalla) en vez de quedarse inservible.
+
+  @Get('mensajeria')
+  estadoMensajeria() {
+    return this.mensajeria.vista();
+  }
+
+  /** Corta los envíos a mano (p. ej. antes de que se agote el crédito). */
+  @Post('mensajeria/pausar')
+  @HttpCode(200)
+  async pausarMensajeria(@Body() dto: PausarMensajeriaDto) {
+    await this.mensajeria.pausar(dto.motivo?.trim() || 'Pausada manualmente desde la consola.');
+    return this.mensajeria.vista();
+  }
+
+  /**
+   * Reanuda tras recargar. `presupuesto` son los segmentos recién comprados; al
+   * indicarlo se reinicia el contador, porque lo gastado pertenece a la recarga
+   * anterior y arrastrarlo volvería a apagar el interruptor al instante.
+   */
+  @Post('mensajeria/reanudar')
+  @HttpCode(200)
+  async reanudarMensajeria(@Body() dto: ReanudarMensajeriaDto) {
+    await this.mensajeria.reanudar(dto.presupuesto);
+    return this.mensajeria.vista();
+  }
 
   @Get('suscripciones')
   listar() {

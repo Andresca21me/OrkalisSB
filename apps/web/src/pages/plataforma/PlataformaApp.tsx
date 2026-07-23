@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { money, num, fechaCorta } from '../../lib/format';
 import { Shell, PageHead, type NavItem } from '../../ui/Shell';
+import { useMensajeriaPlataforma, type EstadoMensajeria } from './usePlataforma';
 import {
   Badge,
   Button,
@@ -146,6 +147,8 @@ export function PlataformaApp() {
         <KpiCard label="Suspendidas" value={num(kpis.suspendidos)} icon="pause" loading={cargando} />
       </div>
 
+      <MensajeriaCard />
+
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <SearchInput value={q} onChange={setQ} placeholder="Buscar negocio…" width={260} />
@@ -249,6 +252,92 @@ export function PlataformaApp() {
 }
 
 // ── Tabla densa de tenants ───────────────────────────────────────────────────
+
+/**
+ * Interruptor de mensajería de la plataforma.
+ *
+ * El crédito del proveedor es finito y lo comparten todos los negocios. Cuando
+ * se acaba, la plataforma pasa a **modo sin mensajes**: los códigos se muestran
+ * en pantalla y los recordatorios se detienen, en lugar de que todo falle en
+ * silencio. Aquí se ve cuánto queda y se enciende otra vez tras recargar.
+ */
+function MensajeriaCard() {
+  const toast = useToast();
+  const { estado, cargando, recargar, pausar, reanudar } = useMensajeriaPlataforma();
+  const [recarga, setRecarga] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+
+  async function accion(fn: () => Promise<EstadoMensajeria>, ok: string, tono: 'success' | 'warning') {
+    setOcupado(true);
+    try {
+      await fn();
+      await recargar();
+      toast(ok, tono);
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  if (cargando || !estado) return null;
+
+  const pausada = !estado.activa;
+  const gastado = estado.presupuesto > 0 ? Math.min(100, Math.round((estado.consumidos / estado.presupuesto) * 100)) : 0;
+  const cerca = estado.restantes != null && estado.restantes <= Math.max(10, estado.presupuesto * 0.1);
+
+  return (
+    <Card padding={18} style={{ marginBottom: 22, borderColor: pausada ? 'rgba(245,158,11,0.45)' : undefined }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0, flex: '1 1 260px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginBottom: 4 }}>
+            <Icon name="message-square" size={17} color={pausada ? 'var(--warning)' : 'var(--brand)'} />
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-md)' }}>Mensajería</span>
+            <Badge tone={pausada ? 'warning' : 'success'} dot>{pausada ? 'Pausada' : 'Activa'}</Badge>
+            {!estado.twilioConfigurado && <Badge tone="neutral">Sin proveedor configurado</Badge>}
+          </div>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '20px' }}>
+            {pausada
+              ? `${estado.motivo ?? 'Pausada.'} Mientras tanto los códigos se muestran en pantalla y no se envían recordatorios.`
+              : estado.presupuesto > 0
+                ? `${num(estado.consumidos)} de ${num(estado.presupuesto)} segmentos usados · quedan ${num(estado.restantes ?? 0)}.`
+                : 'Sin tope declarado: no se cortará sola. Fija los segmentos comprados para que se pause al agotarse.'}
+          </div>
+          {estado.presupuesto > 0 && !pausada && (
+            <div style={{ marginTop: 10, height: 6, borderRadius: 99, background: 'var(--surface-sunken)', overflow: 'hidden' }}>
+              <div style={{ width: `${gastado}%`, height: '100%', background: cerca ? 'var(--warning)' : 'var(--brand)' }} />
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Input
+            value={recarga}
+            onChange={(e) => setRecarga(e.target.value.replace(/\D/g, ''))}
+            placeholder="Segmentos"
+            inputMode="numeric"
+            aria-label="Segmentos comprados"
+            style={{ width: 120 }}
+          />
+          <Button
+            variant={pausada ? 'primary' : 'secondary'}
+            disabled={ocupado}
+            iconLeft="play"
+            onClick={() => void accion(() => reanudar(recarga.trim() ? Number(recarga) : undefined), 'Mensajería reanudada', 'success')}
+          >
+            {pausada ? 'Reanudar' : 'Recargar'}
+          </Button>
+          {!pausada && (
+            <Button variant="secondary" disabled={ocupado} iconLeft="pause"
+              onClick={() => void accion(() => pausar('Pausada manualmente desde la consola.'), 'Mensajería pausada', 'warning')}>
+              Pausar
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function TenantsTable({
   filas,

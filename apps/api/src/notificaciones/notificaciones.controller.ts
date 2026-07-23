@@ -7,6 +7,7 @@ import { CuposService, type EstadoCupo } from './cupos.service';
 import { AlertasService, type AlertaAdminDto } from './alertas.service';
 import { PlantillasService } from './plantillas.service';
 import { MensajesService } from './mensajes.service';
+import { MensajeriaEstadoService } from './mensajeria-estado.service';
 import { CANALES_VALIDOS, EVENTOS_VALIDOS, GuardarPlantillaDto, ListarMensajesDto, ListarPlantillasDto } from './dto/plantilla.dto';
 
 /** Exposición HTTP de notificaciones (FASE-09, H5): cupos y avisos al admin. */
@@ -18,7 +19,23 @@ export class NotificacionesController {
     private readonly alertas: AlertasService,
     private readonly plantillas: PlantillasService,
     private readonly mensajes: MensajesService,
+    private readonly estado: MensajeriaEstadoService,
   ) {}
+
+  /**
+   * ¿Está la mensajería en marcha? Lo consulta el panel del negocio para avisar
+   * de que no salen recordatorios; sin esto, el admin vería su agenda llena y
+   * ningún aviso enviado, y daría por hecho que el producto falla.
+   *
+   * Devuelve solo lo que le incumbe a un negocio: el saldo y el presupuesto son
+   * de la plataforma y se ven en la consola del operador.
+   */
+  @Get('estado')
+  @Roles(RolUsuario.Admin, RolUsuario.Recepcionista)
+  estadoMensajeria(): { pausada: boolean; motivo: string | null } {
+    const v = this.estado.vista();
+    return { pausada: !v.activa, motivo: v.activa ? null : v.motivo };
+  }
 
   /** Consumo/cupo de cada canal en el ciclo de cobro vigente (ADR-009, D1). */
   @Get('cupos')

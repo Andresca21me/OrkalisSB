@@ -33,6 +33,7 @@ import { CuposService } from '../notificaciones/cupos.service';
 import { PlantillasService } from '../notificaciones/plantillas.service';
 import { PlanService } from '../plans/plan.service';
 import { MetricsService } from '../observability/metrics.service';
+import { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
 
 /** Instante UTC a partir de fecha local Bogotá (UTC-5) + minutos del día. */
 function instante(fechaIso: string, minutos: number): Date {
@@ -92,7 +93,8 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     const routerRemitente = new RemitenteResolver({ get: () => undefined } as never);
     const routerCupos = new CuposService(new PlanService());
     const router = new RouterCanalService(resolver, routerRemitente, routerCupos);
-    const notificaciones = new NotificacionesService(queue, new CuposService(new PlanService()), new PlantillasService(), router, metrics);
+    const estadoMensajeria = new MensajeriaEstadoService();
+    const notificaciones = new NotificacionesService(queue, new CuposService(new PlanService()), new PlantillasService(), router, metrics, estadoMensajeria);
     notificaciones.onModuleInit();
     // El outbox no se drena aquí: estas pruebas solo verifican el dominio de
     // agendamiento, que encola (persiste) sin enviar.
@@ -100,13 +102,14 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     const avisos = new AvisosEspecialistaService(notificaciones);
     pub = new PublicAgendamientoService(
       new DisponibilidadService(horario),
-      new OtpService(),
+      new OtpService(estadoMensajeria),
       resolver,
       validadores,
       notificaciones,
       metrics,
       horario,
       avisos,
+      estadoMensajeria,
     );
     agenda = new AgendamientoService(validadores, avisos);
   });

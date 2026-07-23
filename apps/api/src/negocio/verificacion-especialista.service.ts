@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { and, eq, lt } from 'drizzle-orm';
@@ -8,6 +9,7 @@ import type { TenantContext } from '../db/tenant-context';
 import { aE164Colombia } from '../notificaciones/phone';
 import { RemitenteResolver } from '../notificaciones/remitente/remitente.resolver';
 import { VERIFY_PORT, type VerifyPort } from '../notificaciones/verify/verify.port';
+import { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
 import { EquipoService } from './equipo.service';
 
 /** Vida de una verificación antes de expirar. */
@@ -52,6 +54,13 @@ export interface IniciarInput {
  * FASE-07.
  *
  * El código lo gestiona Twilio Verify: **nunca lo conocemos ni lo devolvemos**.
+ *
+ * Excepción: en **modo sin mensajes** (sin crédito o con el interruptor de saldo
+ * apagado) no hay SMS que enviar, así que el código se genera aquí, se guarda
+ * hasheado en la propia fila y se le devuelve al admin para que lo vea en
+ * pantalla. Deja de ser una prueba de posesión del teléfono —imposible sin
+ * envío— y pasa a ser un paso de confirmación, pero el alta sigue siendo
+ * posible, que es lo que importa cuando la alternativa es no poder trabajar.
  */
 @Injectable()
 export class VerificacionEspecialistaService {
@@ -61,6 +70,7 @@ export class VerificacionEspecialistaService {
     private readonly equipo: EquipoService,
     private readonly remitente: RemitenteResolver,
     @Inject(VERIFY_PORT) private readonly verify: VerifyPort,
+    private readonly estadoMensajeria: MensajeriaEstadoService,
   ) {}
 
   /**
@@ -69,7 +79,7 @@ export class VerificacionEspecialistaService {
    * El cupo del plan se comprueba **aquí** además de al crear: es preferible
    * decirle al admin que no tiene cupo antes de gastarle un SMS de Verify.
    */
-  async iniciar(ctx: TenantContext, input: IniciarInput): Promise<{ verificacionId: string; expiraEn: Date }> {
+  async iniciar(ctx: TenantContext, input: IniciarInput): Promise<{ verificacionId: string; expiraEn: Date; codigoVisible?: string }> {
     const nombre = input.nombre?.trim();
     if (!nombre) throw new BadRequestException('El nombre es obligatorio.');
     const telefono = this.normalizarCelular(input.celular);
@@ -89,13 +99,15 @@ export class VerificacionEspecialistaService {
     }
 
     const expiraEn = new Date(Date.now() + TTL_MIN * 60_000);
+    const local = this.estadoMensajeria.sinMensajes() ? await this.codigoLocal() : null;
     const [fila] = await runInTenantTx(ctx, (tx) =>
       tx
         .insert(verificacionEspecialista)
-        .values({ negocioId: ctx.negocioId, telefono, datosBorrador: borrador, expiraEn })
+        .values({ negocioId: ctx.negocioId, telefono, datosBorrador: borrador, expiraEn, codigoLocalHash: local?.hash })
         .returning({ id: verificacionEspecialista.id }),
     );
 
+    if (local) return { verificacionId: fila.id, expiraEn, codigoVisible: local.codigo };
     await this.enviarCodigo(ctx.negocioId, telefono);
     return { verificacionId: fila.id, expiraEn };
   }
@@ -109,8 +121,11 @@ export class VerificacionEspecialistaService {
   async confirmar(ctx: TenantContext, verificacionId: string, codigo: string): Promise<Especialista> {
     const fila = await this.cargarVigente(ctx, verificacionId);
 
-    const perfil = this.remitente.resolver(ctx.negocioId);
-    const ok = await this.verify.check(fila.telefono, codigo.trim(), perfil);
+    // Si el alta empezó en modo sin mensajes, se comprueba contra el código que
+    // generamos nosotros: Twilio Verify no sabe nada de esta verificación.
+    const ok = fila.codigoLocalHash
+      ? await argon2.verify(fila.codigoLocalHash, codigo.trim())
+      : await this.verify.check(fila.telefono, codigo.trim(), this.remitente.resolver(ctx.negocioId));
 
     if (!ok) {
       const intentos = fila.intentos + 1;
@@ -147,7 +162,7 @@ export class VerificacionEspecialistaService {
   }
 
   /** Reenvía el código respetando cooldown y tope de reenvíos. */
-  async reenviar(ctx: TenantContext, verificacionId: string): Promise<{ reenvios: number }> {
+  async reenviar(ctx: TenantContext, verificacionId: string): Promise<{ reenvios: number; codigoVisible?: string }> {
     const fila = await this.cargarVigente(ctx, verificacionId);
 
     const esperados = Math.ceil((COOLDOWN_S * 1000 - (Date.now() - fila.ultimoEnvioEn.getTime())) / 1000);
@@ -159,12 +174,17 @@ export class VerificacionEspecialistaService {
     }
 
     const reenvios = fila.reenvios + 1;
+    // Se rehace el código local aunque la verificación empezara con Verify: si
+    // la mensajería se apagó a mitad del alta, reenviar por SMS no llegaría a
+    // ninguna parte y el admin se quedaría bloqueado.
+    const local = this.estadoMensajeria.sinMensajes() ? await this.codigoLocal() : null;
     await runInTenantTx(ctx, (tx) =>
       tx
         .update(verificacionEspecialista)
-        .set({ reenvios, ultimoEnvioEn: new Date() })
+        .set({ reenvios, ultimoEnvioEn: new Date(), ...(local ? { codigoLocalHash: local.hash } : {}) })
         .where(eq(verificacionEspecialista.id, verificacionId)),
     );
+    if (local) return { reenvios, codigoVisible: local.codigo };
     await this.enviarCodigo(ctx.negocioId, fila.telefono);
     return { reenvios };
   }
@@ -180,6 +200,12 @@ export class VerificacionEspecialistaService {
   }
 
   // ── Interno ─────────────────────────────────────────────────────────────────
+
+  /** Código de 6 dígitos generado en casa, con su hash para guardar. */
+  private async codigoLocal(): Promise<{ codigo: string; hash: string }> {
+    const codigo = randomInt(0, 1_000_000).toString().padStart(6, '0');
+    return { codigo, hash: await argon2.hash(codigo) };
+  }
 
   private async enviarCodigo(negocioId: string, telefono: string): Promise<void> {
     const perfil = this.remitente.resolver(negocioId);

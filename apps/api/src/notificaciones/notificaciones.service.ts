@@ -6,6 +6,7 @@ import type { Canal } from './notification-sender.port';
 import { CuposService, type CanalCupo } from './cupos.service';
 import { PlantillasService } from './plantillas.service';
 import { RouterCanalService } from './router-canal.service';
+import { canalDePago, MensajeriaEstadoService } from './mensajeria-estado.service';
 import { plantillas, type DatosCita } from './templates';
 import { valoresDe } from './plantillas.render';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
@@ -38,6 +39,7 @@ export class NotificacionesService implements OnModuleInit {
     private readonly plantillas: PlantillasService,
     private readonly router: RouterCanalService,
     private readonly metrics: MetricsService,
+    private readonly estado: MensajeriaEstadoService,
   ) {}
 
   onModuleInit(): void {
@@ -168,6 +170,15 @@ export class NotificacionesService implements OnModuleInit {
       citaId?: string | null;
     },
   ): Promise<void> {
+    // Modo sin mensajes: ni siquiera se encola. Dejarlo en `pendiente` sería
+    // peor que no hacer nada — se acumularían días de recordatorios que, al
+    // reanudar, saldrían todos de golpe (avisando de citas ya pasadas y
+    // fundiendo el crédito recién comprado en un minuto).
+    if (this.estado.pausada() && canalDePago(fila.canal)) {
+      this.logger.debug(`Mensajería pausada: '${fila.tipo}' por ${fila.canal} no se encola (negocio ${negocioId}).`);
+      return;
+    }
+
     const transaccional = fila.transaccional ?? true;
     try {
       const sinCupo = !transaccional && !(await this.cupos.verificar(negocioId, fila.cupoCanal)).dentroDeCupo;

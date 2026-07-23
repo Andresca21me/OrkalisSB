@@ -31,7 +31,7 @@ import { bogotaParts } from './validators/validador-cita.port';
 import { transicionar } from './cita-state-machine';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { AvisosEspecialistaService } from './avisos-especialista.service';
-import { mensajeriaSimulada } from '../notificaciones/messaging-mode';
+import { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 
 /** Código de error Postgres para violación de restricción EXCLUDE. */
@@ -53,6 +53,7 @@ export class PublicAgendamientoService {
     private readonly metrics: MetricsService,
     private readonly horario: HorarioService,
     private readonly avisos: AvisosEspecialistaService,
+    private readonly estadoMensajeria: MensajeriaEstadoService,
   ) {}
 
   /** Resuelve el negocio de la sucursal (slug) y arma un contexto de sistema. */
@@ -291,15 +292,19 @@ export class PublicAgendamientoService {
   }
 
   /**
-   * Genera y "envía" un OTP. Cuando la mensajería está simulada (sin Twilio real)
-   * devuelve `devCode` para que el cliente vea el código y pueda reservar en la
-   * demo. Con Twilio configurado, el SMS se envía de verdad y `devCode` queda undefined.
+   * Genera y envía un OTP.
+   *
+   * Si la mensajería no está operativa (sin Twilio o con el interruptor de saldo
+   * apagado) el SMS no sale y se devuelve el código en `devCode` para que la
+   * pantalla se lo enseñe al cliente. Sin eso nadie podría reservar: el flujo
+   * entero se apoya en un código que no llegaría nunca.
    */
-  async enviarOtp(sucursalId: string, telefono: string): Promise<{ enviado: true; devCode?: string }> {
+  async enviarOtp(sucursalId: string, telefono: string): Promise<{ enviado: boolean; devCode?: string }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
     const codigo = await runInTenantTx(ctx, (tx) => this.otp.generar(tx, ctx.negocioId, telefono));
+    if (this.estadoMensajeria.sinMensajes()) return { enviado: false, devCode: codigo };
     await this.notificaciones.encolarOtp(ctx.negocioId, telefono, codigo, { sucursalId }); // outbox: persiste y sigue
-    return { enviado: true, devCode: mensajeriaSimulada() ? codigo : undefined };
+    return { enviado: true };
   }
 
   /** Confirma la reserva: verifica OTP, crea cliente y cita (EXCLUDE = garantía). */

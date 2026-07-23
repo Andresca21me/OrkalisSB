@@ -6,6 +6,7 @@ import { adminDb } from '../db/admin-client';
 import { cita, citaRecordatorio, cliente, especialista, retencionFranja, sucursal } from '../db/schema';
 import { ConfigResolverService } from '../config-module/config-resolver.service';
 import { NotificacionesService } from './notificaciones.service';
+import { MensajeriaEstadoService } from './mensajeria-estado.service';
 
 /** Ventanas soportadas (FASE-08). `config` es la ventana libre del negocio. */
 type Ventana = 'h24' | 'h2' | 'config';
@@ -28,6 +29,7 @@ export class RecordatoriosScheduler {
   constructor(
     private readonly config: ConfigResolverService,
     private readonly notificaciones: NotificacionesService,
+    private readonly estado: MensajeriaEstadoService,
   ) {}
 
   @Interval(60_000)
@@ -53,6 +55,14 @@ export class RecordatoriosScheduler {
    * si no dispararía a la vez el aviso de 24 h y el de 2 h.
    */
   async escanearRecordatorios(ahora = new Date()): Promise<number> {
+    // Sin mensajería operativa no se escanea siquiera: no se marcan ventanas
+    // como atendidas, así que al reanudar los avisos que aún tengan sentido
+    // vuelven a entrar solos y los de citas ya pasadas se quedan fuera.
+    if (this.estado.pausada()) {
+      this.estado.avisarPausaUnaVez('Mensajería pausada por saldo: los recordatorios no se programan.');
+      return 0;
+    }
+
     const proximas = await adminDb
       .select({
         id: cita.id,

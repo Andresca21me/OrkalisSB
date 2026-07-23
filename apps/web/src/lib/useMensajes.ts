@@ -19,6 +19,17 @@ export function useMensajes(f: FiltrosMensajes) {
   return useApi<PaginaMensajes>(() => api.get(`/notificaciones/mensajes?${qs}`), [f.canal, f.estado, f.tipo, f.pagina]);
 }
 
+/**
+ * ¿Está la mensajería pausada a nivel de plataforma?
+ *
+ * El negocio necesita saberlo: si no, ve su agenda llena y ningún aviso enviado
+ * y da por hecho que el producto falla, cuando lo que pasa es que se acabó el
+ * crédito del proveedor.
+ */
+export function useEstadoMensajeria() {
+  return useApi<{ pausada: boolean; motivo: string | null }>(() => api.get('/notificaciones/estado'));
+}
+
 /** Conteo por estado de los últimos 30 días (cabecera del registro). */
 export function useResumenMensajes() {
   return useApi<ResumenMensajes>(() => api.get('/notificaciones/mensajes/resumen'));

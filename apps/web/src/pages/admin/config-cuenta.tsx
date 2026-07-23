@@ -9,7 +9,7 @@ import { urlLogoNegocio } from '../../lib/api';
 import { colorDominante, prepararLogo } from '../../lib/imagen';
 import { contrasteBajo, textoSobre } from '../../lib/color';
 import { useAuth } from '../../lib/auth';
-import { useMensajes, useResumenMensajes } from '../../lib/useMensajes';
+import { useEstadoMensajeria, useMensajes, useResumenMensajes } from '../../lib/useMensajes';
 import { Badge, Button, Dialog, ErrorState, Icon, Select, Spinner, useToast } from '../../ui/ui';
 import { GField } from './gestion-ui';
 import { ConfigBanner, ConfigCard } from './config-ui';
@@ -300,6 +300,7 @@ export function RegistroMensajes() {
   const [pagina, setPagina] = useState(0);
   const { data, cargando, error, recargar } = useMensajes({ canal, estado, pagina });
   const resumen = useResumenMensajes();
+  const estadoMsj = useEstadoMensajeria();
 
   const paginas = data ? Math.ceil(data.total / data.porPagina) : 0;
   const tasa = resumen.data ? Math.round(resumen.data.tasaFallo * 100) : 0;
@@ -310,6 +311,16 @@ export function RegistroMensajes() {
       <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '4px 0 20px' }}>
         Todo lo que la plataforma envió a tus clientes y a tu equipo, con su estado de entrega real.
       </p>
+
+      {estadoMsj.data?.pausada && (
+        <div style={{ marginBottom: 16 }}>
+          <ConfigBanner tone="warning" title="Los envíos están pausados">
+            No se están enviando recordatorios ni confirmaciones. Mientras dure, los códigos de verificación
+            aparecen en pantalla, así que tus clientes pueden seguir reservando con normalidad.
+            {estadoMsj.data.motivo ? ` Motivo: ${estadoMsj.data.motivo}` : ''}
+          </ConfigBanner>
+        </div>
+      )}
 
       {resumen.data && resumen.data.total > 0 && (
         <div style={{ marginBottom: 16 }}>
@@ -377,7 +388,7 @@ export function RegistroMensajes() {
         )}
 
         {paginas > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
             <Button size="md" variant="ghost" disabled={pagina === 0} onClick={() => setPagina((p) => p - 1)}>Anteriores</Button>
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Página {pagina + 1} de {paginas}</span>
             <Button size="md" variant="ghost" disabled={pagina + 1 >= paginas} onClick={() => setPagina((p) => p + 1)}>Siguientes</Button>

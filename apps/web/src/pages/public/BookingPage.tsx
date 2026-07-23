@@ -691,8 +691,14 @@ function Identificacion({ negocio, contacto, onChange, devCode, onEnviar, onVeri
               )}
             </div>
             {devCode && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 24, color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                <Icon name="info" size={13} color="var(--text-tertiary)" /> Demo: el código es {devCode}
+              // Sale cuando no hay envío posible (sin proveedor o saldo
+              // pausado). Se muestra el código para que la reserva no se quede
+              // bloqueada esperando un SMS que no va a llegar.
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 6, marginTop: 24, padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--info-tint)', color: 'var(--text-secondary)', fontSize: 'var(--text-xs)', lineHeight: '17px' }}>
+                <Icon name="info" size={13} color="var(--info)" style={{ marginTop: 1 }} />
+                <span>
+                  No pudimos enviarte el SMS. Tu código es <strong className="data" style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{devCode}</strong>
+                </span>
               </div>
             )}
           </div>

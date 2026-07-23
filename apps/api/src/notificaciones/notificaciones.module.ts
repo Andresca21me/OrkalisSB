@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.validation';
 import { JobQueue } from './job-queue';
 import { CuposService } from './cupos.service';
+import { MensajeriaEstadoService } from './mensajeria-estado.service';
 import { AlertasService } from './alertas.service';
 import { PlantillasService } from './plantillas.service';
 import { MensajesService } from './mensajes.service';
@@ -39,6 +40,7 @@ import { MockVerifyAdapter } from './verify/mock-verify.adapter';
   providers: [
     JobQueue,
     CuposService,
+    MensajeriaEstadoService,
     AlertasService,
     PlantillasService,
     MensajesService,
@@ -79,6 +81,6 @@ import { MockVerifyAdapter } from './verify/mock-verify.adapter';
       inject: [ConfigService],
     },
   ],
-  exports: [NotificacionesService, OutboxWorker, AlertasService, PlantillasService, JobQueue, CuposService, RemitenteResolver, VERIFY_PORT],
+  exports: [NotificacionesService, OutboxWorker, AlertasService, PlantillasService, JobQueue, CuposService, MensajeriaEstadoService, RemitenteResolver, VERIFY_PORT],
 })
 export class NotificacionesModule {}

@@ -15,6 +15,7 @@ import { ConfigResolverService } from '../config-module/config-resolver.service'
 import { RemitenteResolver } from './remitente/remitente.resolver';
 import { RouterCanalService } from './router-canal.service';
 import { MetricsService } from '../observability/metrics.service';
+import { MensajeriaEstadoService } from './mensajeria-estado.service';
 
 /**
  * Matriz "cambios de plan × cupos de mensajería" (Plan-Mensajeria FASE-09,
@@ -63,7 +64,7 @@ describe('Cambios de plan ↔ cupos de mensajería (FASE-09)', () => {
     });
     cupos = new CuposService(new PlanService());
     const router = new RouterCanalService(new ConfigResolverService(), new RemitenteResolver({ get: () => undefined } as never), cupos);
-    notificaciones = new NotificacionesService(new JobQueue(), cupos, new PlantillasService(), router, new MetricsService());
+    notificaciones = new NotificacionesService(new JobQueue(), cupos, new PlantillasService(), router, new MetricsService(), new MensajeriaEstadoService());
   });
 
   afterAll(async () => {
