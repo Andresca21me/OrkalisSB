@@ -201,7 +201,10 @@ export class EquipoService {
       const [a] = await tx
         .select({
           servicios: count(),
+          // `gan_prof` ya incluye la comisión por productos vendidos en cita (D4);
+          // aquí se resta para dejar `ganServicios` puro y sumarla a `comisiones`.
           gan: sql<number>`coalesce(sum(${atencion.ganProf}), 0)`.mapWith(Number),
+          comProductosCita: sql<number>`coalesce(sum(${atencion.comisionProductos}), 0)`.mapWith(Number),
         })
         .from(atencion)
         .where(and(eq(atencion.especialistaId, id), gte(atencion.creadoEn, desde), lte(atencion.creadoEn, hasta)));
@@ -211,8 +214,9 @@ export class EquipoService {
         .from(ventaProducto)
         .where(and(eq(ventaProducto.especialistaId, id), gte(ventaProducto.creadoEn, desde), lte(ventaProducto.creadoEn, hasta)));
 
-      const ganServicios = round2(a?.gan ?? 0);
-      const comisiones = round2(v?.comisiones ?? 0);
+      const comProductosCita = round2(a?.comProductosCita ?? 0);
+      const ganServicios = round2((a?.gan ?? 0) - comProductosCita);
+      const comisiones = round2((v?.comisiones ?? 0) + comProductosCita);
       return {
         desde: desde.toISOString(),
         hasta: hasta.toISOString(),

@@ -5,7 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import type { TenantContext } from '../db/tenant-context';
 import { AgendamientoService } from './agendamiento.service';
 import { AtencionService } from '../finanzas/atencion.service';
-import { CompletarDto, CrearCitaDto, ReasignarDto, WalkInRetroactivoDto, WalkInVivoDto } from './dto/agendamiento.dto';
+import { CompletarDto, CrearCitaDto, ReasignarDto, RevertirDto, WalkInRetroactivoDto, WalkInVivoDto } from './dto/agendamiento.dto';
 
 /** Agenda interna y operación del turno (FASE-08/09). Roles internos. */
 @Controller('citas')
@@ -68,11 +68,11 @@ export class AgendamientoController {
     return this.atencion.completar(ctx, id, dto);
   }
 
-  /** Revierte una atención completada (repone stock, deshace ganancias). */
+  /** Revierte una atención completada (deshace ganancias; repone stock salvo que se indique lo contrario). */
   @Post(':id/revertir')
   @HttpCode(204)
-  async revertir(@CurrentTenant() ctx: TenantContext, @Param('id') id: string): Promise<void> {
-    await this.atencion.revertir(ctx, id);
+  async revertir(@CurrentTenant() ctx: TenantContext, @Param('id') id: string, @Body() dto: RevertirDto): Promise<void> {
+    await this.atencion.revertir(ctx, id, dto.reponerStock ?? true);
   }
 
   @Post(':id/cancelar')

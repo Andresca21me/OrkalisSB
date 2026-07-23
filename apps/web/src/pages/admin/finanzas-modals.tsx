@@ -7,7 +7,19 @@ import { GField, GMoney, GNumber, GSummaryRow, type MoneyValue } from './gestion
 
 interface Sucursal { id: string; nombre: string; activa: boolean }
 
-const COMISION_PRODUCTO = 0.1; // 10% al especialista que vende (prototipo)
+/** Config de comisión por producto para la vista previa (la verdad la calcula el servidor). */
+export interface ComisionProductoConfig {
+  tipo: 'porcentaje' | 'valor_fijo';
+  valor: number;
+}
+
+/** Comisión previa de una venta (misma fórmula que el backend `comisionProducto`). */
+function comisionPreview(cantidad: number, precioUnit: number, cfg: ComisionProductoConfig): number {
+  if (!(cfg.valor > 0) || !(cantidad > 0)) return 0;
+  const totalLinea = cantidad * precioUnit;
+  if (cfg.tipo === 'valor_fijo') return Math.min(cantidad * cfg.valor, totalLinea);
+  return Math.round((totalLinea * cfg.valor) / 100);
+}
 
 export function GastoModal({ kind, sucursales, defaultSucursalId, onClose, onSaved }: { kind: 'fijo' | 'variable'; sucursales: Sucursal[]; defaultSucursalId: string | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
@@ -53,7 +65,7 @@ export function GastoModal({ kind, sucursales, defaultSucursalId, onClose, onSav
   );
 }
 
-export function VentaModal({ productos, especialistas, onClose, onSaved }: { productos: ProductoInventario[]; especialistas: EspecialistaEquipo[]; onClose: () => void; onSaved: () => void }) {
+export function VentaModal({ productos, especialistas, comisionCfg, onClose, onSaved }: { productos: ProductoInventario[]; especialistas: EspecialistaEquipo[]; comisionCfg: ComisionProductoConfig; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const disponibles = useMemo(() => productos.filter((p) => p.cantidad > 0), [productos]);
   const [productoId, setProductoId] = useState(disponibles[0]?.id ?? '');
@@ -64,16 +76,18 @@ export function VentaModal({ productos, especialistas, onClose, onSaved }: { pro
   const producto = disponibles.find((p) => p.id === productoId);
   const total = producto ? Number(producto.precioVenta) * cantidad : 0;
   const bySpec = vendidoPor !== 'salon';
-  const comision = bySpec ? Math.round(total * COMISION_PRODUCTO) : 0;
+  // Vista previa: la comisión definitiva la calcula el servidor con la config.
+  const comision = bySpec && producto ? comisionPreview(cantidad, Number(producto.precioVenta), comisionCfg) : 0;
   const stockError = !!producto && cantidad > producto.cantidad;
   const valid = !!producto && cantidad >= 1 && !stockError;
+  const comisionLabel = comisionCfg.tipo === 'porcentaje' ? `${comisionCfg.valor}%` : `${money(comisionCfg.valor)}/u`;
 
   async function registrar() {
     if (!valid || !producto) return;
     setGuardando(true);
     try {
-      await registrarVenta({ productoId: producto.id, cantidad, especialistaId: bySpec ? vendidoPor : undefined, comisionProf: comision || undefined });
-      toast(`Venta registrada · ${money(total)}`, 'success');
+      const r = await registrarVenta({ productoId: producto.id, cantidad, especialistaId: bySpec ? vendidoPor : undefined });
+      toast(`Venta registrada · ${money(r.total)}`, 'success');
       onSaved();
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -97,7 +111,7 @@ export function VentaModal({ productos, especialistas, onClose, onSaved }: { pro
               <GField label="Producto"><Select value={productoId} onChange={(e) => { setProductoId(e.target.value); setCantidad(1); }}>{disponibles.map((p) => <option key={p.id} value={p.id}>{p.nombre} ({p.cantidad} disp.)</option>)}</Select></GField>
               <GField label="Cantidad" error={stockError ? `Máx. ${producto?.cantidad}` : undefined}><GNumber value={cantidad} onChange={setCantidad} min={1} invalid={stockError} /></GField>
             </div>
-            <GField label="Vendido por" hint={bySpec ? `Comisión del ${COMISION_PRODUCTO * 100}% para el especialista.` : 'La venta es 100% del negocio.'}>
+            <GField label="Vendido por" hint={bySpec ? (comisionCfg.valor > 0 ? `Comisión de ${comisionLabel} para el especialista (según configuración).` : 'Sin comisión configurada: la venta es 100% del negocio.') : 'La venta es 100% del negocio.'}>
               <Select value={vendidoPor} onChange={(e) => setVendidoPor(e.target.value)}>
                 <option value="salon">El negocio (directo)</option>
                 {especialistas.filter((s) => s.activo).map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
@@ -105,9 +119,9 @@ export function VentaModal({ productos, especialistas, onClose, onSaved }: { pro
             </GField>
             <div style={{ padding: '4px 16px 8px', borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}>
               <GSummaryRow first strong label="Total de la venta" value={money(total)} />
-              {bySpec ? (
+              {bySpec && comision > 0 ? (
                 <>
-                  <GSummaryRow label="Comisión especialista" sub={`${COMISION_PRODUCTO * 100}%`} value={money(comision)} tone="pos" />
+                  <GSummaryRow label="Comisión especialista" sub={comisionLabel} value={money(comision)} tone="pos" />
                   <GSummaryRow label="Para el negocio" value={money(total - comision)} />
                 </>
               ) : (

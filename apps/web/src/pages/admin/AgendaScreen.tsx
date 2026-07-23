@@ -94,7 +94,7 @@ export function AgendaScreen() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {lista.map((c) => (
-                      <AppointmentRow key={c.id} appt={c} showPrice onAccion={(ev) => void accion(c, ev)} onCobrar={() => setCobro(c)} />
+                      <AppointmentRow key={c.id} appt={c} showPrice onAccion={(ev) => void accion(c, ev)} onCobrar={() => setCobro(c)} onRevertido={() => { toast("Cobro revertido", "info"); refrescar(); }} />
                     ))}
                   </div>
                 )}

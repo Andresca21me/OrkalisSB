@@ -1,24 +1,29 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CitaAgenda } from '@orkalis/shared';
 import { money } from '../../lib/format';
 import { completarCita, type PagoLinea } from '../../lib/useCitas';
-import { AppHeader, FooterBar, ScrollArea } from '../../ui';
+import { AppHeader, FooterBar, ProductosVenta, ScrollArea, type LineaProducto } from '../../ui';
 import { PagoSplit, pagoInicial, sumaPagos } from '../../ui/PagoSplit';
 import { Button, Card, Icon, useToast } from '../../ui/ui';
 import { SectionLabel, turnoCliente, turnoTotal } from './spec-ui';
 
 export function CobroSpec({ turno, onBack, onDone }: { turno: CitaAgenda; onBack: () => void; onDone: () => void }) {
   const toast = useToast();
-  const total = turnoTotal(turno);
-  const [lineas, setLineas] = useState<PagoLinea[]>(() => pagoInicial(total));
+  const totalServicios = turnoTotal(turno);
+  const [productos, setProductos] = useState<LineaProducto[]>([]);
+  const [subtotalProd, setSubtotalProd] = useState(0);
+  const total = totalServicios + subtotalProd;
+  const [lineas, setLineas] = useState<PagoLinea[]>(() => pagoInicial(totalServicios));
   const [guardando, setGuardando] = useState(false);
   const cuadra = sumaPagos(lineas) === Math.round(total);
+
+  useEffect(() => { setLineas(pagoInicial(total)); }, [total]);
 
   async function confirmar() {
     if (!cuadra) { toast('El pago debe sumar exactamente el total', 'warning'); return; }
     setGuardando(true);
     try {
-      await completarCita(turno.id, { pagos: lineas });
+      await completarCita(turno.id, { pagos: lineas, productos: productos.length ? productos : undefined });
       onDone();
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -44,6 +49,8 @@ export function CobroSpec({ turno, onBack, onDone }: { turno: CitaAgenda; onBack
               </div>
             ))}
           </Card>
+
+          <ProductosVenta sucursalId={turno.sucursalId} lineas={productos} onChange={setProductos} onSubtotalChange={setSubtotalProd} />
 
           <div style={{ marginBottom: 10 }}><span className="eyebrow">Método de pago</span></div>
           <Card padding={14} style={{ marginBottom: 16 }}>

@@ -12,7 +12,7 @@ import {
   type ConfigEfectivo,
   type Procedencia,
 } from '../../lib/useConfig';
-import { Button, Card, ErrorState, Icon, Spinner, Switch, useToast } from '../../ui/ui';
+import { Button, Card, ErrorState, Icon, Segmented, Spinner, Switch, useToast } from '../../ui/ui';
 import { GNumber } from './gestion-ui';
 import { ConfigBanner, ConfigCard, ProvControl, ProvField, SettingRow, type Scope } from './config-ui';
 import { ConfigSucursales, ConfigUsuarios } from './config-org';
@@ -295,6 +295,8 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
   const { data, cargando, error, recargar } = useConfig(sucursalIdParam);
   const [prof, setProf] = useState(50);
   const [pcts, setPcts] = useState<Record<string, number>>({});
+  const [comTipo, setComTipo] = useState<'porcentaje' | 'valor_fijo'>('porcentaje');
+  const [comValor, setComValor] = useState(0);
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
@@ -303,6 +305,8 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
     const p: Record<string, number> = {};
     for (const f of FIN_PCT) p[f.clave] = Number(efectivoDe(data, f.clave)?.valor ?? 0);
     setPcts(p);
+    setComTipo((efectivoDe(data, 'finanzas.comision_producto_tipo')?.valor as 'porcentaje' | 'valor_fijo') ?? 'porcentaje');
+    setComValor(Number(efectivoDe(data, 'finanzas.comision_producto_valor')?.valor ?? 0));
   }, [data]);
 
   const salon = 100 - prof;
@@ -314,6 +318,10 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
     try {
       await setReparticion(nivel, ambitoId, prof, salon);
       for (const f of FIN_PCT) await setConfig(nivel, ambitoId, f.clave, pcts[f.clave] ?? 0);
+      if (inventarioOn) {
+        await setConfig(nivel, ambitoId, 'finanzas.comision_producto_tipo', comTipo);
+        await setConfig(nivel, ambitoId, 'finanzas.comision_producto_valor', comValor);
+      }
       toast('Parámetros financieros guardados', 'success');
       await recargar();
     } catch (e) {
@@ -325,6 +333,10 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
 
   if (error) return <ErrorState onRetry={recargar} />;
   if (cargando || !data) return <div style={{ display: 'grid', placeItems: 'center', padding: 40 }}><Spinner /></div>;
+
+  // La comisión por producto solo tiene sentido con el módulo de inventario
+  // activo; sin él, la tarjeta no se muestra (las claves quedan inertes en BD).
+  const inventarioOn = efectivoDe(data, 'modulo.inventario')?.valor === true;
 
   return (
     <>
@@ -354,6 +366,43 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
           ))}
         </div>
       </ConfigCard>
+
+      {inventarioOn && (
+        <ConfigCard title="Comisión por venta de productos" desc="Lo que gana el especialista cuando vende un producto. En 0, todo el ingreso del producto queda para el negocio." pad={22}>
+          <div className="ork-cols-2" style={{ gap: '8px 28px', alignItems: 'end' }}>
+            <ProvField label="Tipo de comisión">
+              <Segmented
+                options={[{ value: 'porcentaje', label: 'Porcentaje' }, { value: 'valor_fijo', label: 'Monto por unidad' }]}
+                value={comTipo}
+                onChange={(v) => setComTipo(v as 'porcentaje' | 'valor_fijo')}
+              />
+            </ProvField>
+            <ProvField label={comTipo === 'porcentaje' ? '% sobre la venta' : 'COP por unidad vendida'} hint={comTipo === 'porcentaje' ? 'Entre 0 y 100.' : 'Nunca cobra más que el valor de la línea.'}>
+              <GNumber
+                value={comValor}
+                onChange={(v) => setComValor(comTipo === 'porcentaje' ? Math.min(100, Math.max(0, v)) : Math.max(0, v))}
+                suffix={comTipo === 'porcentaje' ? '%' : '$'}
+                min={0}
+                step={comTipo === 'porcentaje' ? 1 : 500}
+              />
+            </ProvField>
+          </div>
+        </ConfigCard>
+      )}
+
+      {inventarioOn && (
+        <ConfigCard title="Regla de stock" desc="Qué pasa cuando se intenta vender sin unidades registradas." pad={22}>
+          <SettingRow first icon="package" title="Permitir stock negativo" desc="Activa: se puede vender aunque no quede stock en el sistema (queda en negativo hasta que lo regularices). Inactiva: la venta se bloquea sin stock.">
+            <Switch
+              checked={efectivoDe(data, 'inventario.permitir_stock_negativo')?.valor === true}
+              onChange={async (v) => {
+                try { await setConfig(nivel, ambitoId, 'inventario.permitir_stock_negativo', v); await recargar(); }
+                catch (e) { toast((e as Error).message, 'error'); }
+              }}
+            />
+          </SettingRow>
+        </ConfigCard>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
         <Button variant="primary" iconLeft="check" loading={guardando} onClick={guardar}>Guardar cambios</Button>

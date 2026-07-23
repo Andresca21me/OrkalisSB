@@ -44,6 +44,10 @@ export const movimientoInventario = pgTable('movimiento_inventario', {
   motivo: text('motivo'),
   // Si la entrada por compra generó un gasto.
   gastoId: uuid('gasto_id').references(() => gasto.id, { onDelete: 'set null' }),
+  /** Lo pagado de verdad en esta compra (solo entradas por compra; NULL en el resto). */
+  costoTotal: numeric('costo_total', { precision: 12, scale: 2 }),
+  /** Stock que quedó tras aplicar el movimiento: hace el kardex legible sin recalcular. */
+  stockResultante: integer('stock_resultante'),
   creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -64,5 +68,7 @@ export const ventaProducto = pgTable('venta_producto', {
   cantidad: integer('cantidad').notNull(),
   total: numeric('total', { precision: 12, scale: 2 }).notNull(),
   comisionProf: numeric('comision_prof', { precision: 12, scale: 2 }).notNull().default('0'),
+  /** Costo unitario congelado al vender (margen exacto e inmune a cambios de costo). */
+  costoUnitario: numeric('costo_unitario', { precision: 12, scale: 2 }).notNull().default('0'),
   creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
 });

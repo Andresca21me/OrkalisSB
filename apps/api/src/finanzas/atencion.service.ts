@@ -7,13 +7,15 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, SplitType } from '@orkalis/shared';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
-import { atencion, atencionPago, atencionProducto, cita, citaServicio, producto, servicio } from '../db/schema';
+import { atencion, atencionPago, atencionProducto, cita, citaServicio, movimientoInventario, producto, servicio } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { ConfigResolverService } from '../config-module/config-resolver.service';
+import { ModuloGate } from '../operacion/modulo-gate.service';
 import { transicionar } from '../agendamiento/cita-state-machine';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 import {
   calcularAtencion,
+  type ComisionProductoTipo,
   type ParametrosFinancieros,
   type ProductoReal,
   type ServicioReal,
@@ -47,6 +49,7 @@ export class AtencionService {
   constructor(
     private readonly config: ConfigResolverService,
     private readonly metrics: MetricsService,
+    private readonly gate: ModuloGate,
   ) {}
 
   /** Completa el turno: calcula, persiste atención + stock, transiciona. */
@@ -64,7 +67,16 @@ export class AtencionService {
       // Valida la transición (lanza claro si el estado no permite completar).
       transicionar(c.estado as EstadoCita, 'completar');
     }
-    const params = await this.resolverParametros(ctx.negocioId, c.sucursalId);
+    const params = await this.resolverParametros(ctx, c.sucursalId);
+    // Con productos pero sin el módulo (por plan o por config apagada) se rechaza
+    // en claro: ignorarlos en silencio dejaría un producto "vendido" sin registrar
+    // ni cobrar (Plan-Inventario, §2.5).
+    if (input.productos?.length && !params.inventarioActivo) {
+      throw new BadRequestException('El módulo de inventario no está activo.');
+    }
+    const permitirStockNegativo = params.inventarioActivo
+      ? await this.config.resolverModulo(ctx.negocioId, c.sucursalId, 'inventario.permitir_stock_negativo')
+      : false;
 
     const at = await runInTenantTx(ctx, async (tx) => {
       // Idempotencia: no duplicar atención.
@@ -81,23 +93,24 @@ export class AtencionService {
         throw new BadRequestException('Debe registrar al menos un servicio realizado.');
       }
 
-      // Productos (solo si inventario activo): descuenta stock.
+      // Productos (solo si inventario activo): descuenta stock. Se guarda el costo
+      // unitario actual como snapshot (margen inmune a cambios de costo, D9).
       const productosReales: ProductoReal[] = [];
-      const lineasProducto: { productoId: string; cantidad: number; valor: number }[] = [];
+      const lineasProducto: { productoId: string; cantidad: number; valor: number; costoUnitario: number }[] = [];
       if (params.inventarioActivo && input.productos?.length) {
         for (const pr of input.productos) {
           const [prod] = await tx
-            .select({ cantidad: producto.cantidad, precioVenta: producto.precioVenta })
+            .select({ cantidad: producto.cantidad, precioVenta: producto.precioVenta, costo: producto.costo })
             .from(producto)
             .where(eq(producto.id, pr.productoId))
             .limit(1);
           if (!prod) throw new NotFoundException('Producto no encontrado.');
-          if (prod.cantidad < pr.cantidad) {
+          if (prod.cantidad < pr.cantidad && !permitirStockNegativo) {
             throw new BadRequestException('Stock insuficiente para el producto.');
           }
           const valor = Number(prod.precioVenta);
           productosReales.push({ cantidad: pr.cantidad, valor });
-          lineasProducto.push({ productoId: pr.productoId, cantidad: pr.cantidad, valor });
+          lineasProducto.push({ productoId: pr.productoId, cantidad: pr.cantidad, valor, costoUnitario: Number(prod.costo) });
         }
       }
 
@@ -133,6 +146,7 @@ export class AtencionService {
           total: r.total.toFixed(2),
           ganProf: r.ganProf.toFixed(2),
           ganSalon: r.ganSalon.toFixed(2),
+          comisionProductos: r.comisionProductos.toFixed(2),
           metodoPago: metodoDominante(input.pagos), // legacy: método dominante
           snapshotParam: r.snapshot,
         })
@@ -143,15 +157,32 @@ export class AtencionService {
         input.pagos.map((p) => ({ atencionId: at.id, metodo: p.metodo, monto: p.monto.toFixed(2) })),
       );
 
-      // Productos: registrar y descontar stock.
-      for (const lp of lineasProducto) {
-        await tx
-          .insert(atencionProducto)
-          .values({ atencionId: at.id, productoId: lp.productoId, cantidad: lp.cantidad, valor: lp.valor.toFixed(2) });
-        await tx
+      // Productos: registrar (con costo y comisión snapshot), descontar stock y
+      // dejar el movimiento de salida en el kardex (D5).
+      for (let i = 0; i < lineasProducto.length; i++) {
+        const lp = lineasProducto[i];
+        await tx.insert(atencionProducto).values({
+          atencionId: at.id,
+          productoId: lp.productoId,
+          cantidad: lp.cantidad,
+          valor: lp.valor.toFixed(2),
+          costoUnitario: lp.costoUnitario.toFixed(2),
+          comision: (r.comisionesPorLinea[i] ?? 0).toFixed(2),
+        });
+        const [prodAct] = await tx
           .update(producto)
           .set({ cantidad: sqlDecrement(lp.cantidad), actualizadoEn: new Date() })
-          .where(eq(producto.id, lp.productoId));
+          .where(eq(producto.id, lp.productoId))
+          .returning({ cantidad: producto.cantidad });
+        await tx.insert(movimientoInventario).values({
+          negocioId: ctx.negocioId,
+          sucursalId: c.sucursalId,
+          productoId: lp.productoId,
+          tipoMov: 'salida',
+          cantidad: lp.cantidad,
+          motivo: 'Venta en cita',
+          stockResultante: prodAct?.cantidad ?? null,
+        });
       }
 
       await tx
@@ -165,8 +196,16 @@ export class AtencionService {
     return at;
   }
 
-  /** Revierte una atención completada: repone stock, deshace y reabre el turno. */
-  async revertir(ctx: TenantContext, citaId: string): Promise<void> {
+  /**
+   * Revierte una atención completada: deshace el cierre y reabre el turno,
+   * reponiendo el stock salvo que se indique lo contrario (D8). NO se gatea por
+   * módulo: debe funcionar aunque el inventario se haya apagado tras el cobro.
+   *
+   * `reponerStock=false` es para productos ya usados/dañados que no vuelven al
+   * inventario; la salida original queda como registro fiel (no se borra su
+   * movimiento de kardex).
+   */
+  async revertir(ctx: TenantContext, citaId: string, reponerStock = true): Promise<void> {
     const c = await this.cargarCita(ctx, citaId);
     const nuevoEstado = transicionar(c.estado as EstadoCita, 'revertir'); // valida completada→en_progreso
 
@@ -174,16 +213,27 @@ export class AtencionService {
       const [at] = await tx.select({ id: atencion.id }).from(atencion).where(eq(atencion.citaId, citaId)).limit(1);
       if (!at) throw new ConflictException('No hay atención que revertir.');
 
-      // Repone stock de cada producto de la atención.
       const lineas = await tx
         .select({ productoId: atencionProducto.productoId, cantidad: atencionProducto.cantidad })
         .from(atencionProducto)
         .where(eq(atencionProducto.atencionId, at.id));
-      for (const l of lineas) {
-        await tx
-          .update(producto)
-          .set({ cantidad: sqlIncrement(l.cantidad), actualizadoEn: new Date() })
-          .where(eq(producto.id, l.productoId));
+      if (reponerStock) {
+        for (const l of lineas) {
+          const [prodAct] = await tx
+            .update(producto)
+            .set({ cantidad: sqlIncrement(l.cantidad), actualizadoEn: new Date() })
+            .where(eq(producto.id, l.productoId))
+            .returning({ cantidad: producto.cantidad });
+          await tx.insert(movimientoInventario).values({
+            negocioId: ctx.negocioId,
+            sucursalId: c.sucursalId,
+            productoId: l.productoId,
+            tipoMov: 'entrada',
+            cantidad: l.cantidad,
+            motivo: 'Reversión de cobro',
+            stockResultante: prodAct?.cantidad ?? null,
+          });
+        }
       }
 
       await tx.delete(atencionProducto).where(eq(atencionProducto.atencionId, at.id));
@@ -193,7 +243,8 @@ export class AtencionService {
     this.metrics.inc(METRICAS.turnosRevertidos);
   }
 
-  private async resolverParametros(negocioId: string, sucursalId: string): Promise<ParametrosFinancieros> {
+  private async resolverParametros(ctx: TenantContext, sucursalId: string): Promise<ParametrosFinancieros> {
+    const negocioId = ctx.negocioId;
     const [
       reparticionProfesional,
       reparticionSalon,
@@ -201,7 +252,12 @@ export class AtencionService {
       comisionBancaria,
       tarifaClienteProfesional,
       particionPorEspecialista,
+      // `inventarioActivo` es plan ∧ config: si el negocio ya no tiene el módulo
+      // por su plan, aunque el toggle siga encendido, NO se venden productos
+      // (Plan-Inventario §1.3/D11). Antes esto miraba solo la config.
       inventarioActivo,
+      comisionProductoTipoRaw,
+      comisionProductoValor,
     ] = await Promise.all([
       this.config.resolverNumero(negocioId, sucursalId, 'finanzas.reparticion_profesional'),
       this.config.resolverNumero(negocioId, sucursalId, 'finanzas.reparticion_salon'),
@@ -209,7 +265,9 @@ export class AtencionService {
       this.config.resolverNumero(negocioId, sucursalId, 'finanzas.comision_bancaria'),
       this.config.resolverNumero(negocioId, sucursalId, 'finanzas.tarifa_cliente_profesional'),
       this.config.resolverModulo(negocioId, sucursalId, 'modulo.particion_por_especialista'),
-      this.config.resolverModulo(negocioId, sucursalId, 'modulo.inventario'),
+      this.gate.estaActivo(ctx, 'modulo.inventario', sucursalId),
+      this.config.resolver(negocioId, sucursalId, 'finanzas.comision_producto_tipo'),
+      this.config.resolverNumero(negocioId, sucursalId, 'finanzas.comision_producto_valor'),
     ]);
     return {
       reparticionProfesional,
@@ -219,6 +277,8 @@ export class AtencionService {
       tarifaClienteProfesional,
       particionPorEspecialista,
       inventarioActivo,
+      comisionProductoTipo: (comisionProductoTipoRaw.valor as ComisionProductoTipo) ?? 'porcentaje',
+      comisionProductoValor,
     };
   }
 

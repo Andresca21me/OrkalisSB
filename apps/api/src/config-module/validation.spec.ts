@@ -40,4 +40,18 @@ describe('validacionesCruzadas', () => {
     expect(validacionesCruzadas(mapa(60, 50))).not.toBeNull();
     expect(validacionesCruzadas(mapa(40, 40))).not.toBeNull();
   });
+
+  it('rechaza comisión de producto en porcentaje > 100; acepta valor fijo grande', () => {
+    const conComision = (tipo: string, valor: number): Map<string, ValorConfig> =>
+      new Map<string, ValorConfig>([
+        ['finanzas.reparticion_profesional', 50],
+        ['finanzas.reparticion_salon', 50],
+        ['finanzas.comision_producto_tipo', tipo],
+        ['finanzas.comision_producto_valor', valor],
+      ]);
+    expect(validacionesCruzadas(conComision('porcentaje', 50))).toBeNull();
+    expect(validacionesCruzadas(conComision('porcentaje', 150))).not.toBeNull();
+    // Como monto fijo por unidad NO hay tope en la validación (el tope real es por línea).
+    expect(validacionesCruzadas(conComision('valor_fijo', 500000))).toBeNull();
+  });
 });

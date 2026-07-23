@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, NivelConfig, OrigenCita, PerfilNegocio, PlanSuscripcion, TipoGasto, TipoProducto } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { atencion, cita, especialista, especialistaSucursal, gasto, negocio, sucursal, suscripcion } from '../db/schema';
+import { atencion, atencionProducto, cita, especialista, especialistaSucursal, gasto, negocio, producto, sucursal, suscripcion } from '../db/schema';
 import { PlanService } from '../plans/plan.service';
 import type { TenantContext } from '../db/tenant-context';
 import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
@@ -51,7 +51,7 @@ describe('Operación interna (FASE-10)', () => {
     events.on(CONFIG_UPDATED, (p: ConfigUpdatedEvent) => resolver.invalidar(p.negocioId));
     writer = new ConfigWriteService(resolver, events);
     const gate = new ModuloGate(resolver, new PlanService());
-    inventario = new InventarioService(gate);
+    inventario = new InventarioService(gate, resolver);
     gastos = new GastosService();
     liquidaciones = new LiquidacionesService(gate);
     reportes = new ReportesService();
@@ -97,7 +97,111 @@ describe('Operación interna (FASE-10)', () => {
   it('con inventario OFF el módulo no está disponible (gating)', async () => {
     await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'modulo.inventario', false);
     await expect(inventario.listar(ctx, sucursalId)).rejects.toThrow();
+    await expect(inventario.listarMovimientos(ctx, {})).rejects.toThrow();
+    await expect(inventario.listarVentas(ctx, {})).rejects.toThrow();
     await writer.remove(ctx, NivelConfig.Negocio, negocioId, 'modulo.inventario');
+  });
+
+  it('recarga de stock actualiza el costo al promedio ponderado', async () => {
+    const p = await inventario.crear(ctx, {
+      sucursalId,
+      nombre: 'Tinte',
+      tipo: TipoProducto.Venta,
+      cantidad: 10,
+      costo: 1000, // 10 uds a 1000
+      precioVenta: 5000,
+      generaGasto: false,
+    });
+    // Compra 10 uds más por 20000 → 20000/10 = 2000 c/u. Promedio: (10×1000 + 20000)/20 = 1500.
+    await inventario.movimiento(ctx, { productoId: p.id, tipoMov: 'entrada', cantidad: 10, costoTotal: 20000 });
+    const [prod] = await adminDb.select({ costo: producto.costo }).from(producto).where(eq(producto.id, p.id));
+    expect(Number(prod.costo)).toBe(1500);
+  });
+
+  it('entrada sin costo NO recalcula el costo del producto', async () => {
+    const p = await inventario.crear(ctx, {
+      sucursalId, nombre: 'Gel', tipo: TipoProducto.Venta, cantidad: 5, costo: 800, precioVenta: 3000, generaGasto: false,
+    });
+    await inventario.movimiento(ctx, { productoId: p.id, tipoMov: 'entrada', cantidad: 5 });
+    const [prod] = await adminDb.select({ costo: producto.costo }).from(producto).where(eq(producto.id, p.id));
+    expect(Number(prod.costo)).toBe(800);
+  });
+
+  it('crear producto con stock inicial genera gasto y movimiento', async () => {
+    const p = await inventario.crear(ctx, {
+      sucursalId, nombre: 'Mascarilla', tipo: TipoProducto.Venta, cantidad: 8, costo: 2500, precioVenta: 6000,
+    });
+    const lista = await gastos.listar(ctx, sucursalId);
+    expect(lista.some((g) => g.categoria === 'Compra de inventario' && Number(g.monto) === 20000)).toBe(true);
+    const { items } = await inventario.listarMovimientos(ctx, { productoId: p.id });
+    const inicial = items.find((m) => m.motivo === 'Stock inicial');
+    expect(inicial).toBeTruthy();
+    expect(inicial!.stockResultante).toBe(8);
+    expect(Number(inicial!.costoTotal)).toBe(20000);
+  });
+
+  it('venta directa toma la comisión de la configuración (no del request)', async () => {
+    await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'finanzas.comision_producto_valor', 20);
+    const p = await inventario.crear(ctx, {
+      sucursalId, nombre: 'Serum', tipo: TipoProducto.Venta, cantidad: 10, costo: 4000, precioVenta: 10000, generaGasto: false,
+    });
+    const { total, comision } = await inventario.vender(ctx, { productoId: p.id, cantidad: 2, especialistaId: espId });
+    expect(total).toBe(20000);
+    expect(comision).toBe(4000); // 20% de 20000
+    await writer.remove(ctx, NivelConfig.Negocio, negocioId, 'finanzas.comision_producto_valor');
+  });
+
+  it('sin especialista no hay comisión en la venta directa', async () => {
+    await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'finanzas.comision_producto_valor', 20);
+    const p = await inventario.crear(ctx, {
+      sucursalId, nombre: 'Aceite', tipo: TipoProducto.Venta, cantidad: 10, costo: 4000, precioVenta: 10000, generaGasto: false,
+    });
+    const { comision } = await inventario.vender(ctx, { productoId: p.id, cantidad: 1 });
+    expect(comision).toBe(0);
+    await writer.remove(ctx, NivelConfig.Negocio, negocioId, 'finanzas.comision_producto_valor');
+  });
+
+  it('stock insuficiente: bloquea con flag OFF, permite negativo con flag ON', async () => {
+    const p = await inventario.crear(ctx, {
+      sucursalId, nombre: 'Locion', tipo: TipoProducto.Venta, cantidad: 1, costo: 1000, precioVenta: 3000, generaGasto: false,
+    });
+    await expect(inventario.vender(ctx, { productoId: p.id, cantidad: 5 })).rejects.toThrow(/insuficiente/i);
+
+    await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'inventario.permitir_stock_negativo', true);
+    const { total } = await inventario.vender(ctx, { productoId: p.id, cantidad: 5 });
+    expect(total).toBe(15000);
+    const [prod] = await adminDb.select({ cantidad: producto.cantidad }).from(producto).where(eq(producto.id, p.id));
+    expect(prod.cantidad).toBe(-4); // 1 − 5
+    await writer.remove(ctx, NivelConfig.Negocio, negocioId, 'inventario.permitir_stock_negativo');
+  });
+
+  it('historial de ventas une venta directa y venta en cita sin duplicar', async () => {
+    const p = await inventario.crear(ctx, {
+      sucursalId, nombre: 'Balsamo', tipo: TipoProducto.Venta, cantidad: 20, costo: 1000, precioVenta: 5000, generaGasto: false,
+    });
+    // Venta directa.
+    await inventario.vender(ctx, { productoId: p.id, cantidad: 1, especialistaId: espId });
+    // Venta en cita: se siembra una atención con su línea de producto.
+    const [c] = await adminDb.insert(cita).values({
+      negocioId, sucursalId, especialistaId: espId,
+      inicio: new Date('2031-01-10T14:00:00Z'), fin: new Date('2031-01-10T14:30:00Z'),
+      estado: EstadoCita.Completada, origen: OrigenCita.CreacionInterna,
+    }).returning();
+    const [at] = await adminDb.insert(atencion).values({
+      negocioId, sucursalId, citaId: c.id, especialistaId: espId,
+      total: '5000.00', ganProf: '0.00', ganSalon: '5000.00', metodoPago: MetodoPago.Efectivo,
+      snapshotParam: {}, creadoEn: new Date('2031-01-10T15:00:00Z'),
+    }).returning();
+    await adminDb.insert(atencionProducto).values({
+      atencionId: at.id, productoId: p.id, cantidad: 1, valor: '5000.00', costoUnitario: '1000.00', comision: '0.00',
+    });
+
+    const hist = await inventario.listarVentas(ctx, { productoId: p.id });
+    expect(hist.items).toHaveLength(2);
+    expect(hist.items.some((i) => i.origen === 'directa')).toBe(true);
+    expect(hist.items.some((i) => i.origen === 'cita')).toBe(true);
+    expect(hist.totales.unidades).toBe(2);
+    expect(hist.totales.total).toBe(10000);
   });
 
   it('eliminar un gasto = inactivar (no borra el histórico)', async () => {

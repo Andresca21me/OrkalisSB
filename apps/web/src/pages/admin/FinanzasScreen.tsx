@@ -1,17 +1,18 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { TipoProducto } from '@orkalis/shared';
 import { useSucursal } from '../../lib/sucursal';
-import { moduloActivo, useConfig } from '../../lib/useConfig';
+import { efectivoDe, moduloActivo, useConfig } from '../../lib/useConfig';
 import { useInventario } from '../../lib/useInventario';
 import { useEquipo } from '../../lib/useEquipo';
 import { Button, Icon, Spinner } from '../../ui/ui';
 import { QuincenalScreen } from './QuincenalScreen';
-import { VentaModal } from './finanzas-modals';
+import { VentaModal, type ComisionProductoConfig } from './finanzas-modals';
 
 // Las pantallas con gráficos (recharts, ~380 kB) se cargan bajo demanda al abrir
 // su pestaña — no al entrar al panel admin (FASE-14, lazy de gráficos).
 const AnalisisScreen = lazy(() => import('./AnalisisScreen').then((m) => ({ default: m.AnalisisScreen })));
 const ReportesFinScreen = lazy(() => import('./ReportesFinScreen').then((m) => ({ default: m.ReportesFinScreen })));
+const VentasInventarioScreen = lazy(() => import('./VentasInventarioScreen').then((m) => ({ default: m.VentasInventarioScreen })));
 
 function ChartFallback() {
   return <div style={{ display: 'grid', placeItems: 'center', padding: 60 }}><Spinner size={24} /></div>;
@@ -35,14 +36,19 @@ export function FinanzasScreen() {
       { id: 'analisis', label: 'Análisis', icon: 'bar-chart-2' },
       ...(cierreOn ? [{ id: 'quincenal', label: 'Control quincenal', icon: 'calendar' }] : []),
       { id: 'reportes', label: 'Reportes', icon: 'pie-chart' },
+      ...(inventarioOn ? [{ id: 'inventario', label: 'Inventario y ventas', icon: 'package' }] : []),
     ],
-    [cierreOn],
+    [cierreOn, inventarioOn],
   );
 
   const [tab, setTab] = useState('analisis');
   useEffect(() => { if (!tabs.some((t) => t.id === tab)) setTab('analisis'); }, [tabs, tab]);
 
   const ventaProductos = (productos.data ?? []).filter((p) => p.tipo === TipoProducto.Venta);
+  const comisionCfg: ComisionProductoConfig = {
+    tipo: (efectivoDe(config.data ?? [], 'finanzas.comision_producto_tipo')?.valor as 'porcentaje' | 'valor_fijo') ?? 'porcentaje',
+    valor: Number(efectivoDe(config.data ?? [], 'finanzas.comision_producto_valor')?.valor ?? 0),
+  };
 
   return (
     <div>
@@ -64,9 +70,10 @@ export function FinanzasScreen() {
         {tab === 'analisis' && <AnalisisScreen inventarioOn={inventarioOn} />}
         {tab === 'quincenal' && cierreOn && <QuincenalScreen />}
         {tab === 'reportes' && <ReportesFinScreen particion={particion} />}
+        {tab === 'inventario' && inventarioOn && <VentasInventarioScreen />}
       </Suspense>
 
-      {ventaOpen && <VentaModal productos={ventaProductos} especialistas={equipo.data ?? []} onClose={() => setVentaOpen(false)} onSaved={async () => { setVentaOpen(false); await productos.recargar(); }} />}
+      {ventaOpen && <VentaModal productos={ventaProductos} especialistas={equipo.data ?? []} comisionCfg={comisionCfg} onClose={() => setVentaOpen(false)} onSaved={async () => { setVentaOpen(false); await productos.recargar(); }} />}
     </div>
   );
 }

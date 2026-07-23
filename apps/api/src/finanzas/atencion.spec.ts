@@ -6,10 +6,13 @@ import { eq } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, NivelConfig, OrigenCita, PerfilNegocio } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { atencion, atencionPago, cita, citaServicio, especialista, especialistaSucursal, negocio, producto, servicio, sucursal } from '../db/schema';
+import { PlanSuscripcion } from '@orkalis/shared';
+import { atencion, atencionPago, atencionProducto, cita, citaServicio, especialista, especialistaSucursal, movimientoInventario, negocio, producto, servicio, sucursal, suscripcion } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
 import { ConfigWriteService } from '../config-module/config-write.service';
+import { ModuloGate } from '../operacion/modulo-gate.service';
+import { PlanService } from '../plans/plan.service';
 import { AtencionService } from './atencion.service';
 import { MetricsService } from '../observability/metrics.service';
 
@@ -55,6 +58,10 @@ describe('AtencionService (completar / revertir transaccional)', () => {
     // SALON → inventario ON por defecto.
     const [neg] = await adminDb.insert(negocio).values({ nombre: NOMBRE, perfil: PerfilNegocio.Salon }).returning();
     negocioId = neg.id;
+    // Plan Pro: el módulo de inventario ahora es plan ∧ config (Plan-Inventario D11);
+    // sin suscripción, el plan default (Básico) no incluye inventario y la venta de
+    // producto en la cita se rechazaría.
+    await adminDb.insert(suscripcion).values({ negocioId, plan: PlanSuscripcion.Pro, numEspecialistas: 2 });
     const [suc] = await adminDb.insert(sucursal).values({ negocioId, nombre: 'Sede' }).returning();
     sucursalId = suc.id;
     const [esp] = await adminDb.insert(especialista).values({ negocioId, nombre: 'Esp' }).returning();
@@ -76,7 +83,8 @@ describe('AtencionService (completar / revertir transaccional)', () => {
     resolver = new ConfigResolverService();
     events.on(CONFIG_UPDATED, (p: ConfigUpdatedEvent) => resolver.invalidar(p.negocioId));
     writer = new ConfigWriteService(resolver, events);
-    service = new AtencionService(resolver, new MetricsService());
+    const gate = new ModuloGate(resolver, new PlanService());
+    service = new AtencionService(resolver, new MetricsService(), gate);
   });
 
   afterAll(async () => {
@@ -169,5 +177,65 @@ describe('AtencionService (completar / revertir transaccional)', () => {
     expect(Number(at.ganProf)).toBe(0);
     expect(Number(at.ganSalon)).toBe(50000);
     await writer.remove(ctx, NivelConfig.Negocio, negocioId, 'modulo.particion_por_especialista');
+  });
+
+  // ── Comisión por producto, kardex y reversión selectiva (Plan-Inventario) ────
+
+  it('la comisión de producto configurada entra en gan_prof y se registra por línea', async () => {
+    // Repartición fijada a 50/50 (un test previo la dejó en 70/30 de forma persistente).
+    await writer.setReparticion(ctx, NivelConfig.Negocio, negocioId, 50, 50);
+    await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'finanzas.comision_producto_valor', 10);
+    const citaId = await citaEnProgreso(9); // 2 servicios = 50000
+    const at = await service.completar(ctx, citaId, {
+      pagos: efectivo(70000), // 50000 servicios + 20000 producto
+      productos: [{ productoId: prodId, cantidad: 2 }], // 2 × 10000 = 20000; comisión 10% = 2000
+    });
+    expect(Number(at.comisionProductos)).toBe(2000);
+    expect(Number(at.ganProf)).toBe(27000); // 25000 servicio + 2000 comisión
+    expect(Number(at.ganSalon)).toBe(43000); // 25000 + 20000 − 2000
+
+    const lineas = await adminDb.select().from(atencionProducto).where(eq(atencionProducto.atencionId, at.id));
+    expect(lineas).toHaveLength(1);
+    expect(Number(lineas[0].comision)).toBe(2000);
+    expect(Number(lineas[0].costoUnitario)).toBe(0); // el producto se sembró sin costo
+    await writer.remove(ctx, NivelConfig.Negocio, negocioId, 'finanzas.comision_producto_valor');
+  });
+
+  it('completar deja un movimiento de salida en el kardex con el stock resultante', async () => {
+    const citaId = await citaEnProgreso(10);
+    const at = await service.completar(ctx, citaId, {
+      pagos: efectivo(60000), // 50000 servicios + 10000 producto
+      productos: [{ productoId: prodId, cantidad: 1 }],
+    });
+    const [p] = await adminDb.select({ cantidad: producto.cantidad }).from(producto).where(eq(producto.id, prodId));
+    const movs = await adminDb
+      .select()
+      .from(movimientoInventario)
+      .where(eq(movimientoInventario.productoId, prodId));
+    const salida = movs.find((m) => m.motivo === 'Venta en cita' && m.stockResultante === p.cantidad);
+    expect(salida).toBeTruthy();
+    await service.revertir(ctx, at.citaId); // limpia para no arrastrar stock
+  });
+
+  it('revertir con reponerStock=false NO repone el stock (producto ya usado)', async () => {
+    const citaId = await citaEnProgreso(11);
+    await service.completar(ctx, citaId, { pagos: efectivo(70000), productos: [{ productoId: prodId, cantidad: 2 }] });
+    const [antes] = await adminDb.select({ cantidad: producto.cantidad }).from(producto).where(eq(producto.id, prodId));
+
+    await service.revertir(ctx, citaId, false);
+    const [despues] = await adminDb.select({ cantidad: producto.cantidad }).from(producto).where(eq(producto.id, prodId));
+    expect(despues.cantidad).toBe(antes.cantidad); // NO se repuso
+  });
+
+  it('completar con productos pero módulo apagado (config) es rechazado en claro', async () => {
+    await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'modulo.inventario', false);
+    const citaId = await citaEnProgreso(12);
+    await expect(
+      service.completar(ctx, citaId, { pagos: efectivo(70000), productos: [{ productoId: prodId, cantidad: 1 }] }),
+    ).rejects.toThrow(/inventario no está activo/i);
+    // Sin productos, el mismo cobro de servicios funciona con el módulo apagado.
+    const at = await service.completar(ctx, citaId, { pagos: efectivo(50000) });
+    expect(Number(at.total)).toBe(50000);
+    await writer.remove(ctx, NivelConfig.Negocio, negocioId, 'modulo.inventario');
   });
 });

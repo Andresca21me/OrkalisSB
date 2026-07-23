@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CitaAgenda } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
-import { completarCita, crearCita, type EventoCita, type PagoLinea } from '../../lib/useCitas';
+import { completarCita, crearCita, revertirCita, type EventoCita, type PagoLinea } from '../../lib/useCitas';
 import { hoyISO, money } from '../../lib/format';
 import { PagoSplit, pagoInicial, sumaPagos } from '../../ui/PagoSplit';
-import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, Select, StatTile } from '../../ui';
+import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, ProductosVenta, Select, StatTile, type LineaProducto } from '../../ui';
 
 const PALETA = ['#1A73E8', '#00A88A', '#7C3AED', '#F59E0B', '#EF4444', '#0EA5E9', '#475569', '#DB2777'];
 export function colorDe(id: string): string {
@@ -34,41 +34,84 @@ const TRANSICIONES: { estado: string; label: string; evento?: EventoCita; cobro?
   { estado: 'no_asistio', label: 'No asistió', evento: 'no-asistio' },
 ];
 
-export function ApptActionsMenu({ appt, onAccion, onCobrar, onReasignar }: { appt: CitaAgenda; onAccion: (ev: EventoCita) => void; onCobrar: () => void; onReasignar?: () => void }) {
+export function ApptActionsMenu({ appt, onAccion, onCobrar, onReasignar, onRevertido }: { appt: CitaAgenda; onAccion: (ev: EventoCita) => void; onCobrar: () => void; onReasignar?: () => void; onRevertido?: () => void }) {
   const [open, setOpen] = useState(false);
+  const [confirmRev, setConfirmRev] = useState(false);
+  const [reponer, setReponer] = useState(true);
+  const [revirtiendo, setRevirtiendo] = useState(false);
+  const [errRev, setErrRev] = useState<string | null>(null);
   const reasignable = appt.estado === 'solicitada' || appt.estado === 'confirmada' || appt.estado === 'en_progreso';
+  // Desde 'completada' la máquina de estados solo admite revertir: se ofrece esa
+  // acción dedicada en lugar de las transiciones de estado (que fallarían).
+  const completada = appt.estado === 'completada';
+
+  async function revertir() {
+    setRevirtiendo(true);
+    setErrRev(null);
+    try {
+      await revertirCita(appt.id, reponer);
+      setConfirmRev(false);
+      onRevertido?.();
+    } catch (e) {
+      setErrRev((e as Error).message);
+    } finally {
+      setRevirtiendo(false);
+    }
+  }
+
   return (
     <div style={{ position: 'relative' }}>
       <IconButton name="more-vertical" title="Acciones" onClick={() => setOpen((o) => !o)} />
       <Popover open={open} onClose={() => setOpen(false)} align="right" width={220}>
-        <div className="eyebrow" style={{ padding: '6px 10px 4px' }}>Cambiar estado</div>
-        {TRANSICIONES.filter((t) => t.estado !== appt.estado).map((t) => (
-          <MenuItem
-            key={t.estado}
-            onClick={() => {
-              setOpen(false);
-              if (t.cobro) onCobrar();
-              else if (t.evento) onAccion(t.evento);
-            }}
-          >
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <EstadoBadge estado={t.estado} />
-            </span>
-          </MenuItem>
-        ))}
-        {onReasignar && reasignable && (
+        {completada ? (
+          <MenuItem icon="rotate-ccw" onClick={() => { setOpen(false); setConfirmRev(true); }}>Revertir cobro</MenuItem>
+        ) : (
           <>
-            <div style={{ height: 1, background: 'var(--border-subtle)', margin: '6px 4px' }} />
-            <MenuItem icon="repeat" onClick={() => { setOpen(false); onReasignar(); }}>Reasignar especialista</MenuItem>
+            <div className="eyebrow" style={{ padding: '6px 10px 4px' }}>Cambiar estado</div>
+            {TRANSICIONES.filter((t) => t.estado !== appt.estado && t.estado !== 'completada').map((t) => (
+              <MenuItem
+                key={t.estado}
+                onClick={() => {
+                  setOpen(false);
+                  if (t.cobro) onCobrar();
+                  else if (t.evento) onAccion(t.evento);
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <EstadoBadge estado={t.estado} />
+                </span>
+              </MenuItem>
+            ))}
+            {appt.estado === 'en_progreso' && (
+              <MenuItem icon="check" onClick={() => { setOpen(false); onCobrar(); }}>Completar y cobrar</MenuItem>
+            )}
+            {onReasignar && reasignable && (
+              <>
+                <div style={{ height: 1, background: 'var(--border-subtle)', margin: '6px 4px' }} />
+                <MenuItem icon="repeat" onClick={() => { setOpen(false); onReasignar(); }}>Reasignar especialista</MenuItem>
+              </>
+            )}
           </>
         )}
       </Popover>
+
+      {confirmRev && (
+        <Dialog open onClose={() => setConfirmRev(false)} width={440} title="Revertir cobro" subtitle={`${appt.clienteNombre ?? 'Cliente'} · ${horaCorta(appt.inicio)}`}
+          footer={<><Button variant="secondary" onClick={() => setConfirmRev(false)}>Cancelar</Button><Button variant="danger" loading={revirtiendo} onClick={() => void revertir()}>Sí, revertir</Button></>}>
+          <p style={{ margin: '0 0 4px', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '20px' }}>Esto deshace las ganancias calculadas. El turno volverá a quedar pendiente de cobro.</p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={reponer} onChange={(e) => setReponer(e.target.checked)} style={{ width: 18, height: 18 }} />
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>Reingresar al inventario los productos vendidos, si los hubo.</span>
+          </label>
+          {errRev && <p style={{ color: 'var(--error)', fontSize: 'var(--text-sm)', marginTop: 10 }}>{errRev}</p>}
+        </Dialog>
+      )}
     </div>
   );
 }
 
 // ── Fila de cita ─────────────────────────────────────────────────────────────
-export function AppointmentRow({ appt, showPrice, onAccion, onCobrar, onReasignar }: { appt: CitaAgenda; showPrice?: boolean; onAccion: (ev: EventoCita) => void; onCobrar: () => void; onReasignar?: () => void }) {
+export function AppointmentRow({ appt, showPrice, onAccion, onCobrar, onReasignar, onRevertido }: { appt: CitaAgenda; showPrice?: boolean; onAccion: (ev: EventoCita) => void; onCobrar: () => void; onReasignar?: () => void; onRevertido?: () => void }) {
   const dim = appt.estado === 'cancelada' || appt.estado === 'no_asistio';
   const color = colorDe(appt.especialistaId);
   return (
@@ -97,7 +140,7 @@ export function AppointmentRow({ appt, showPrice, onAccion, onCobrar, onReasigna
           {showPrice && <span className="data" style={{ flex: 'none', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{money(totalCita(appt))}</span>}
           <div className="ork-appt-estado" style={{ flex: 'none', width: 116, display: 'flex', justifyContent: 'flex-end' }}><EstadoBadge estado={appt.estado} /></div>
           <div style={{ flex: 'none' }}>
-            <ApptActionsMenu appt={appt} onAccion={onAccion} onCobrar={onCobrar} onReasignar={onReasignar} />
+            <ApptActionsMenu appt={appt} onAccion={onAccion} onCobrar={onCobrar} onReasignar={onReasignar} onRevertido={onRevertido} />
           </div>
         </div>
       </div>
@@ -168,18 +211,24 @@ export function MiniCalendar({ selectedIso, onPick }: { selectedIso: string; onP
 
 // ── Modal de cobro (completar) ───────────────────────────────────────────────
 export function CobroModal({ cita, onClose, onDone }: { cita: CitaAgenda; onClose: () => void; onDone: () => void }) {
-  const total = totalCita(cita);
-  const [lineas, setLineas] = useState<PagoLinea[]>(() => pagoInicial(total));
+  const totalServicios = totalCita(cita);
+  const [productos, setProductos] = useState<LineaProducto[]>([]);
+  const [subtotalProd, setSubtotalProd] = useState(0);
+  const total = totalServicios + subtotalProd;
+  const [lineas, setLineas] = useState<PagoLinea[]>(() => pagoInicial(totalServicios));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cuadra = sumaPagos(lineas) === Math.round(total);
+
+  // Al cambiar el total (por productos) se reinicia el reparto para que sume el nuevo total.
+  useEffect(() => { setLineas(pagoInicial(total)); }, [total]);
 
   async function completar() {
     if (!cuadra) { setError(`Los métodos deben sumar ${money(total)}.`); return; }
     setGuardando(true);
     setError(null);
     try {
-      await completarCita(cita.id, { pagos: lineas });
+      await completarCita(cita.id, { pagos: lineas, productos: productos.length ? productos : undefined });
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -197,11 +246,18 @@ export function CobroModal({ cita, onClose, onDone }: { cita: CitaAgenda; onClos
             <span className="data" style={{ fontWeight: 600 }}>{money(s.precio)}</span>
           </div>
         ))}
+        {subtotalProd > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Productos</span>
+            <span className="data" style={{ fontWeight: 600 }}>{money(subtotalProd)}</span>
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: 8, marginTop: 4 }}>
           <span style={{ fontWeight: 600 }}>Total</span>
           <span className="data" style={{ fontWeight: 800, fontFamily: 'var(--font-display)' }}>{money(total)}</span>
         </div>
       </div>
+      <ProductosVenta sucursalId={cita.sucursalId} lineas={productos} onChange={setProductos} onSubtotalChange={setSubtotalProd} />
       <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600, display: 'block', marginBottom: 8 }}>Método de pago <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>· puedes dividirlo</span></label>
       <PagoSplit total={total} lineas={lineas} onChange={setLineas} />
       {error && <p style={{ color: 'var(--error)', fontSize: 'var(--text-sm)', marginTop: 12 }}>{error}</p>}

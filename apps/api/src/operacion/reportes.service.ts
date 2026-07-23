@@ -6,6 +6,7 @@ import { runInTenantTx } from '../db/tx';
 import {
   atencion,
   atencionPago,
+  atencionProducto,
   cita,
   citaServicio,
   cliente,
@@ -145,6 +146,18 @@ export class ReportesService {
         .from(ventaProducto)
         .where(and(gte(ventaProducto.creadoEn, desde), lte(ventaProducto.creadoEn, hasta), sucursalId ? eq(ventaProducto.sucursalId, sucursalId) : undefined));
 
+      // Productos vendidos DENTRO de citas (para el KPI informativo de ventas de
+      // producto). Su ingreso ya está en `atencion.total`, así que NO se suma a
+      // `ingresosTotales`: solo alimenta `ventasProducto` para que el KPI refleje
+      // también lo vendido en el cobro de la cita.
+      const [ventasCita] = await tx
+        .select({
+          valor: sql<number>`coalesce(sum(${atencionProducto.valor} * ${atencionProducto.cantidad}), 0)`.mapWith(Number),
+        })
+        .from(atencionProducto)
+        .innerJoin(atencion, eq(atencion.id, atencionProducto.atencionId))
+        .where(and(gte(atencion.creadoEn, desde), lte(atencion.creadoEn, hasta), sucursalId ? eq(atencion.sucursalId, sucursalId) : undefined));
+
       const gastos = await tx
         .select({ tipo: gasto.tipo, monto: gasto.monto })
         .from(gasto)
@@ -233,7 +246,7 @@ export class ReportesService {
         ingresosTotales,
         ingresosSalon,
         ganProfesionales,
-        ventasProducto: round2(ventasTotal),
+        ventasProducto: round2(ventasTotal + (ventasCita?.valor ?? 0)),
         servicios: ats.length,
         gastosFijos: round2(gastosFijos),
         gastosVariables: round2(gastosVariables),

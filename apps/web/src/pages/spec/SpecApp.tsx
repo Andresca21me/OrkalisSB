@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { useAuth, useMiFoto } from '../../lib/auth';
 import { fechaLarga, hora, hoyISO, money } from '../../lib/format';
-import { accionCita, rangoDiaBogota, useCitas } from '../../lib/useCitas';
+import { accionCita, rangoDiaBogota, revertirCita, useCitas } from '../../lib/useCitas';
 import { setDisponibilidad } from '../../lib/useEspecialista';
 import { Avatar, Button, Card, EmptyState, ErrorState, Icon, Skeleton, useToast } from '../../ui/ui';
 import { ScrollArea, SpecShell } from '../../ui';
@@ -39,10 +39,18 @@ export function SpecApp() {
 
   async function refrescar() { await turnos.recargar(); }
 
-  async function accion(c: CitaAgenda, ev: 'aprobar' | 'iniciar' | 'cancelar' | 'no-asistio' | 'revertir') {
+  async function accion(c: CitaAgenda, ev: 'aprobar' | 'iniciar' | 'cancelar' | 'no-asistio') {
     try {
       await accionCita(c.id, ev);
-      toast(ev === 'iniciar' ? 'Turno iniciado' : ev === 'revertir' ? 'Cobro revertido' : 'Turno actualizado', ev === 'cancelar' || ev === 'no-asistio' ? 'info' : 'success');
+      toast(ev === 'iniciar' ? 'Turno iniciado' : 'Turno actualizado', ev === 'cancelar' || ev === 'no-asistio' ? 'info' : 'success');
+      await refrescar();
+    } catch (e) { toast((e as Error).message, 'error'); }
+  }
+
+  async function revertir(c: CitaAgenda, reponerStock: boolean) {
+    try {
+      await revertirCita(c.id, reponerStock);
+      toast('Cobro revertido', 'success');
       await refrescar();
     } catch (e) { toast((e as Error).message, 'error'); }
   }
@@ -86,7 +94,7 @@ export function SpecApp() {
           <DetalleTurno turno={turno} onBack={() => setOverlay(null)}
             onIniciar={() => accion(turno, 'iniciar')} onCompletar={() => setOverlay({ type: 'cobro', id: turno.id })}
             onCancelar={() => { void accion(turno, 'cancelar'); setOverlay(null); }} onNoAsistio={() => { void accion(turno, 'no-asistio'); setOverlay(null); }}
-            onRevertir={() => { void accion(turno, 'revertir'); }} />
+            onRevertir={(reponer) => { void revertir(turno, reponer); }} />
         </SpecShell>
       );
     }

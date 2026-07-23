@@ -81,7 +81,11 @@ export class ServiciosController {
 @Roles(RolUsuario.Admin)
 export class InventarioController {
   constructor(private readonly s: InventarioService) {}
-  @Get('productos') listar(@CurrentTenant() ctx: TenantContext, @Query('sucursalId') suc?: string) {
+  // Lectura permitida también a recepción/especialista: la necesitan para el
+  // selector de productos al cobrar una cita. El gate del módulo sigue aplicando
+  // (403 si está inactivo), y ese 403 es la señal de "sin módulo" para esos paneles.
+  @Get('productos') @Roles(RolUsuario.Admin, RolUsuario.Recepcionista, RolUsuario.Especialista)
+  listar(@CurrentTenant() ctx: TenantContext, @Query('sucursalId') suc?: string) {
     return this.s.listar(ctx, suc);
   }
   @Post('productos') crear(@CurrentTenant() ctx: TenantContext, @Body() dto: ProductoDto) {
@@ -92,6 +96,44 @@ export class InventarioController {
   }
   @Delete('productos/:id') @HttpCode(204) desactivar(@CurrentTenant() ctx: TenantContext, @Param('id') id: string) {
     return this.s.desactivar(ctx, id);
+  }
+  // Las rutas fijas van ANTES de cualquier `productos/:id` para que Nest no las
+  // capture como un id. (Aquí no colisionan, pero se mantiene el orden por claridad.)
+  @Get('movimientos') movimientos(
+    @CurrentTenant() ctx: TenantContext,
+    @Query('sucursalId') sucursalId?: string,
+    @Query('productoId') productoId?: string,
+    @Query('tipo') tipo?: 'entrada' | 'salida' | 'ajuste',
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.s.listarMovimientos(ctx, {
+      sucursalId,
+      productoId,
+      tipo,
+      desde: desde ? new Date(desde) : undefined,
+      hasta: hasta ? new Date(hasta) : undefined,
+    });
+  }
+  @Get('ventas') ventas(
+    @CurrentTenant() ctx: TenantContext,
+    @Query('sucursalId') sucursalId?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+    @Query('especialistaId') especialistaId?: string,
+    @Query('productoId') productoId?: string,
+    @Query('clienteId') clienteId?: string,
+    @Query('origen') origen?: 'cita' | 'directa',
+  ) {
+    return this.s.listarVentas(ctx, {
+      sucursalId,
+      especialistaId,
+      productoId,
+      clienteId,
+      origen,
+      desde: desde ? new Date(desde) : undefined,
+      hasta: hasta ? new Date(hasta) : undefined,
+    });
   }
   @Post('movimientos') @HttpCode(200) movimiento(@CurrentTenant() ctx: TenantContext, @Body() dto: MovimientoDto) {
     return this.s.movimiento(ctx, dto);

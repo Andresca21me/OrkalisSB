@@ -140,16 +140,17 @@ function TimelineSkeleton() {
 // ── Detalle del turno ────────────────────────────────────────────────────────
 type SheetKind = 'noasistio' | 'cancelar' | 'revertir' | null;
 export function DetalleTurno({ turno, onBack, onIniciar, onCompletar, onCancelar, onNoAsistio, onRevertir }: {
-  turno: CitaAgenda; onBack: () => void; onIniciar: () => void; onCompletar: () => void; onCancelar: () => void; onNoAsistio: () => void; onRevertir: () => void;
+  turno: CitaAgenda; onBack: () => void; onIniciar: () => void; onCompletar: () => void; onCancelar: () => void; onNoAsistio: () => void; onRevertir: (reponerStock: boolean) => void;
 }) {
   const [sheet, setSheet] = useState<SheetKind>(null);
+  const [reponer, setReponer] = useState(true);
   const st = turno.estado;
   const total = turnoTotal(turno);
 
   const cfg: Record<Exclude<SheetKind, null>, { title: string; body: string; cta: string; run: () => void }> = {
     noasistio: { title: '¿Marcar como no asistió?', body: 'El cliente no se presentó. El turno quedará registrado como “No asistió” y se liberará tu agenda.', cta: 'Marcar no asistió', run: onNoAsistio },
     cancelar: { title: '¿Cancelar este turno?', body: 'Se cancelará el turno y se liberará el horario. Avísale al cliente si es posible.', cta: 'Cancelar turno', run: onCancelar },
-    revertir: { title: '¿Revertir el cobro?', body: 'Esto deshace las ganancias calculadas y repone el stock usado. El turno volverá a quedar pendiente de cobro.', cta: 'Sí, revertir', run: onRevertir },
+    revertir: { title: '¿Revertir el cobro?', body: 'Esto deshace las ganancias calculadas. El turno volverá a quedar pendiente de cobro.', cta: 'Sí, revertir', run: () => onRevertir(reponer) },
   };
 
   return (
@@ -222,6 +223,12 @@ export function DetalleTurno({ turno, onBack, onIniciar, onCompletar, onCancelar
             <Button variant="danger" size="lg" style={{ flex: 1 }} onClick={() => { const r = cfg[sheet].run; setSheet(null); r(); }}>{cfg[sheet].cta}</Button>
           </div>}>
           <p style={{ margin: 0, fontSize: 'var(--text-base)', color: 'var(--text-secondary)', lineHeight: '22px' }}>{cfg[sheet].body}</p>
+          {sheet === 'revertir' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={reponer} onChange={(e) => setReponer(e.target.checked)} style={{ width: 18, height: 18 }} />
+              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>Reingresar al inventario los productos vendidos, si los hubo.</span>
+            </label>
+          )}
         </Sheet>
       )}
     </div>

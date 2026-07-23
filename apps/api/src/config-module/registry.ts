@@ -81,6 +81,37 @@ export const REGISTRY: Record<string, DefinicionClave> = {
     descripcion: '% adicional que el cliente paga al profesional.',
   }),
 
+  // ── Venta de productos (Plan-Inventario, D2) ───────────────────────────────
+  // Solo se leen dentro de flujos ya gateados por `modulo.inventario`, así que
+  // en un negocio sin el módulo son inertes: no hay que limpiarlas al apagarlo.
+  'finanzas.comision_producto_tipo': def({
+    clave: 'finanzas.comision_producto_tipo',
+    tipo: 'enum',
+    enumValores: ['porcentaje', 'valor_fijo'],
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: {
+      [PerfilNegocio.Salon]: 'porcentaje',
+      [PerfilNegocio.Barberia]: 'porcentaje',
+    },
+    descripcion: 'Cómo se calcula la comisión del especialista por vender un producto.',
+  }),
+  'finanzas.comision_producto_valor': def({
+    clave: 'finanzas.comision_producto_valor',
+    tipo: 'numero',
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    // 0 = todo el ingreso del producto queda para el negocio. Es el default
+    // porque reproduce exactamente el comportamiento anterior al módulo.
+    defaults: { [PerfilNegocio.Salon]: 0, [PerfilNegocio.Barberia]: 0 },
+    descripcion: '% sobre la venta, o monto fijo por unidad, según el tipo de comisión.',
+  }),
+  'inventario.permitir_stock_negativo': def({
+    clave: 'inventario.permitir_stock_negativo',
+    tipo: 'boolean',
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: false, [PerfilNegocio.Barberia]: false },
+    descripcion: 'Permite vender sin stock registrado (queda en negativo hasta regularizar).',
+  }),
+
   // ── Parámetros de agendamiento (numero / duracion) ─────────────────────────
   'agendamiento.antelacion_cancelacion_horas': def({
     clave: 'agendamiento.antelacion_cancelacion_horas',

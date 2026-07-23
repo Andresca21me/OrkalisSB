@@ -36,6 +36,11 @@ export function accionCita(id: string, evento: EventoCita): Promise<unknown> {
   return api.post(`/citas/${id}/${evento}`);
 }
 
+/** Revierte un cobro; `reponerStock` decide si los productos vuelven al inventario. */
+export function revertirCita(id: string, reponerStock: boolean): Promise<unknown> {
+  return api.post(`/citas/${id}/revertir`, { reponerStock });
+}
+
 /** Una línea del pago (permite dividir el cobro en varios métodos). */
 export interface PagoLinea {
   metodo: MetodoPago;

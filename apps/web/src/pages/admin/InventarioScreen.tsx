@@ -11,8 +11,10 @@ import {
   registrarMovimiento,
   useAlertasStock,
   useInventario,
+  useMovimientos,
   useValoracion,
 } from '../../lib/useInventario';
+import { efectivoDe, useConfig } from '../../lib/useConfig';
 import { PageHead } from '../../ui/Shell';
 import {
   Button,
@@ -39,12 +41,15 @@ export function InventarioScreen({ sucursalId }: { sucursalId: string | null }) 
   const alertas = useAlertasStock(sucursalId);
   const valoracion = useValoracion(sucursalId);
   const sucs = useApi<Sucursal[]>(() => api.get('/sucursales'));
+  const config = useConfig(sucursalId);
+  const permitirNegativo = efectivoDe(config.data ?? [], 'inventario.permitir_stock_negativo')?.valor === true;
 
   const [seg, setSeg] = useState<TipoProducto>(TipoProducto.Venta);
   const [query, setQuery] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editP, setEditP] = useState<ProductoInventario | null>(null);
   const [movP, setMovP] = useState<ProductoInventario | null>(null);
+  const [kardexP, setKardexP] = useState<ProductoInventario | null>(null);
   const [delP, setDelP] = useState<ProductoInventario | null>(null);
 
   const lista = productos.data ?? [];
@@ -104,13 +109,14 @@ export function InventarioScreen({ sucursalId }: { sucursalId: string | null }) 
           {rows.length === 0 ? (
             <Card padding={0}><EmptyState icon="search" title="Sin resultados" desc={q ? `Ningún producto coincide con “${query}”.` : `No hay productos ${seg === TipoProducto.Venta ? 'de venta' : 'de servicio'} registrados.`} action={q ? <Button variant="secondary" onClick={() => setQuery('')}>Limpiar búsqueda</Button> : <Button iconLeft="plus" onClick={() => { setEditP(null); setFormOpen(true); }}>Nuevo producto</Button>} /></Card>
           ) : (
-            <ProductTable rows={rows} tipo={seg} onMove={setMovP} onEdit={(p) => { setEditP(p); setFormOpen(true); }} onDelete={setDelP} />
+            <ProductTable rows={rows} tipo={seg} onMove={setMovP} onKardex={setKardexP} onEdit={(p) => { setEditP(p); setFormOpen(true); }} onDelete={setDelP} />
           )}
         </>
       )}
 
       {formOpen && <ProductModal producto={editP} sucursales={sucs.data ?? []} defaultSucursalId={sucursalId} onClose={() => { setFormOpen(false); setEditP(null); }} onSaved={async () => { setFormOpen(false); setEditP(null); await refrescar(); }} />}
-      {movP && <MovementModal producto={movP} onClose={() => setMovP(null)} onSaved={async () => { setMovP(null); await refrescar(); }} />}
+      {movP && <MovementModal producto={movP} permitirNegativo={permitirNegativo} onClose={() => setMovP(null)} onSaved={async () => { setMovP(null); await refrescar(); }} />}
+      {kardexP && <KardexModal producto={kardexP} onClose={() => setKardexP(null)} />}
       <GConfirm open={!!delP} title="Eliminar producto" danger confirmLabel="Eliminar" confirmIcon="trash-2"
         desc={delP ? <span><strong style={{ color: 'var(--text-primary)' }}>{delP.nombre}</strong> se eliminará del inventario. Esta acción no afecta los movimientos ya registrados.</span> : ''}
         onClose={() => setDelP(null)} onConfirm={() => delP && eliminar(delP)} />
@@ -138,7 +144,7 @@ function LowStockPanel({ items, onMove }: { items: ProductoInventario[]; onMove:
   );
 }
 
-function ProductTable({ rows, tipo, onMove, onEdit, onDelete }: { rows: ProductoInventario[]; tipo: TipoProducto; onMove: (p: ProductoInventario) => void; onEdit: (p: ProductoInventario) => void; onDelete: (p: ProductoInventario) => void }) {
+function ProductTable({ rows, tipo, onMove, onKardex, onEdit, onDelete }: { rows: ProductoInventario[]; tipo: TipoProducto; onMove: (p: ProductoInventario) => void; onKardex: (p: ProductoInventario) => void; onEdit: (p: ProductoInventario) => void; onDelete: (p: ProductoInventario) => void }) {
   const th: React.CSSProperties = { textAlign: 'left', padding: '0 14px 10px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' };
   const td: React.CSSProperties = { padding: '14px', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', borderTop: '1px solid var(--border-subtle)', verticalAlign: 'middle' };
   const num: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' };
@@ -161,7 +167,7 @@ function ProductTable({ rows, tipo, onMove, onEdit, onDelete }: { rows: Producto
               <tr key={p.id} data-testid={`producto-row-${p.id}`}>
                 <td style={{ ...td, paddingLeft: 18, fontWeight: 600 }}>{p.nombre}</td>
                 <td style={td}><StockDot status={stockStatus(p.cantidad, p.stockMin)} /></td>
-                <td style={num}>{p.cantidad}</td>
+                <td style={{ ...num, color: p.cantidad < 0 ? 'var(--error)' : undefined, fontWeight: p.cantidad < 0 ? 700 : undefined }} title={p.cantidad < 0 ? 'Stock negativo: regulariza con una recarga' : undefined}>{p.cantidad}</td>
                 <td style={num}>{money(p.costo)}</td>
                 {tipo === TipoProducto.Venta && <td style={num}>{money(p.precioVenta)}</td>}
                 <td style={{ ...num, color: 'var(--text-tertiary)' }}>{p.stockMin}</td>
@@ -170,6 +176,7 @@ function ProductTable({ rows, tipo, onMove, onEdit, onDelete }: { rows: Producto
                   <div style={{ display: 'inline-flex', justifyContent: 'flex-end' }}>
                     <RowMenu items={[
                       { icon: 'repeat', label: 'Registrar movimiento', onClick: () => onMove(p) },
+                      { icon: 'list', label: 'Ver movimientos', onClick: () => onKardex(p) },
                       { icon: 'edit', label: 'Editar', onClick: () => onEdit(p) },
                       { divider: true },
                       { icon: 'trash-2', label: 'Eliminar', danger: true, onClick: () => onDelete(p) },
@@ -194,6 +201,7 @@ function ProductModal({ producto, sucursales, defaultSucursalId, onClose, onSave
   const [stockMin, setStockMin] = useState<number>(producto?.stockMin ?? 5);
   const [costo, setCosto] = useState<MoneyValue>(producto ? Number(producto.costo) : '');
   const [precioVenta, setPrecioVenta] = useState<MoneyValue>(producto ? Number(producto.precioVenta) : '');
+  const [gastoInicial, setGastoInicial] = useState(true);
   const [touched, setTouched] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
@@ -211,7 +219,7 @@ function ProductModal({ producto, sucursales, defaultSucursalId, onClose, onSave
         await editarProducto(producto.id, { nombre: nombre.trim(), tipo, stockMin: Number(stockMin) || 0, costo: Number(costo), precioVenta: Number(precioVenta) || 0 });
         toast('Producto actualizado', 'success');
       } else {
-        await crearProducto({ sucursalId: sucId, nombre: nombre.trim(), tipo, cantidad: Number(cantidad) || 0, stockMin: Number(stockMin) || 0, costo: Number(costo), precioVenta: Number(precioVenta) || 0 });
+        await crearProducto({ sucursalId: sucId, nombre: nombre.trim(), tipo, cantidad: Number(cantidad) || 0, stockMin: Number(stockMin) || 0, costo: Number(costo), precioVenta: Number(precioVenta) || 0, generaGasto: gastoInicial });
         toast('Producto creado', 'success');
       }
       onSaved();
@@ -252,17 +260,75 @@ function ProductModal({ producto, sucursales, defaultSucursalId, onClose, onSave
         {!producto && (
           <GField label="Cantidad inicial" hint="Después se ajusta por movimientos."><GNumber value={cantidad} onChange={setCantidad} min={0} /></GField>
         )}
+
+        {!producto && Number(cantidad) > 0 && Number(costo) > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+            <Switch checked={gastoInicial} onChange={setGastoInicial} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Registrar la compra inicial como gasto</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Anota {money((Number(cantidad) || 0) * (Number(costo) || 0))} como gasto de compra en Finanzas.</div>
+            </div>
+          </label>
+        )}
       </div>
     </Dialog>
   );
 }
 
-function MovementModal({ producto, onClose, onSaved }: { producto: ProductoInventario; onClose: () => void; onSaved: () => void }) {
+function KardexModal({ producto, onClose }: { producto: ProductoInventario; onClose: () => void }) {
+  const { data, cargando, error, recargar } = useMovimientos(producto.id);
+  const items = data?.items ?? [];
+  const tipoLabel: Record<string, string> = { entrada: 'Entrada', salida: 'Salida', ajuste: 'Ajuste' };
+  return (
+    <Dialog open onClose={onClose} width={620} title="Movimientos" subtitle={producto.nombre}
+      footer={<Button variant="ghost" onClick={onClose}>Cerrar</Button>}>
+      <div style={{ padding: '4px 0 12px' }}>
+        {error ? (
+          <ErrorState onRetry={recargar} />
+        ) : cargando ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 8 }}>{[0, 1, 2].map((i) => <Skeleton key={i} w="100%" h={40} />)}</div>
+        ) : items.length === 0 ? (
+          <EmptyState icon="list" title="Sin movimientos" desc="Este producto todavía no tiene entradas ni salidas registradas." />
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+              <thead><tr>
+                {['Fecha', 'Tipo', 'Cant.', 'Costo', 'Stock', 'Motivo'].map((h, i) => (
+                  <th key={h} style={{ textAlign: i > 1 ? 'right' : 'left', padding: '0 10px 8px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {items.map((m) => {
+                  const signo = m.tipoMov === 'salida' ? '−' : m.tipoMov === 'entrada' ? '+' : '=';
+                  return (
+                    <tr key={m.id}>
+                      <td style={{ padding: '10px', fontSize: 'var(--text-sm)', borderTop: '1px solid var(--border-subtle)', whiteSpace: 'nowrap' }}>{new Date(m.creadoEn).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: '2-digit' })}</td>
+                      <td style={{ padding: '10px', fontSize: 'var(--text-sm)', borderTop: '1px solid var(--border-subtle)' }}>{tipoLabel[m.tipoMov]}</td>
+                      <td style={{ padding: '10px', fontSize: 'var(--text-sm)', borderTop: '1px solid var(--border-subtle)', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{signo}{m.cantidad}</td>
+                      <td style={{ padding: '10px', fontSize: 'var(--text-sm)', borderTop: '1px solid var(--border-subtle)', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{m.costoTotal ? money(m.costoTotal) : '—'}</td>
+                      <td style={{ padding: '10px', fontSize: 'var(--text-sm)', borderTop: '1px solid var(--border-subtle)', textAlign: 'right', fontFamily: 'var(--font-mono)', color: m.stockResultante != null && m.stockResultante < 0 ? 'var(--error)' : undefined }}>{m.stockResultante ?? '—'}</td>
+                      <td style={{ padding: '10px', fontSize: 'var(--text-sm)', borderTop: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>{m.motivo ?? '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Dialog>
+  );
+}
+
+function MovementModal({ producto, permitirNegativo, onClose, onSaved }: { producto: ProductoInventario; permitirNegativo: boolean; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [dir, setDir] = useState<'entrada' | 'salida' | 'ajuste'>('entrada');
   const [cantidad, setCantidad] = useState<number>(1);
   const [motivo, setMotivo] = useState('Compra');
   const [gasto, setGasto] = useState(true);
+  // Costo REAL de la compra (editable). Arranca como sugerencia = cantidad × costo actual.
+  const [costoTotal, setCostoTotal] = useState<MoneyValue>('');
+  const [costoTocado, setCostoTocado] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   const motivos: Record<string, string[]> = {
@@ -272,16 +338,31 @@ function MovementModal({ producto, onClose, onSaved }: { producto: ProductoInven
   };
   useEffect(() => { setMotivo(motivos[dir][0]); }, [dir]);
 
-  const delta = dir === 'entrada' ? cantidad : dir === 'salida' ? -cantidad : 0;
-  const nuevo = dir === 'ajuste' ? cantidad : Math.max(0, producto.cantidad + delta);
   const esCompra = dir === 'entrada' && motivo === 'Compra';
-  const gastoMonto = cantidad * Number(producto.costo);
+  // Mientras el usuario no lo edite, la sugerencia sigue al valor cantidad × costo.
+  const sugerido = cantidad * Number(producto.costo);
+  const costoEfectivo = costoTocado ? Number(costoTotal) || 0 : sugerido;
+
+  const delta = dir === 'entrada' ? cantidad : dir === 'salida' ? -cantidad : 0;
+  const nuevo = dir === 'ajuste' ? cantidad : producto.cantidad + delta;
+  const nuevoMostrado = dir === 'salida' && !permitirNegativo ? Math.max(0, nuevo) : nuevo;
+  const quedaNegativo = nuevo < 0;
 
   async function registrar() {
     setGuardando(true);
     try {
-      await registrarMovimiento({ productoId: producto.id, tipoMov: dir, cantidad, motivo, generaGasto: esCompra && gasto, costoTotal: esCompra && gasto ? gastoMonto : undefined });
-      toast(esCompra && gasto ? `Entrada registrada · gasto de ${money(gastoMonto)}` : 'Movimiento registrado', 'success');
+      const conGasto = esCompra && gasto;
+      await registrarMovimiento({
+        productoId: producto.id,
+        tipoMov: dir,
+        cantidad,
+        motivo,
+        generaGasto: conGasto,
+        // El costo real se envía en cualquier entrada de compra (dispara el promedio
+        // ponderado); si además genera gasto, es el monto del egreso.
+        costoTotal: esCompra ? costoEfectivo : undefined,
+      });
+      toast(conGasto ? `Entrada registrada · gasto de ${money(costoEfectivo)}` : 'Movimiento registrado', 'success');
       onSaved();
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -309,18 +390,28 @@ function MovementModal({ producto, onClose, onSaved }: { producto: ProductoInven
           <GField label="Motivo"><Select value={motivo} onChange={(e) => setMotivo(e.target.value)}>{motivos[dir].map((m) => <option key={m} value={m}>{m}</option>)}</Select></GField>
         </div>
 
+        {esCompra && (
+          <GField label="Costo total de la compra" hint="Lo que pagaste por estas unidades. Actualiza el costo al promedio ponderado.">
+            <GMoney value={costoTocado ? costoTotal : sugerido} onChange={(v) => { setCostoTocado(true); setCostoTotal(v); }} />
+          </GField>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '14px 0', borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)' }}>
           <div style={{ textAlign: 'center' }}><div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Actual</div><div className="data" style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>{producto.cantidad}</div></div>
           <Icon name="arrow-right" size={18} color="var(--text-tertiary)" />
-          <div style={{ textAlign: 'center' }}><div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Nuevo</div><div className="data" style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: nuevo === 0 ? 'var(--error)' : nuevo <= producto.stockMin ? '#B45309' : 'var(--success)' }}>{nuevo}</div></div>
+          <div style={{ textAlign: 'center' }}><div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Nuevo</div><div className="data" style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: nuevoMostrado < 0 ? 'var(--error)' : nuevoMostrado === 0 ? 'var(--error)' : nuevoMostrado <= producto.stockMin ? '#B45309' : 'var(--success)' }}>{nuevoMostrado}</div></div>
         </div>
+
+        {quedaNegativo && permitirNegativo && dir === 'salida' && (
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--error)', textAlign: 'center' }}>El stock quedará en negativo ({nuevo}). Regularízalo con una recarga.</div>
+        )}
 
         {esCompra && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
             <Switch checked={gasto} onChange={setGasto} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Generar gasto variable asociado</div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Registra {money(gastoMonto)} como gasto de compra en Finanzas.</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Registra {money(costoEfectivo)} como gasto de compra en Finanzas.</div>
             </div>
           </label>
         )}

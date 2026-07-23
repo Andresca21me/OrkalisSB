@@ -41,5 +41,14 @@ export function validacionesCruzadas(efectivos: Map<string, ValorConfig>): strin
   if (typeof prof === 'number' && typeof salon === 'number' && prof + salon !== 100) {
     return 'La repartición profesional + salón debe sumar 100%.';
   }
+
+  // Comisión de producto en % no puede pasar de 100 (Plan-Inventario, D2). Como
+  // monto fijo por unidad NO tiene tope aquí (el tope real —no cobrar más que la
+  // línea— se aplica al calcular, porque depende del precio de cada venta).
+  const comTipo = efectivos.get('finanzas.comision_producto_tipo');
+  const comValor = efectivos.get('finanzas.comision_producto_valor');
+  if (comTipo === 'porcentaje' && typeof comValor === 'number' && comValor > 100) {
+    return 'La comisión por producto en porcentaje no puede superar el 100%.';
+  }
   return null;
 }

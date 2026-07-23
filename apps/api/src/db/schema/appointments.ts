@@ -86,6 +86,15 @@ export const atencion = pgTable('atencion', {
   total: numeric('total', { precision: 12, scale: 2 }).notNull(),
   ganProf: numeric('gan_prof', { precision: 12, scale: 2 }).notNull(),
   ganSalon: numeric('gan_salon', { precision: 12, scale: 2 }).notNull(),
+  /**
+   * Parte de `gan_prof` que proviene de comisiones por venta de productos.
+   * Va INCLUIDA en `gan_prof` (no se suma aparte) para que liquidaciones y
+   * reportes existentes sigan cuadrando; se guarda por separado solo para poder
+   * desglosar "comisión por servicios" vs "comisión por productos".
+   */
+  comisionProductos: numeric('comision_productos', { precision: 12, scale: 2 })
+    .notNull()
+    .default('0'),
   metodoPago: metodoPagoEnum('metodo_pago').notNull(),
   // Snapshot de porcentajes/valores aplicados al completar (ADR-006).
   snapshotParam: jsonb('snapshot_param').notNull(),
@@ -102,6 +111,14 @@ export const atencionProducto = pgTable('atencion_producto', {
     .references(() => producto.id, { onDelete: 'restrict' }),
   cantidad: integer('cantidad').notNull(),
   valor: numeric('valor', { precision: 12, scale: 2 }).notNull(),
+  /**
+   * Costo unitario del producto EN EL MOMENTO de la venta. Congelado como el
+   * `snapshot_param` de la atención (ADR-006): si mañana cambia el costo del
+   * producto, el margen de esta venta no puede moverse.
+   */
+  costoUnitario: numeric('costo_unitario', { precision: 12, scale: 2 }).notNull().default('0'),
+  /** Comisión del especialista por ESTA línea (ya incluida en `atencion.gan_prof`). */
+  comision: numeric('comision', { precision: 12, scale: 2 }).notNull().default('0'),
 });
 
 /**

@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -46,6 +47,8 @@ export class ProductoDto {
   @IsOptional() @IsInt() @Min(0) stockMin?: number;
   @IsOptional() @IsNumber() @Min(0) costo?: number;
   @IsOptional() @IsNumber() @Min(0) precioVenta?: number;
+  /** Si el stock inicial (>0) debe registrarse como gasto de compra. Default: true. */
+  @IsOptional() @IsBoolean() generaGasto?: boolean;
 }
 
 export class EditarProductoDto {
@@ -61,15 +64,17 @@ export class MovimientoDto {
   @IsIn(['entrada', 'salida', 'ajuste']) tipoMov!: 'entrada' | 'salida' | 'ajuste';
   @IsInt() @Min(0) cantidad!: number;
   @IsOptional() @IsString() motivo?: string;
-  @IsOptional() generaGasto?: boolean;
+  @IsOptional() @IsBoolean() generaGasto?: boolean;
+  /** Costo real de la compra (entradas): dispara el promedio ponderado del costo. */
   @IsOptional() @IsNumber() @Min(0) costoTotal?: number;
 }
 
 export class VentaDto {
   @IsUUID('4') productoId!: string;
   @IsInt() @Min(1) cantidad!: number;
+  // La comisión NO llega del cliente: la calcula el servidor con la configuración
+  // del negocio (Plan-Inventario, D2). Solo se indica a quién se le acredita.
   @IsOptional() @IsUUID('4') especialistaId?: string;
-  @IsOptional() @IsNumber() @Min(0) comisionProf?: number;
 }
 
 export class GastoDto {

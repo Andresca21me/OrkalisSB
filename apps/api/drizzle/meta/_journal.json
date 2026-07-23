@@ -127,6 +127,13 @@
       "when": 1784769106254,
       "tag": "0017_heavy_titania",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784826680132,
+      "tag": "0018_equal_bill_hollister",
+      "breakpoints": true
     }
   ]
 }

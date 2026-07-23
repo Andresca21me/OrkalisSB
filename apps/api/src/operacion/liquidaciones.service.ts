@@ -17,6 +17,10 @@ export interface LiquidacionResultado {
   especialistaId: string;
   nombre: string;
   bruto: number;
+  /** Parte del bruto por servicios (invariante: servicios + productos = bruto). */
+  comisionServicios: number;
+  /** Parte del bruto por comisiones de venta de productos (en cita + directas). */
+  comisionProductos: number;
   descuento: number;
   neto: number;
 }
@@ -44,6 +48,7 @@ export class LiquidacionesService {
       .select({
         especialistaId: atencion.especialistaId,
         ganProf: atencion.ganProf,
+        comisionProductos: atencion.comisionProductos,
         metodoPago: atencion.metodoPago,
         snapshot: atencion.snapshotParam,
       })
@@ -67,14 +72,16 @@ export class LiquidacionesService {
         ),
       );
 
-    // Agregación por especialista.
-    const acc = new Map<string, { bruto: number; descuento: number }>();
-    const get = (id: string) => acc.get(id) ?? { bruto: 0, descuento: 0 };
+    // Agregación por especialista. `comisionProductos` se separa del bruto solo
+    // para el desglose; el bruto es el mismo de siempre (ganProf ya la incluye, D4).
+    const acc = new Map<string, { bruto: number; comisionProductos: number; descuento: number }>();
+    const get = (id: string) => acc.get(id) ?? { bruto: 0, comisionProductos: 0, descuento: 0 };
 
     for (const a of atenciones) {
       const ganProf = Number(a.ganProf);
       const cur = get(a.especialistaId);
       cur.bruto += ganProf;
+      cur.comisionProductos += Number(a.comisionProductos);
       if (ELECTRONICOS.has(a.metodoPago)) {
         const comisionPct = Number(
           (a.snapshot as { parametros?: { comisionBancaria?: number } })?.parametros?.comisionBancaria ?? 0,
@@ -87,6 +94,7 @@ export class LiquidacionesService {
       if (!c.especialistaId) continue;
       const cur = get(c.especialistaId);
       cur.bruto += Number(c.comision);
+      cur.comisionProductos += Number(c.comision);
       acc.set(c.especialistaId, cur);
     }
 
@@ -100,11 +108,14 @@ export class LiquidacionesService {
     const resultados: LiquidacionResultado[] = [];
     for (const [especialistaId, v] of acc) {
       const bruto = round2(v.bruto);
+      const comisionProductos = round2(v.comisionProductos);
       const descuento = round2(v.descuento);
       resultados.push({
         especialistaId,
         nombre: nombres.get(especialistaId) ?? '—',
         bruto,
+        comisionProductos,
+        comisionServicios: round2(bruto - comisionProductos),
         descuento,
         neto: round2(bruto - descuento),
       });
@@ -147,8 +158,10 @@ export class LiquidacionesService {
   /** Exportación CSV (UTF-8 con BOM, RF-045). La generación pesada/PDF: FASE-11. */
   exportarCsv(resultados: LiquidacionResultado[]): string {
     const filas = [
-      'especialista,bruto,descuento,neto',
-      ...resultados.map((r) => `"${r.nombre}",${r.bruto},${r.descuento},${r.neto}`),
+      'especialista,bruto,comision_servicios,comision_productos,descuento,neto',
+      ...resultados.map(
+        (r) => `"${r.nombre}",${r.bruto},${r.comisionServicios},${r.comisionProductos},${r.descuento},${r.neto}`,
+      ),
     ];
     return '﻿' + filas.join('\n') + '\n';
   }

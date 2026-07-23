@@ -2,6 +2,7 @@ import {
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsISO8601,
@@ -69,6 +70,11 @@ export class CompletarDto {
 
 export class ReasignarDto {
   @IsUUID('4') especialistaId!: string;
+}
+
+export class RevertirDto {
+  /** ¿Reingresar los productos vendidos al inventario? Default: sí (D8). */
+  @IsOptional() @IsBoolean() reponerStock?: boolean;
 }
 
 export class CrearCitaDto {

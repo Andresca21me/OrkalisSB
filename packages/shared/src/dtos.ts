@@ -238,8 +238,67 @@ export interface LiquidacionResultado {
   especialistaId: string;
   nombre: string;
   bruto: number;
+  /** Parte del bruto que viene de servicios (invariante: servicios + productos = bruto). */
+  comisionServicios: number;
+  /** Parte del bruto que viene de comisiones por venta de productos. */
+  comisionProductos: number;
   descuento: number;
   neto: number;
+}
+
+/** Movimiento de stock para el kardex (`GET /inventario/movimientos`). */
+export interface MovimientoInventarioItem {
+  id: string;
+  productoId: string;
+  productoNombre: string;
+  tipoMov: 'entrada' | 'salida' | 'ajuste';
+  cantidad: number;
+  motivo: string | null;
+  /** Lo pagado en la compra; `null` cuando el movimiento no es una compra. */
+  costoTotal: string | null;
+  /** Stock tras el movimiento; `null` en filas anteriores a esta función. */
+  stockResultante: number | null;
+  gastoId: string | null;
+  creadoEn: string;
+}
+
+/**
+ * Una línea del historial de ventas de producto (`GET /inventario/ventas`).
+ *
+ * Unifica DOS fuentes que no se pueden fusionar en la base sin duplicar
+ * ingresos: la venta dentro de una cita (`atencion_producto`, ya contenida en
+ * `atencion.total`) y la venta directa de mostrador (`venta_producto`).
+ */
+export interface VentaProductoHistorial {
+  id: string;
+  fecha: string;
+  origen: 'cita' | 'directa';
+  citaId: string | null;
+  atencionId: string | null;
+  clienteNombre: string | null;
+  especialistaId: string | null;
+  especialistaNombre: string | null;
+  productoId: string;
+  productoNombre: string;
+  cantidad: number;
+  precioUnitario: number;
+  total: number;
+  comision: number;
+  costoUnitario: number;
+  /** Margen bruto de la línea: total − costo. La comisión se reporta aparte. */
+  margen: number;
+}
+
+/** Historial de ventas con sus totales del período (`GET /inventario/ventas`). */
+export interface HistorialVentasResp {
+  items: VentaProductoHistorial[];
+  totales: {
+    total: number;
+    comision: number;
+    costo: number;
+    margen: number;
+    unidades: number;
+  };
 }
 
 // ── Finanzas (FASE-08) ───────────────────────────────────────────────────────
