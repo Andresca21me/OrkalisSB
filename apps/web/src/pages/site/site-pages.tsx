@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { money } from '../../lib/format';
-import { Badge, Button, Icon } from '../../ui/ui';
+import { Button, Icon } from '../../ui/ui';
 import {
   FAQ,
   FEATURES,
@@ -475,17 +475,268 @@ export function ContactPage() {
   );
 }
 
+/** Un bloque de contenido legal: párrafo(s) y/o lista de viñetas. */
+interface BloqueLegal {
+  titulo: string;
+  parrafos?: string[];
+  lista?: string[];
+}
+
+const LEGAL_ACTUALIZADO = '23 de julio de 2026';
+
+const TERMINOS: BloqueLegal[] = [
+  {
+    titulo: '1. Identificación del prestador',
+    parrafos: [
+      'Orkalis (en adelante, «la Plataforma» o «Orkalis») es un servicio de software como servicio (SaaS) operado por Andrés Camilo Medina Muriel, identificado con NIT / Cédula de ciudadanía No. 1005892839, con domicilio en Cali, Colombia, bajo la marca comercial Orkalis Software Solutions.',
+      'Correo de contacto y notificaciones: orkalis.solution@gmail.com.',
+    ],
+  },
+  {
+    titulo: '2. Objeto y aceptación',
+    parrafos: [
+      'Estos Términos y Condiciones regulan el acceso y uso de la Plataforma, destinada a la gestión de operaciones de salones de belleza, barberías y negocios afines (agenda, reservas, atención, clientes, inventario, finanzas y mensajería).',
+      'El registro, la contratación de un plan o el uso de la Plataforma implican la aceptación plena y sin reservas de estos Términos. Si actúa en nombre de un negocio, declara contar con facultades para obligarlo. Si no está de acuerdo, debe abstenerse de usar el servicio.',
+    ],
+  },
+  {
+    titulo: '3. Definiciones',
+    lista: [
+      '«Cliente» o «Negocio»: la persona natural o jurídica que contrata la suscripción a la Plataforma.',
+      '«Usuario»: cada persona autorizada por el Negocio para acceder (administrador, recepcionista, especialista).',
+      '«Cliente final»: la persona que reserva o recibe un servicio del Negocio y cuyos datos este administra en la Plataforma.',
+      '«Suscripción»: el plan contratado con su vigencia, límites y precio.',
+    ],
+  },
+  {
+    titulo: '4. Descripción del servicio',
+    parrafos: [
+      'Orkalis provee herramientas en la nube para agendar citas, gestionar el equipo y el catálogo, controlar inventario y ventas de producto, registrar el cierre financiero de cada atención, generar reportes y enviar notificaciones (SMS, WhatsApp y correo) a través de proveedores externos.',
+      'La Plataforma se ofrece «tal cual» y de forma continua salvo mantenimientos o causas de fuerza mayor. Orkalis podrá agregar, modificar o descontinuar funcionalidades informándolo por medios razonables.',
+    ],
+  },
+  {
+    titulo: '5. Registro, cuenta y seguridad',
+    parrafos: [
+      'El Negocio es responsable de la veracidad de los datos de registro y de la custodia de las credenciales de sus Usuarios. Todo uso realizado desde una cuenta se presume efectuado por su titular.',
+      'El Negocio debe notificar de inmediato cualquier uso no autorizado a orkalis.solution@gmail.com.',
+    ],
+  },
+  {
+    titulo: '6. Planes, precios y facturación',
+    parrafos: [
+      'La suscripción se cobra de forma periódica según el plan elegido, el número de especialistas y los cupos de mensajería contratados. Los precios se expresan en pesos colombianos (COP) y pueden estar sujetos a los impuestos aplicables.',
+      'Los pagos se procesan a través de la pasarela Mercado Pago. Al suscribirse, el Negocio autoriza el cobro recurrente del valor vigente en cada ciclo con el medio de pago registrado. Orkalis no almacena los datos completos de las tarjetas; su tratamiento corresponde a la pasarela.',
+    ],
+  },
+  {
+    titulo: '7. Renovación, cambios de plan y cancelación',
+    parrafos: [
+      'La suscripción se renueva automáticamente al inicio de cada ciclo hasta que el Negocio la cancele. El Negocio puede cambiar de plan o cancelar en cualquier momento desde la Plataforma o solicitándolo al correo de contacto; la cancelación surte efecto al término del ciclo pagado.',
+      'Salvo disposición legal imperativa en contrario, los valores ya cobrados por un ciclo en curso no son reembolsables. Los cambios de plan que impliquen mayor valor se prorratean según corresponda.',
+    ],
+  },
+  {
+    titulo: '8. Los cobros al cliente final son ajenos a Orkalis',
+    parrafos: [
+      'Orkalis cobra únicamente la suscripción a la Plataforma. El cobro del servicio prestado por el Negocio a sus clientes finales se realiza directamente entre ellos, por los medios que el Negocio disponga, y es completamente ajeno a Orkalis. Orkalis no es parte de esa relación ni responde por ella.',
+    ],
+  },
+  {
+    titulo: '9. Obligaciones y uso aceptable',
+    lista: [
+      'Usar la Plataforma conforme a la ley, la moral y estos Términos.',
+      'No vulnerar la seguridad del servicio, ni acceder a datos de otros negocios, ni realizar ingeniería inversa.',
+      'No cargar contenido ilícito, ni usar la mensajería para spam o comunicaciones no consentidas.',
+      'Garantizar que cuenta con la autorización de sus clientes finales para tratar sus datos y enviarles mensajes (ver punto 10).',
+      'Responder por el uso que sus Usuarios hagan de la cuenta.',
+    ],
+  },
+  {
+    titulo: '10. Mensajería y consentimiento',
+    parrafos: [
+      'La Plataforma permite enviar notificaciones a los clientes finales del Negocio mediante proveedores terceros (por ejemplo, Twilio para SMS/WhatsApp y un proveedor de correo). El Negocio es el único responsable de contar con el consentimiento previo, expreso e informado de los destinatarios y de respetar su derecho a no recibir comunicaciones.',
+      'El servicio de mensajería depende de saldo y de la disponibilidad de los proveedores. Ante su agotamiento o indisponibilidad, la Plataforma puede operar en modo sin mensajes mostrando los códigos en pantalla, sin que ello constituya incumplimiento.',
+    ],
+  },
+  {
+    titulo: '11. Propiedad intelectual',
+    parrafos: [
+      'El software, la marca Orkalis, el diseño y todos los elementos de la Plataforma son propiedad de su titular y están protegidos por la ley. La suscripción otorga una licencia limitada, no exclusiva e intransferible de uso durante su vigencia. Los datos cargados por el Negocio siguen siendo de su propiedad.',
+    ],
+  },
+  {
+    titulo: '12. Disponibilidad, soporte y respaldos',
+    parrafos: [
+      'Orkalis realiza esfuerzos razonables para mantener la Plataforma disponible y para conservar respaldos de la información, sin garantizar una disponibilidad ininterrumpida. El soporte se presta a través del correo de contacto en horario hábil.',
+    ],
+  },
+  {
+    titulo: '13. Limitación de responsabilidad',
+    parrafos: [
+      'La Plataforma es una herramienta de gestión; las decisiones operativas, contables, tributarias y comerciales del Negocio son de su exclusiva responsabilidad. En la máxima medida permitida por la ley, Orkalis no responde por lucro cesante, pérdida de datos imputable al Negocio, ni por daños indirectos derivados del uso o de fallas de proveedores externos.',
+      'Nada en estos Términos limita los derechos irrenunciables que la ley colombiana reconoce al consumidor.',
+    ],
+  },
+  {
+    titulo: '14. Suspensión y terminación',
+    parrafos: [
+      'Orkalis podrá suspender o terminar el acceso ante el incumplimiento de estos Términos, la falta de pago o el uso indebido de la Plataforma, previa comunicación cuando sea razonable. Terminada la relación, el Negocio podrá solicitar la exportación de sus datos dentro de un plazo prudencial, tras el cual podrán ser eliminados.',
+    ],
+  },
+  {
+    titulo: '15. Modificaciones',
+    parrafos: [
+      'Orkalis podrá actualizar estos Términos. Los cambios se publicarán en el sitio con su fecha de vigencia y, cuando sean sustanciales, se informarán por un medio razonable. El uso posterior a la publicación implica su aceptación.',
+    ],
+  },
+  {
+    titulo: '16. Ley aplicable y jurisdicción',
+    parrafos: [
+      'Estos Términos se rigen por las leyes de la República de Colombia, en especial la Ley 527 de 1999 (comercio electrónico), la Ley 1480 de 2011 (Estatuto del Consumidor) y la Ley 1581 de 2012 (protección de datos). Cualquier controversia se someterá a los jueces competentes de Colombia.',
+    ],
+  },
+  {
+    titulo: '17. Contacto',
+    parrafos: [
+      'Para consultas, peticiones o notificaciones relacionadas con estos Términos: orkalis.solution@gmail.com — Andrés Camilo Medina Muriel, Cali, Colombia.',
+    ],
+  },
+];
+
+const PRIVACIDAD: BloqueLegal[] = [
+  {
+    titulo: '1. Responsable del tratamiento',
+    parrafos: [
+      'El responsable del tratamiento de los datos personales recolectados a través de la Plataforma es Andrés Camilo Medina Muriel, NIT / Cédula No. 1005892839, marca comercial Orkalis Software Solutions, con domicilio en Cali, Colombia.',
+      'Canal de atención al titular: orkalis.solution@gmail.com.',
+    ],
+  },
+  {
+    titulo: '2. Marco legal',
+    parrafos: [
+      'Esta política se expide en cumplimiento de la Ley 1581 de 2012, el Decreto 1074 de 2015 y demás normas concordantes sobre protección de datos personales en Colombia, así como del derecho de Habeas Data reconocido en el artículo 15 de la Constitución Política.',
+    ],
+  },
+  {
+    titulo: '3. Datos que se recolectan',
+    lista: [
+      'De los Usuarios del Negocio: nombre, correo electrónico, teléfono, rol y credenciales de acceso.',
+      'De los clientes finales del Negocio: nombre, teléfono y, en su caso, historial de citas y atenciones que el Negocio registre.',
+      'Datos de facturación y pago, gestionados a través de la pasarela Mercado Pago (Orkalis no almacena los datos completos de las tarjetas).',
+      'Datos técnicos de uso necesarios para operar y asegurar la Plataforma (por ejemplo, registros de acceso).',
+    ],
+  },
+  {
+    titulo: '4. Finalidades del tratamiento',
+    lista: [
+      'Prestar, mantener y mejorar los servicios de la Plataforma.',
+      'Gestionar el registro, la autenticación y la seguridad de las cuentas.',
+      'Procesar la suscripción, los pagos y la facturación.',
+      'Enviar notificaciones transaccionales (confirmaciones, recordatorios, códigos de verificación) por SMS, WhatsApp o correo, cuando el Negocio lo active.',
+      'Atender peticiones, quejas y reclamos, y cumplir obligaciones legales.',
+    ],
+  },
+  {
+    titulo: '5. Rol de Orkalis: responsable y encargado',
+    parrafos: [
+      'Respecto de los datos de los Usuarios y de la relación de suscripción, Orkalis actúa como responsable del tratamiento.',
+      'Respecto de los datos de los clientes finales que el Negocio carga y administra, el Negocio es el responsable y Orkalis actúa como encargado, tratándolos únicamente conforme a las instrucciones del Negocio y para prestar el servicio. El Negocio garantiza haber obtenido la autorización de dichos titulares.',
+    ],
+  },
+  {
+    titulo: '6. Transmisión y transferencia a terceros',
+    parrafos: [
+      'Para operar, Orkalis se apoya en proveedores que actúan como encargados y que pueden tratar datos, incluso en servidores ubicados fuera de Colombia, bajo estándares adecuados de seguridad:',
+    ],
+    lista: [
+      'Mercado Pago — procesamiento de pagos y suscripciones.',
+      'Twilio — envío de mensajes SMS y WhatsApp.',
+      'Proveedor de correo electrónico transaccional — envío de notificaciones por email.',
+      'Proveedor de infraestructura en la nube (hosting) — alojamiento de la Plataforma y la base de datos.',
+    ],
+  },
+  {
+    titulo: '7. Derechos del titular',
+    parrafos: [
+      'Conforme al artículo 8 de la Ley 1581 de 2012, el titular tiene derecho a:',
+    ],
+    lista: [
+      'Conocer, actualizar y rectificar sus datos personales.',
+      'Solicitar prueba de la autorización otorgada.',
+      'Ser informado sobre el uso que se ha dado a sus datos.',
+      'Presentar quejas ante la Superintendencia de Industria y Comercio (SIC) por infracciones.',
+      'Revocar la autorización y/o solicitar la supresión de sus datos cuando proceda.',
+      'Acceder de forma gratuita a sus datos personales.',
+    ],
+  },
+  {
+    titulo: '8. Procedimiento para ejercer los derechos',
+    parrafos: [
+      'El titular puede ejercer sus derechos enviando su solicitud a orkalis.solution@gmail.com, indicando su nombre, medio de contacto y el objeto de la petición. Las consultas se atienden en un término máximo de diez (10) días hábiles y los reclamos en un término máximo de quince (15) días hábiles, prorrogables conforme a la ley.',
+      'Cuando los datos correspondan a un cliente final administrado por un Negocio, Orkalis podrá canalizar la solicitud hacia dicho Negocio en su calidad de responsable.',
+    ],
+  },
+  {
+    titulo: '9. Seguridad de la información',
+    parrafos: [
+      'Orkalis adopta medidas técnicas y administrativas razonables para proteger los datos frente a acceso no autorizado, pérdida o alteración, incluyendo aislamiento entre negocios, cifrado de credenciales y controles de acceso por rol. Ningún sistema es infalible; el Negocio también debe custodiar sus credenciales.',
+    ],
+  },
+  {
+    titulo: '10. Conservación de los datos',
+    parrafos: [
+      'Los datos se conservan mientras la cuenta esté activa y durante el tiempo necesario para cumplir las finalidades y las obligaciones legales, contables y tributarias aplicables. Terminada la relación, los datos podrán eliminarse o anonimizarse una vez vencidos los plazos legales de conservación.',
+    ],
+  },
+  {
+    titulo: '11. Menores de edad',
+    parrafos: [
+      'La Plataforma está dirigida a negocios y a personas mayores de edad. No se recolectan datos de menores de forma consciente. Si un cliente final es menor, el Negocio es responsable de contar con la autorización de sus representantes legales.',
+    ],
+  },
+  {
+    titulo: '12. Vigencia y cambios',
+    parrafos: [
+      'Esta política rige desde su publicación y podrá actualizarse. Los cambios se publicarán en el sitio con su fecha de vigencia y, cuando sean sustanciales, se comunicarán por un medio razonable.',
+    ],
+  },
+  {
+    titulo: '13. Contacto del responsable',
+    parrafos: [
+      'Andrés Camilo Medina Muriel (Orkalis Software Solutions) — orkalis.solution@gmail.com — Cali, Colombia.',
+    ],
+  },
+];
+
 export function LegalPage({ kind }: { kind: 'terminos' | 'privacidad' }) {
-  const titulo = kind === 'terminos' ? 'Términos y condiciones' : 'Política de privacidad · Habeas Data';
+  const esTerminos = kind === 'terminos';
+  const titulo = esTerminos ? 'Términos y condiciones' : 'Política de privacidad · Habeas Data';
+  const sub = esTerminos
+    ? 'Condiciones que rigen el acceso y uso de la Plataforma Orkalis.'
+    : 'Cómo Orkalis trata y protege los datos personales, conforme a la Ley 1581 de 2012.';
+  const bloques = esTerminos ? TERMINOS : PRIVACIDAD;
   return (
     <Section>
-      <div style={{ maxWidth: 720, margin: '0 auto' }}>
-        <SectionHead eyebrow="Legal" title={titulo} sub="Documento maqueta para la versión visual del sitio." />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          {['Este es un texto de marcador de posición para la maqueta del sitio. El contenido legal definitivo se incorporará cuando se encienda el alta self-service.', 'Orkalis cobra únicamente la suscripción a la plataforma. El cobro del servicio a los clientes finales del negocio es presencial y ajeno a Orkalis.', 'El tratamiento de datos personales sigue la Ley 1581 de 2012 (Habeas Data). El titular puede consultar, actualizar o suprimir sus datos en contacto@orkalis.co.'].map((p, i) => (
-            <p key={i} style={{ margin: 0 }}>{p}</p>
+      <div style={{ maxWidth: 760, margin: '0 auto' }}>
+        <SectionHead eyebrow="Legal" title={titulo} sub={sub} />
+        <p style={{ margin: '0 0 32px', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Última actualización: {LEGAL_ACTUALIZADO}</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 30 }}>
+          {bloques.map((b) => (
+            <section key={b.titulo}>
+              <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.35 }}>{b.titulo}</h2>
+              {b.parrafos?.map((p, i) => (
+                <p key={i} style={{ margin: '0 0 10px', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.65 }}>{p}</p>
+              ))}
+              {b.lista && (
+                <ul style={{ margin: '4px 0 0', paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {b.lista.map((li, i) => (
+                    <li key={i} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{li}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
           ))}
-          <Badge tone="warning">Maqueta · contenido no vinculante</Badge>
         </div>
       </div>
     </Section>

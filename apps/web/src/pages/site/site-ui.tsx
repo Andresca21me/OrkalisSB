@@ -264,11 +264,12 @@ export function SiteFooter({ go }: { go: Go }) {
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.12)', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.5)' }}>© 2026 Orkalis · Hecho en Colombia · contacto@orkalis.co</span>
-          <span style={{ display: 'flex', gap: 14 }}>
-            {['smartphone', 'mail', 'external-link'].map((ic) => <Icon key={ic} name={ic} size={17} color="rgba(255,255,255,0.6)" />)}
-          </span>
+        <div style={{ paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.12)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>© 2026 Orkalis Software Solutions. Todos los derechos reservados.</p>
+          <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>Orkalis Software Solutions es operado por Andrés Camilo Medina Muriel | NIT / Cédula: 1005892839.</p>
+          <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
+            Contacto: <a href="mailto:orkalis.solution@gmail.com" style={{ color: 'rgba(255,255,255,0.78)', textDecoration: 'underline' }}>orkalis.solution@gmail.com</a> | Cali, Colombia
+          </p>
         </div>
       </div>
     </footer>
