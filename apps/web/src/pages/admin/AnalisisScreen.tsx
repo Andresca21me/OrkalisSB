@@ -162,8 +162,8 @@ export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
 function ExpenseCard({ titulo, items, onAdd, onDelete }: { titulo: string; items: { id: string; categoria: string | null; monto: string }[]; onAdd: () => void; onDelete: (g: { id: string; categoria: string | null }) => void }) {
   return (
     <Card padding={18}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <span style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--text-primary)' }}>{titulo}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <span style={{ minWidth: 0, fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--text-primary)' }}>{titulo}</span>
         <Button variant="secondary" size="sm" iconLeft="plus" onClick={onAdd}>Agregar gasto</Button>
       </div>
       {items.length === 0 ? (

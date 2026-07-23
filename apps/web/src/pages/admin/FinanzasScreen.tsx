@@ -46,12 +46,12 @@ export function FinanzasScreen() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 24, borderBottom: '1px solid var(--border-subtle)' }}>
-        <div style={{ display: 'flex', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 24, borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="ork-scroll-x" style={{ display: 'flex', gap: 4, minWidth: 0, maxWidth: '100%' }}>
           {tabs.map((t) => {
             const on = t.id === tab;
             return (
-              <button key={t.id} type="button" onClick={() => setTab(t.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, height: 44, padding: '0 16px', marginBottom: -1, border: 'none', borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, background: 'transparent', cursor: 'pointer', color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', fontWeight: 600 }}>
+              <button key={t.id} type="button" onClick={() => setTab(t.id)} style={{ display: 'inline-flex', alignItems: 'center', flex: '0 0 auto', whiteSpace: 'nowrap', gap: 9, height: 44, padding: '0 16px', marginBottom: -1, border: 'none', borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, background: 'transparent', cursor: 'pointer', color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', fontWeight: 600 }}>
                 <Icon name={t.icon} size={18} color={on ? 'var(--brand)' : 'var(--text-tertiary)'} />{t.label}
               </button>
             );

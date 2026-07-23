@@ -15,6 +15,11 @@ body {
   background: var(--surface-page);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Red de seguridad en móvil: un correo, una URL o el nombre de un negocio
+     escrito de una sola palabra no tienen espacios donde partir y se salían de
+     su tarjeta. `break-word` solo actúa cuando la palabra no cabe de ninguna
+     forma, así que no afecta al texto normal. */
+  overflow-wrap: break-word;
 }
 
 h1, h2, h3, h4 {

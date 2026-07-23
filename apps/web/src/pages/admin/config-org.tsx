@@ -44,7 +44,7 @@ export function ConfigSucursales({ sucursales, onChanged }: { sucursales: Sucurs
         </ConfigBanner>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{sucursales.length} {sucursales.length === 1 ? 'sucursal' : 'sucursales'}</span>
         <Button iconLeft="plus" onClick={() => setCrear(true)}>Crear sucursal</Button>
       </div>
@@ -55,8 +55,8 @@ export function ConfigSucursales({ sucursales, onChanged }: { sucursales: Sucurs
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', flex: 'none' }}><Icon name="store" size={21} color="var(--text-secondary)" /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                  <span style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{b.nombre}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                  <span style={{ minWidth: 0, fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{b.nombre}</span>
                   <Badge tone={b.activa ? 'success' : 'neutral'} size="md" dot>{b.activa ? 'Activa' : 'Inactiva'}</Badge>
                 </div>
               </div>
@@ -162,13 +162,16 @@ export function ConfigUsuarios({ sucursales }: { sucursales: Sucursal[] }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{data.length} {data.length === 1 ? 'usuario' : 'usuarios'} con acceso</span>
         <Button iconLeft="user-plus" onClick={() => setInvitar(true)}>Nuevo usuario</Button>
       </div>
 
       <Card padding={0}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        {/* La tabla scrollea dentro de la tarjeta: cinco columnas con correo y
+            lista de sucursales no bajan de ~640px. */}
+        <div className="ork-scroll-x">
+        <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse' }}>
           <thead><tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <th style={thConfig}>Usuario</th><th style={thConfig}>Rol</th><th style={thConfig}>Alcance</th><th style={{ ...thConfig, textAlign: 'right' }}>Estado</th><th style={{ ...thConfig, width: 52 }} />
           </tr></thead>
@@ -205,6 +208,7 @@ export function ConfigUsuarios({ sucursales }: { sucursales: Sucursal[] }) {
             })}
           </tbody>
         </table>
+        </div>
       </Card>
 
       {invitar && <UsuarioModal sucursales={sucursales} onClose={() => setInvitar(false)} onSaved={async () => { setInvitar(false); await recargar(); }} />}

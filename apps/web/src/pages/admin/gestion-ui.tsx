@@ -110,11 +110,14 @@ export interface SegOption { value: string; label: string; icon?: string; count?
 export function GSegmented({ value, onChange, options, size = 'md' }: { value: string; onChange: (v: string) => void; options: SegOption[]; size?: 'sm' | 'md' }) {
   const h = size === 'sm' ? 34 : 38;
   return (
-    <div style={{ display: 'inline-flex', padding: 3, gap: 2, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+    // `flexWrap` + `maxWidth`: tres opciones con icono y contador miden más
+    // que un móvil de 360px, y un `inline-flex` sin envolver desbordaba la
+    // tarjeta que lo contiene.
+    <div style={{ display: 'flex', flexWrap: 'wrap', maxWidth: '100%', padding: 3, gap: 2, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
       {options.map((o) => {
         const on = o.value === value;
         return (
-          <button key={o.value} type="button" onClick={() => onChange(o.value)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: h, padding: '0 14px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-xs)', background: on ? 'var(--surface-card)' : 'transparent', boxShadow: on ? 'var(--shadow-xs)' : 'none', color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, transition: 'background var(--dur-fast) var(--ease-out)' }}>
+          <button key={o.value} type="button" onClick={() => onChange(o.value)} style={{ display: 'inline-flex', alignItems: 'center', flex: '0 0 auto', whiteSpace: 'nowrap', gap: 7, height: h, padding: '0 14px', border: 'none', cursor: 'pointer', borderRadius: 'var(--radius-xs)', background: on ? 'var(--surface-card)' : 'transparent', boxShadow: on ? 'var(--shadow-xs)' : 'none', color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, transition: 'background var(--dur-fast) var(--ease-out)' }}>
             {o.icon && <Icon name={o.icon} size={15} color={on ? 'var(--brand)' : 'var(--text-tertiary)'} />}
             {o.label}
             {o.count != null && <span className="data" style={{ fontSize: 'var(--text-xs)', fontWeight: 700, padding: '1px 6px', borderRadius: 999, background: on ? 'var(--brand-tint)' : 'var(--surface-card)', color: on ? 'var(--brand)' : 'var(--text-tertiary)' }}>{o.count}</span>}
@@ -162,11 +165,11 @@ export function GConfirm({ open, title, desc, confirmLabel = 'Confirmar', confir
 export function GSummaryRow({ label, value, strong, tone, sub, first }: { label: string; value: ReactNode; strong?: boolean; tone?: 'pos' | 'neg'; sub?: string; first?: boolean }) {
   const color = tone === 'pos' ? 'var(--success)' : tone === 'neg' ? 'var(--error)' : 'var(--text-primary)';
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, padding: '11px 0', borderTop: first ? 'none' : '1px solid var(--border-subtle)' }}>
-      <span style={{ fontSize: 'var(--text-sm)', color: strong ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: strong ? 600 : 400 }}>
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', padding: '11px 0', borderTop: first ? 'none' : '1px solid var(--border-subtle)' }}>
+      <span style={{ minWidth: 0, fontSize: 'var(--text-sm)', color: strong ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: strong ? 600 : 400 }}>
         {label}{sub && <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> · {sub}</span>}
       </span>
-      <span className="data" style={{ fontSize: strong ? 'var(--text-md)' : 'var(--text-sm)', fontWeight: strong ? 700 : 600, color, whiteSpace: 'nowrap' }}>{value}</span>
+      <span className="data" style={{ flex: 'none', marginLeft: 'auto', fontSize: strong ? 'var(--text-md)' : 'var(--text-sm)', fontWeight: strong ? 700 : 600, color, whiteSpace: 'nowrap' }}>{value}</span>
     </div>
   );
 }

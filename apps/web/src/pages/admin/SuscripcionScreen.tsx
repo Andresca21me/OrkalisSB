@@ -171,7 +171,8 @@ export function SuscripcionScreen() {
 
       {data.cobros.length > 0 && (
         <Card padding={0} style={{ overflow: 'hidden', marginBottom: 24 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="ork-scroll-x">
+          <table style={{ width: '100%', minWidth: 480, borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['Período', 'Monto', 'Estado', 'Pagado'].map((h, i) => (
@@ -192,6 +193,7 @@ export function SuscripcionScreen() {
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
 
@@ -271,8 +273,8 @@ function PlanCard({ p, actual, onElegir }: { p: PlanPublico; actual: boolean; on
   ];
   return (
     <Card selected={actual} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <strong style={{ fontSize: 'var(--text-md)' }}>{PLAN_LABEL[p.plan]}</strong>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <strong style={{ minWidth: 0, fontSize: 'var(--text-md)' }}>{PLAN_LABEL[p.plan]}</strong>
         {actual && <Badge tone="brand">Actual</Badge>}
       </div>
       <div>

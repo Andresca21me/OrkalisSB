@@ -88,7 +88,7 @@ export function PanelScreen({ onNav }: { onNav: (id: string) => void }) {
           {/* Resumen financiero del mes */}
           {p && (
             <Card padding={18}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
                 <span className="eyebrow" style={{ textTransform: 'capitalize' }}>Resumen del mes · {p.mes.etiqueta}</span>
                 <Badge tone="accent" dot>En curso</Badge>
               </div>
@@ -110,7 +110,7 @@ export function PanelScreen({ onNav }: { onNav: (id: string) => void }) {
 
           {/* Citas de hoy */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
               <h2 style={{ fontSize: 'var(--text-lg)', letterSpacing: '-0.02em' }}>Citas de hoy</h2>
               {lista.length > 0 && <Button variant="ghost" size="sm" iconRight="arrow-right" onClick={() => onNav('agenda')}>Ver agenda</Button>}
             </div>
@@ -136,7 +136,7 @@ export function PanelScreen({ onNav }: { onNav: (id: string) => void }) {
         <aside className="ork-aside" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {(alertas.data?.length ?? 0) > 0 && (
             <Card padding={18}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
                 <span className="eyebrow">Stock bajo</span>
                 <Icon name="alert-triangle" size={16} color="var(--warning)" />
               </div>

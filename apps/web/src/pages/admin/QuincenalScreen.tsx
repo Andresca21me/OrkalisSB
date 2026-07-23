@@ -91,7 +91,7 @@ export function QuincenalScreen() {
 
       {/* Cierre mensual */}
       <Card padding={0} style={{ overflow: 'hidden', borderColor: 'rgba(245,158,11,0.35)', marginBottom: 24 }}>
-        <div style={{ padding: '16px 20px', background: 'var(--warning-tint)', borderBottom: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ padding: '16px 20px', background: 'var(--warning-tint)', borderBottom: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <Icon name="archive" size={18} color="#B45309" />
           <span style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: '#92400E' }}>Cierre mensual</span>
           <span style={{ fontSize: 'var(--text-sm)', color: '#B45309' }}>· zona de cuidado</span>
@@ -114,7 +114,8 @@ export function QuincenalScreen() {
         <Card padding={0}><EmptyState compact icon="archive" title="Sin cierres" desc="Cuando cierres un período aparecerá archivado aquí." /></Card>
       ) : (
         <Card padding={0} style={{ overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="ork-scroll-x">
+          <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse' }}>
             <thead><tr>
               {['Período', 'Tipo', 'Ingresos', 'Ganancia neta', 'Cerrado'].map((h, i) => (
                 <th key={h} style={{ textAlign: i >= 2 && i <= 3 ? 'right' : 'left', padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
@@ -132,6 +133,7 @@ export function QuincenalScreen() {
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
 

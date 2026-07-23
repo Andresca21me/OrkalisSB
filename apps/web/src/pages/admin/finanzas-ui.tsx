@@ -53,7 +53,9 @@ export function RangePicker({ value, onChange }: { value: RangoDias; onChange: (
         <span className="data" style={{ whiteSpace: 'nowrap' }}>{etiquetaRango(value)}</span>
         <Icon name="chevron-down" size={15} color="var(--text-tertiary)" />
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} align="right">
+      {/* Ancho acotado al viewport: en móvil el calendario se salía de la
+          pantalla y las últimas columnas de días quedaban fuera de alcance. */}
+      <Popover open={open} onClose={() => setOpen(false)} align="right" width="min(340px, calc(100vw - 24px))">
         <RangeCalendar value={value} onApply={apply} />
       </Popover>
     </div>
@@ -211,7 +213,7 @@ export function FinTile({ label, value, icon, tone, sub, loading, big }: { label
   return (
     <Card padding={18} style={{ minHeight: 116, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '18px' }}>{label}</span>
+        <span style={{ minWidth: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '18px' }}>{label}</span>
         {icon && <span style={{ display: 'inline-flex', width: 30, height: 30, flex: 'none', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={16} color="var(--text-tertiary)" /></span>}
       </div>
       <div style={{ marginTop: 'auto' }}>

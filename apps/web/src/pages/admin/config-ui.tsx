@@ -7,9 +7,13 @@ export type Scope = 'negocio' | 'sucursal';
 export function ConfigCard({ title, desc, action, pad = 22, children }: { title?: string; desc?: string; action?: ReactNode; pad?: number; children: ReactNode }) {
   return (
     <Card padding={0} style={{ marginBottom: 16 }}>
+      {/* `flexWrap` + `minWidth:0`: en móvil el botón de acción no cabe al lado
+          del título y, sin envolver, empujaba el texto fuera de la tarjeta. Un
+          ítem flex no se encoge por debajo del ancho de su contenido si no se
+          le baja el min-width. */}
       {(title || action) && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, padding: `18px ${pad}px 0` }}>
-          <div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', padding: `18px ${pad}px 0` }}>
+          <div style={{ minWidth: 0, flex: '1 1 240px' }}>
             {title && <h3 style={{ fontSize: 'var(--text-md)', letterSpacing: '-0.01em' }}>{title}</h3>}
             {desc && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: '4px 0 0', maxWidth: 560 }}>{desc}</p>}
           </div>
@@ -63,9 +67,9 @@ export function ProvControl({ scope, procedencia, onOverride, onInherit }: { sco
 /** Fila de ajuste: icono + título + descripción + control a la derecha. */
 export function SettingRow({ first, icon, title, desc, badge, prov, children }: { first?: boolean; icon?: string; title: string; desc?: string; badge?: ReactNode; prov?: ReactNode; children: ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, padding: '18px 0', borderTop: first ? 'none' : '1px solid var(--border-subtle)' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', padding: '18px 0', borderTop: first ? 'none' : '1px solid var(--border-subtle)' }}>
       {icon && <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', flex: 'none' }}><Icon name={icon} size={18} color="var(--text-secondary)" /></span>}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
           {badge}
@@ -73,7 +77,7 @@ export function SettingRow({ first, icon, title, desc, badge, prov, children }: 
         {desc && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: '3px 0 0', maxWidth: 460, lineHeight: '20px' }}>{desc}</p>}
         {prov && <div style={{ marginTop: 8 }}>{prov}</div>}
       </div>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12 }}>{children}</div>
+      <div style={{ flex: 'none', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>{children}</div>
     </div>
   );
 }
@@ -82,8 +86,8 @@ export function SettingRow({ first, icon, title, desc, badge, prov, children }: 
 export function ProvField({ label, hint, error, prov, children }: { label: ReactNode; hint?: string; error?: string; prov?: ReactNode; children: ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ minWidth: 0, fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
         {prov}
       </div>
       {children}

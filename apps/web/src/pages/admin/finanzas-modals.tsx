@@ -93,7 +93,7 @@ export function VentaModal({ productos, especialistas, onClose, onSaved }: { pro
           <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', padding: '8px 0' }}>No hay productos de venta con stock disponible.</div>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
               <GField label="Producto"><Select value={productoId} onChange={(e) => { setProductoId(e.target.value); setCantidad(1); }}>{disponibles.map((p) => <option key={p.id} value={p.id}>{p.nombre} ({p.cantidad} disp.)</option>)}</Select></GField>
               <GField label="Cantidad" error={stockError ? `Máx. ${producto?.cantidad}` : undefined}><GNumber value={cantidad} onChange={setCantidad} min={1} invalid={stockError} /></GField>
             </div>

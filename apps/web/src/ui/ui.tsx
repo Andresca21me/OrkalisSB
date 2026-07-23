@@ -4,10 +4,13 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { ICONS } from './icons';
 import { useDialogA11y } from '../lib/useDialogA11y';
 
@@ -620,7 +623,29 @@ export function Logo({ size = 26, color = 'var(--navy)', word = true }: { size?:
 }
 
 // ── Popover (menú/selector anclado) ──────────────────────────────────────────
-export function Popover({ open, onClose, children, align = 'left', width }: { open: boolean; onClose: () => void; children: ReactNode; align?: 'left' | 'right'; width?: number }) {
+/**
+ * Menú anclado a un disparador, dibujado en un **portal** sobre `document.body`.
+ *
+ * **Por qué un portal y no `position:absolute` dentro del contenedor.** Antes el
+ * menú se posicionaba respecto a su padre relativo, así que cualquier ancestro
+ * con `overflow:hidden` lo recortaba: en la Agenda, la tarjeta de cada cita usa
+ * `overflow:hidden` para redondear sus esquinas y el menú de tres puntos salía
+ * cortado por el borde de la tarjeta. Sacándolo del flujo ya no hay recorte
+ * posible, venga de donde venga.
+ *
+ * El precio de `position:fixed` es que las coordenadas hay que calcularlas a
+ * mano y refrescarlas al hacer scroll o rotar el móvil; a cambio se puede
+ * además reencuadrar el menú para que nunca se salga de la pantalla.
+ *
+ * El disparador se deduce del DOM (el elemento padre del ancla invisible), así
+ * que los sitios que lo usan no cambian: todos ya envuelven botón + Popover en
+ * un contenedor común.
+ */
+export function Popover({ open, onClose, children, align = 'left', width }: { open: boolean; onClose: () => void; children: ReactNode; align?: 'left' | 'right'; width?: number | string }) {
+  const ancla = useRef<HTMLSpanElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -629,29 +654,84 @@ export function Popover({ open, onClose, children, align = 'left', width }: { op
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
-  if (!open) return null;
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const colocar = () => {
+      const disparador = ancla.current?.parentElement;
+      const caja = disparador?.getBoundingClientRect();
+      if (!caja) return;
+      // El menú ya está en el DOM (invisible hasta tener posición), así que se
+      // mide de verdad en vez de estimar: importa con contenidos anchos como el
+      // calendario de rangos, que no declara `width`.
+      const m = menu.current?.getBoundingClientRect();
+      // Se mide siempre que se pueda: `width` admite expresiones CSS
+      // (`min(340px, …)`) que aquí no se pueden resolver a un número.
+      const w = m?.width || (typeof width === 'number' ? width : 200);
+      const h = m?.height ?? 0;
+      const margen = 8;
+
+      let left = align === 'right' ? caja.right - w : caja.left;
+      left = Math.min(Math.max(margen, left), Math.max(margen, window.innerWidth - w - margen));
+
+      // Abrir hacia arriba si abajo no cabe: en móvil las últimas filas de una
+      // lista larga tienen el menú justo contra el borde inferior.
+      let top = caja.bottom + 6;
+      if (top + h > window.innerHeight - margen && caja.top - h - 6 > margen) top = caja.top - h - 6;
+
+      setPos({ top, left });
+    };
+    colocar();
+    // `capture` para enterarse también del scroll de contenedores internos, que
+    // no burbujea hasta window.
+    window.addEventListener('scroll', colocar, true);
+    window.addEventListener('resize', colocar);
+    return () => {
+      window.removeEventListener('scroll', colocar, true);
+      window.removeEventListener('resize', colocar);
+    };
+  }, [open, align, width]);
+
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-      <div
-        role="menu"
-        style={{
-          position: 'absolute',
-          top: 'calc(100% + 6px)',
-          [align]: 0,
-          zIndex: 41,
-          width,
-          minWidth: 200,
-          background: 'var(--surface-card)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          boxShadow: 'var(--shadow-lg)',
-          padding: 6,
-          animation: 'ork-pop var(--dur-base) var(--ease-out)',
-        }}
-      >
-        {children}
-      </div>
+      {/* Ancla invisible: no ocupa sitio, solo sirve para localizar el disparador. */}
+      <span ref={ancla} aria-hidden style={{ display: 'none' }} />
+      {open &&
+        createPortal(
+          <>
+            <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+            <div
+              ref={menu}
+              role="menu"
+              style={{
+                position: 'fixed',
+                top: pos?.top ?? 0,
+                left: pos?.left ?? 0,
+                // Sin posición todavía se dibuja oculto: hay que renderizarlo
+                // para poder medirlo, pero no debe verse dando un salto.
+                visibility: pos ? 'visible' : 'hidden',
+                zIndex: 151,
+                width,
+                minWidth: 200,
+                maxWidth: 'calc(100vw - 16px)',
+                maxHeight: 'calc(100vh - 16px)',
+                overflowY: 'auto',
+                background: 'var(--surface-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-lg)',
+                padding: 6,
+                animation: 'ork-pop var(--dur-base) var(--ease-out)',
+              }}
+            >
+              {children}
+            </div>
+          </>,
+          document.body,
+        )}
     </>
   );
 }
@@ -843,7 +923,7 @@ export function KpiCard({
   return (
     <Card padding={18} style={{ minHeight: 116, display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</span>
+        <span style={{ minWidth: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</span>
         {icon && (
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', flex: 'none' }}>
             <Icon name={icon} size={17} color="var(--text-tertiary)" />
@@ -887,8 +967,10 @@ export function StatTile({ label, value, icon, accent, loading }: { label: strin
           <Icon name={icon} size={19} color={accent ? 'var(--brand)' : 'var(--text-tertiary)'} />
         </span>
       )}
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>{label}</div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        {/* Con `nowrap` a secas una etiqueta larga («Especialistas activos»)
+            fijaba el ancho mínimo de la tarjeta y la sacaba de la rejilla. */}
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
         <div className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-xl)', letterSpacing: '-0.02em', color: 'var(--text-primary)', lineHeight: 1.2 }}>{value}</div>
       </div>
     </Card>
@@ -899,7 +981,10 @@ export function StatTile({ label, value, icon, accent, loading }: { label: strin
 type TabItem = string | { value: string; label: string };
 export function Tabs({ tabs, value, onChange }: { tabs: TabItem[]; value: string; onChange: (v: string) => void }) {
   return (
-    <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)' }}>
+    // Cuatro pestañas no caben en 360px. Antes se salían de la pantalla; ahora
+    // la tira scrollea en horizontal, que es lo esperable en móvil, y cada
+    // pestaña conserva su ancho en vez de comprimirse hasta ser ilegible.
+    <div className="ork-scroll-x" style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)' }}>
       {tabs.map((tab) => {
         const v = typeof tab === 'object' ? tab.value : tab;
         const l = typeof tab === 'object' ? tab.label : tab;
@@ -911,6 +996,8 @@ export function Tabs({ tabs, value, onChange }: { tabs: TabItem[]; value: string
             onClick={() => onChange(v)}
             style={{
               position: 'relative',
+              flex: '0 0 auto',
+              whiteSpace: 'nowrap',
               height: 40,
               padding: '0 4px',
               marginRight: 14,
@@ -936,7 +1023,7 @@ export function Tabs({ tabs, value, onChange }: { tabs: TabItem[]; value: string
 export function Segmented({ options, value, onChange, size = 'md' }: { options: TabItem[]; value: string; onChange: (v: string) => void; size?: 'md' | 'lg' }) {
   const h = size === 'lg' ? 44 : 38;
   return (
-    <div style={{ display: 'flex', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: 3, gap: 3 }}>
+    <div style={{ display: 'flex', maxWidth: '100%', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: 3, gap: 3 }}>
       {options.map((o) => {
         const v = typeof o === 'object' ? o.value : o;
         const l = typeof o === 'object' ? o.label : o;
@@ -947,7 +1034,13 @@ export function Segmented({ options, value, onChange, size = 'md' }: { options: 
             type="button"
             onClick={() => onChange(v)}
             style={{
+              // `minWidth:0` es imprescindible: un ítem flex con `flex:1` sigue
+              // teniendo min-width auto y no baja del ancho de su texto.
               flex: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
               height: h,
               border: 'none',
               borderRadius: 'var(--radius-xs)',
@@ -1035,6 +1128,9 @@ export function SearchInput({ value, onChange, placeholder = 'Buscar…', width 
         height: 40,
         padding: '0 12px',
         width,
+        // El ancho que piden las pantallas (300-340px) no cabe en un móvil:
+        // se respeta como máximo, no como medida fija.
+        maxWidth: '100%',
         background: 'var(--surface-card)',
         borderRadius: 'var(--radius-sm)',
         border: `1px solid ${focus ? 'var(--brand)' : 'var(--border-default)'}`,
@@ -1141,7 +1237,7 @@ export function Dialog({ open, onClose, title, subtitle, children, footer, width
   const titleId = useId();
   if (!open) return null;
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'clamp(12px, 4vw, 24px)' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(10,15,20,0.5)', animation: 'ork-fade var(--dur-base) var(--ease-out)' }} />
       <div
         ref={panelRef}
@@ -1163,7 +1259,7 @@ export function Dialog({ open, onClose, title, subtitle, children, footer, width
         }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '20px 22px 14px' }}>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <h2 id={titleId} style={{ fontSize: 'var(--text-xl)', letterSpacing: '-0.02em' }}>{title}</h2>
             {subtitle && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: '4px 0 0' }}>{subtitle}</p>}
           </div>

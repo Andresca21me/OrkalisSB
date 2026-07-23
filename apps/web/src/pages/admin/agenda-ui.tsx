@@ -75,12 +75,12 @@ export function AppointmentRow({ appt, showPrice, onAccion, onCobrar, onReasigna
     <Card padding={0} testId={`appt-row-${appt.id}`} style={{ overflow: 'hidden', opacity: dim ? 0.72 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         <div style={{ width: 4, flex: 'none', background: color }} />
-        <div style={{ flex: 1, minWidth: 0, padding: '14px 14px 14px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div className="ork-appt-row" style={{ flex: 1, minWidth: 0, padding: '14px 14px 14px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ flex: 'none', width: 58 }}>
             <div className="data" style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--text-primary)', lineHeight: 1.1 }}>{horaCorta(appt.inicio)}</div>
             <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{durMin(appt)} min</div>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="ork-appt-main" style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{appt.clienteNombre ?? 'Sin cliente'}</span>
               {appt.origen === 'agendamiento_publico' && appt.estado === 'solicitada' && <Badge tone="brand">En línea</Badge>}
@@ -95,7 +95,7 @@ export function AppointmentRow({ appt, showPrice, onAccion, onCobrar, onReasigna
             </div>
           </div>
           {showPrice && <span className="data" style={{ flex: 'none', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{money(totalCita(appt))}</span>}
-          <div style={{ flex: 'none', width: 116, display: 'flex', justifyContent: 'flex-end' }}><EstadoBadge estado={appt.estado} /></div>
+          <div className="ork-appt-estado" style={{ flex: 'none', width: 116, display: 'flex', justifyContent: 'flex-end' }}><EstadoBadge estado={appt.estado} /></div>
           <div style={{ flex: 'none' }}>
             <ApptActionsMenu appt={appt} onAccion={onAccion} onCobrar={onCobrar} onReasignar={onReasignar} />
           </div>

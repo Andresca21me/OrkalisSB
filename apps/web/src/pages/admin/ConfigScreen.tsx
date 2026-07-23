@@ -329,7 +329,7 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
   return (
     <>
       <ConfigCard title="Reparto del servicio" desc="El reparto profesional y del negocio debe sumar 100%." pad={22}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 28px' }}>
+        <div className="ork-cols-2" style={{ gap: '0 28px' }}>
           <ProvField label="% Profesional"><span data-testid="repart-profesional"><GNumber value={prof} onChange={(v) => setProf(Math.min(100, v))} suffix="%" min={0} /></span></ProvField>
           <ProvField label={`% Negocio (${voc.negocio})`}><span data-testid="repart-salon"><GNumber value={salon} onChange={(v) => setProf(Math.max(0, 100 - v))} suffix="%" min={0} /></span></ProvField>
         </div>
@@ -346,7 +346,7 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
       </ConfigCard>
 
       <ConfigCard title="Deducciones y comisiones" desc="Se aplican según la operación de cada cobro." pad={22}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px 28px' }}>
+        <div className="ork-cols-3" style={{ gap: '8px 28px' }}>
           {FIN_PCT.map((f) => (
             <ProvField key={f.clave} label={f.label} hint={f.hint}>
               <GNumber value={pcts[f.clave] ?? 0} onChange={(v) => setPcts((p) => ({ ...p, [f.clave]: Math.min(100, v) }))} suffix="%" min={0} />

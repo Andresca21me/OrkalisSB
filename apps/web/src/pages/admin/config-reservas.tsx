@@ -97,7 +97,7 @@ function ReservaSucursalCard({ sucursal }: { sucursal: Sucursal }) {
         </div>
 
         {/* Datos y acciones */}
-        <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ flex: '1 1 260px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <Icon name="store" size={18} color="var(--text-tertiary)" />
             <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--text-primary)' }}>{sucursal.nombre}</span>

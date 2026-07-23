@@ -91,7 +91,7 @@ export function ReportesFinScreen({ particion }: { particion: boolean }) {
             <FinTile label="Ventas de producto" icon="package" value={money(d.ventasProducto)} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div className="ork-cols-2" style={{ marginBottom: 16 }}>
             <Card padding={18}>
               <div className="eyebrow" style={{ marginBottom: 14 }}>Tendencia de ingresos · {rangoLabel}</div>
               {trend.length === 0 ? <SinDatos /> : <BarChart data={trend} formatY={compactCOP} />}
@@ -102,7 +102,7 @@ export function ReportesFinScreen({ particion }: { particion: boolean }) {
             </Card>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="ork-cols-2">
             <Card padding={18}>
               <div className="eyebrow" style={{ marginBottom: 14 }}>Distribución por método de pago</div>
               {payDonut.length === 0 ? <SinDatos /> : <Donut data={payDonut} />}

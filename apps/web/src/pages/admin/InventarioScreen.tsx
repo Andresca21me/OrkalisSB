@@ -229,7 +229,7 @@ function ProductModal({ producto, sucursales, defaultSucursalId, onClose, onSave
         <Button variant="primary" loading={guardando} onClick={guardar}>{producto ? 'Guardar cambios' : 'Crear producto'}</Button>
       </>}>
       <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
           <GField label="Nombre del producto" span={2} error={nombreErr}><Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Pomada mate" /></GField>
           {!producto && sucursales.length > 1 && (
             <GField label="Sucursal" span={2} error={sucErr}><Select value={sucId} onChange={(e) => setSucId(e.target.value)}>{sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}</Select></GField>
@@ -243,7 +243,7 @@ function ProductModal({ producto, sucursales, defaultSucursalId, onClose, onSave
           ]} />
         </GField>
 
-        <div style={{ display: 'grid', gridTemplateColumns: tipo === TipoProducto.Venta ? '1fr 1fr 1fr' : '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
           <GField label="Costo de compra" hint="Por unidad" error={costoErr}><GMoney value={costo} onChange={setCosto} invalid={!!costoErr} /></GField>
           {tipo === TipoProducto.Venta && <GField label="Precio de venta" hint="Al público"><GMoney value={precioVenta} onChange={setPrecioVenta} /></GField>}
           <GField label="Stock mínimo" hint="Avisa cuando baje de aquí"><GNumber value={stockMin} onChange={setStockMin} min={0} /></GField>
@@ -304,7 +304,7 @@ function MovementModal({ producto, onClose, onSaved }: { producto: ProductoInven
             { value: 'ajuste', label: 'Ajuste', icon: 'repeat' },
           ]} />
         </GField>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
           <GField label={dir === 'ajuste' ? 'Stock final' : 'Cantidad'}><GNumber value={cantidad} onChange={setCantidad} min={dir === 'ajuste' ? 0 : 1} /></GField>
           <GField label="Motivo"><Select value={motivo} onChange={(e) => setMotivo(e.target.value)}>{motivos[dir].map((m) => <option key={m} value={m}>{m}</option>)}</Select></GField>
         </div>

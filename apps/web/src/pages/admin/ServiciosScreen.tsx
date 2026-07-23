@@ -138,7 +138,7 @@ function ServiceCard({ s, onEdit, onDelete }: { s: Servicio; onEdit: () => void;
       <div style={{ padding: '16px 16px 0', flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 'var(--text-md)', color: 'var(--text-primary)', lineHeight: 1.2 }}>{s.nombre}</div>
+            <div style={{ fontWeight: 600, fontSize: 'var(--text-md)', color: 'var(--text-primary)', lineHeight: 1.2, overflowWrap: 'anywhere' }}>{s.nombre}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 4 }}>{s.categoria || 'Sin categoría'}</div>
           </div>
           <Badge tone={s.activo ? 'success' : 'neutral'} dot>{s.activo ? 'Activo' : 'Inactivo'}</Badge>
@@ -215,7 +215,7 @@ function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio
         <Button variant="primary" loading={guardando} onClick={guardar}>{servicio ? 'Guardar cambios' : 'Crear servicio'}</Button>
       </>}>
       <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
           <GField label="Nombre del servicio" span={2} error={nombreErr}><Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Corte + barba" /></GField>
           <GField label="Categoría" optional><Input value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Ej.: Cortes" /></GField>
           <GField label="Duración"><GNumber value={duracion} onChange={setDuracion} min={5} step={5} suffix="min" /></GField>
@@ -233,7 +233,7 @@ function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio
             </GField>
             <div style={{ marginTop: 14 }}>
               {splitType === SplitType.Porcentaje ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
                   <GField label="% Profesional"><GNumber value={Number(splitValor) || 0} onChange={(v) => setSplitValor(Math.min(100, v))} min={0} suffix="%" /></GField>
                   <GField label={`% ${voc.Negocio}`}><GNumber value={100 - (Number(splitValor) || 0)} onChange={(v) => setSplitValor(Math.max(0, 100 - v))} min={0} suffix="%" /></GField>
                 </div>

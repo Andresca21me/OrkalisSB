@@ -105,10 +105,10 @@ export function AgendaScreen() {
       ) : (
         <div style={{ maxWidth: 980 }}>
           <Card padding={0}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '16px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
               <Icon name="file-text" size={18} color="var(--text-tertiary)" />
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-base)' }}>Historial</span>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>Últimos 60 días · {scope}</span>
+              <span style={{ minWidth: 0, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>Últimos 60 días · {scope}</span>
             </div>
             <div style={{ padding: '4px 18px 14px' }}>
               {historial.cargando ? (

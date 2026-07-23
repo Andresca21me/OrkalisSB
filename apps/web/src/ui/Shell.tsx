@@ -214,6 +214,17 @@ export function Shell({
         @media (max-width: 360px) {
           .ork-kpis { grid-template-columns: 1fr; }
         }
+
+        /* Fila de cita de la Agenda. En móvil los anchos fijos (hora, hueco del
+           estado, menú) más cuatro huecos de 16px se comían casi toda la fila y
+           dejaban el nombre del cliente en unos pocos píxeles. Aquí se aprietan
+           los huecos, el estado ocupa lo que mide y el bloque de nombre puede
+           bajar a la línea siguiente en lugar de encogerse a nada. */
+        @media (max-width: 560px) {
+          .ork-appt-row { gap: 10px !important; flex-wrap: wrap; }
+          .ork-appt-main { flex: 1 1 150px !important; }
+          .ork-appt-estado { width: auto !important; }
+        }
       `}</style>
     </div>
   );
@@ -273,8 +284,8 @@ function MenuUsuario({ items, activo, onNav }: { items?: NavItem[]; activo: stri
 export function PageHead({ title, desc, action }: { title: string; desc?: string; action?: ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 22, gap: 16, flexWrap: 'wrap' }}>
-      <div>
-        <h1 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em' }}>{title}</h1>
+      <div style={{ minWidth: 0, flex: '1 1 260px' }}>
+        <h1 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em', overflowWrap: 'anywhere' }}>{title}</h1>
         {desc && <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', marginTop: 4 }}>{desc}</p>}
       </div>
       {action}
