@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { hora, hoyISO, money, sumarDiasISO } from '../../lib/format';
-import { useAuth } from '../../lib/auth';
+import { useAuth, useMiFoto } from '../../lib/auth';
+import { prepararFoto } from '../../lib/imagen';
+import { borrarMiFoto, subirMiFoto } from '../../lib/useEquipo';
 import { rangoDiaBogota, useCitas } from '../../lib/useCitas';
 import { useGanancias } from '../../lib/useEspecialista';
 import { diasATimestamps, etiquetaRango, presetRango, type RangoDias } from '../../lib/useReportes';
@@ -111,6 +113,92 @@ export function GananciasSpec({ especialistaId, sucursalId }: { especialistaId: 
 }
 
 // ── Perfil ───────────────────────────────────────────────────────────────────
+
+/**
+ * Avatar del especialista, editable por él mismo.
+ *
+ * Normalmente la foto la sube el administrador al darlo de alta, pero aquí
+ * puede cambiarla: es su cara y es quien mejor la elige. Se guarda contra
+ * `mi/foto` —sin id en la ruta, lo deduce el servidor de la sesión— y después
+ * se refresca la sesión, que es lo que hace que el cambio salte a la vez en
+ * esta pantalla, en la cabecera de "Mi día" y en el menú lateral de escritorio.
+ * La misma foto es la que ve el cliente en el enlace de reserva.
+ */
+function MiFoto({ nombre }: { nombre: string }) {
+  const { refrescar } = useAuth();
+  const foto = useMiFoto();
+  const toast = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const [menu, setMenu] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+
+  async function aplicar(accion: () => Promise<unknown>, ok: string) {
+    setMenu(false);
+    setOcupado(true);
+    try {
+      await accion();
+      await refrescar();
+      toast(ok, 'success');
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setMenu(true)}
+        disabled={ocupado}
+        aria-label="Cambiar mi foto de perfil"
+        style={{ position: 'relative', flex: 'none', padding: 0, border: 'none', background: 'transparent', borderRadius: 999, cursor: ocupado ? 'progress' : 'pointer', opacity: ocupado ? 0.6 : 1 }}
+      >
+        <Avatar name={nombre} size={64} src={foto} />
+        <span
+          aria-hidden
+          style={{ position: 'absolute', right: -2, bottom: -2, width: 24, height: 24, borderRadius: 999, background: 'var(--brand)', border: '2px solid var(--surface-card)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Icon name="image" size={12} color="var(--brand-on, #fff)" />
+        </span>
+      </button>
+
+      {/* El input vive fuera del botón: anidarlo dispararía el diálogo de
+          archivos al abrir el menú, no al elegir la opción. */}
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const archivo = e.target.files?.[0];
+          // Se limpia para que volver a elegir el MISMO archivo cuente como
+          // cambio y el onChange se dispare otra vez.
+          e.target.value = '';
+          if (archivo) void aplicar(async () => subirMiFoto(await prepararFoto(archivo)), 'Foto actualizada');
+        }}
+      />
+
+      <Sheet open={menu} onClose={() => setMenu(false)} title="Tu foto de perfil">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 8 }}>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', lineHeight: '19px' }}>
+            La verán tus clientes al elegirte en el enlace de reservas.
+          </div>
+          <Button variant="secondary" size="lg" fullWidth iconLeft="image" onClick={() => input.current?.click()}>
+            {foto ? 'Cambiar foto' : 'Subir una foto'}
+          </Button>
+          {foto && (
+            <Button variant="secondary" size="lg" fullWidth iconLeft="trash-2" onClick={() => void aplicar(borrarMiFoto, 'Foto eliminada')}>
+              Quitar foto
+            </Button>
+          )}
+        </div>
+      </Sheet>
+    </>
+  );
+}
+
 export function PerfilSpec({ disponible, onToggleDisp, sucursales, sucActivaId, sucActivaNombre, onPickSucursal }: {
   disponible: boolean; onToggleDisp: () => void; sucursales: Sucursal[]; sucActivaId: string | null; sucActivaNombre: string; onPickSucursal: (id: string) => void;
 }) {
@@ -124,7 +212,7 @@ export function PerfilSpec({ disponible, onToggleDisp, sucursales, sucActivaId, 
       <ScrollArea>
         <div style={{ padding: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
-            <Avatar name={usuario?.nombre ?? ''} size={64} />
+            <MiFoto nombre={usuario?.nombre ?? ''} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{usuario?.nombre}</div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Especialista · {usuario?.negocio.nombre}</div>

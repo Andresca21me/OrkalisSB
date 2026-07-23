@@ -49,7 +49,9 @@ export interface IniciarVerificacionBody {
 }
 
 /** Paso 1: guarda el borrador y envía el código por SMS. */
-export function iniciarVerificacion(body: IniciarVerificacionBody): Promise<{ verificacionId: string; expiraEn: string }> {
+export function iniciarVerificacion(
+  body: IniciarVerificacionBody,
+): Promise<{ verificacionId: string; expiraEn: string; codigoVisible?: string }> {
   return api.post('/especialistas/verificacion/iniciar', body);
 }
 
@@ -59,7 +61,7 @@ export function confirmarVerificacion(verificacionId: string, codigo: string): P
 }
 
 /** Reenvía el código (cooldown 30 s, máximo 3 reenvíos). */
-export function reenviarCodigo(verificacionId: string): Promise<{ reenvios: number }> {
+export function reenviarCodigo(verificacionId: string): Promise<{ reenvios: number; codigoVisible?: string }> {
   return api.post('/especialistas/verificacion/reenviar', { verificacionId });
 }
 
@@ -71,4 +73,17 @@ export function subirFotoEspecialista(id: string, dataUrl: string): Promise<{ fo
 /** Quita la foto: el avatar vuelve a la inicial sobre color. */
 export function borrarFotoEspecialista(id: string): Promise<unknown> {
   return api.del(`/especialistas/${id}/foto`);
+}
+
+// El especialista sobre su propia foto: sin id en la ruta, el servidor la
+// deduce de la sesión para que nadie pueda apuntar a un compañero.
+
+/** El especialista cambia su propia foto desde su panel. */
+export function subirMiFoto(dataUrl: string): Promise<{ fotoVersion: string }> {
+  return api.put('/especialistas/mi/foto', { dataUrl });
+}
+
+/** El especialista quita su propia foto. */
+export function borrarMiFoto(): Promise<unknown> {
+  return api.del('/especialistas/mi/foto');
 }

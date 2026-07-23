@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { CitaAgenda } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
-import { useAuth } from '../../lib/auth';
+import { useAuth, useMiFoto } from '../../lib/auth';
 import { fechaLarga, hora, hoyISO, money } from '../../lib/format';
 import { accionCita, rangoDiaBogota, useCitas } from '../../lib/useCitas';
 import { setDisponibilidad } from '../../lib/useEspecialista';
@@ -137,6 +137,7 @@ function MiDia({ me, turnos, current, cargando, error, onRetry, disponible, onTo
   disponible: boolean; onToggleDisp: () => void; multiSede: boolean; sucNombre: string; onSede: () => void;
   onOpen: (t: CitaAgenda) => void; onIniciar: (t: CitaAgenda) => void; onCompletar: (t: CitaAgenda) => void; onCancelar: (t: CitaAgenda) => void; onNoAsistio: (t: CitaAgenda) => void; onWalkin: () => void;
 }) {
+  const miFoto = useMiFoto();
   const completados = turnos.filter((t) => t.estado === 'completada').length;
   const gananciasHoy = turnos.filter((t) => t.estado === 'completada').reduce((a, t) => a + turnoTotal(t), 0);
   const upcoming = turnos.filter((t) => t !== current && t.estado !== 'completada' && t.estado !== 'cancelada' && t.estado !== 'no_asistio');
@@ -151,7 +152,7 @@ function MiDia({ me, turnos, current, cargando, error, onRetry, disponible, onTo
             <h1 style={{ fontSize: 'var(--text-xl)', letterSpacing: '-0.02em', lineHeight: 1.15 }}>Hola, {primerNombre}</h1>
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', marginTop: 4, textTransform: 'capitalize' }}>{fechaLarga(new Date())}</div>
           </div>
-          <Avatar name={me} size={44} />
+          <Avatar name={me} size={44} src={miFoto} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           {multiSede && (

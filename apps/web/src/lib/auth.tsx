@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { EstadoSuscripcion, type PerfilNegocio, type PlanSuscripcion, type SesionUsuario } from '@orkalis/shared';
-import { api, ApiError, tokens } from './api';
+import { api, ApiError, tokens, urlFotoEspecialista } from './api';
 
 /** Usuario en sesión = respuesta de `GET /auth/me` (incluye su negocio). */
 export type Usuario = SesionUsuario;
@@ -170,4 +170,18 @@ export function useAuth(): AuthState {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error('useAuth fuera de AuthProvider');
   return ctx;
+}
+
+/**
+ * Foto del especialista en sesión, o `null` si no tiene (entonces el `Avatar`
+ * cae a la inicial sobre color).
+ *
+ * La sesión ya trae `fotoVersion`, así que el avatar sale bien desde el primer
+ * render y, al cambiarla, basta con `refrescar()` para que se actualice en la
+ * cabecera, el menú lateral y el perfil a la vez.
+ */
+export function useMiFoto(): string | null {
+  const { usuario } = useAuth();
+  if (!usuario?.especialistaId) return null;
+  return urlFotoEspecialista(usuario.especialistaId, usuario.fotoVersion);
 }

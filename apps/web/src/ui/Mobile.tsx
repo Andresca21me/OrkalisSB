@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Avatar, Icon, Logo } from './ui';
+import { useMiFoto } from '../lib/auth';
 import { useMediaQuery } from '../lib/useMediaQuery';
 
 /**
@@ -250,6 +251,7 @@ export function SpecShell({
 
 /** Barra lateral (solo escritorio): marca + disponibilidad + navegación + usuario. */
 function SpecSidebar({ tab, onTab, nombre, disponible, onToggleDisp, onLogout }: { tab: string; onTab: (id: string) => void; nombre: string; disponible: boolean; onToggleDisp: () => void; onLogout: () => void }) {
+  const miFoto = useMiFoto();
   return (
     <aside style={{ flex: 'none', width: 256, height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-card)', borderRight: '1px solid var(--border-subtle)' }}>
       <div style={{ padding: '20px 20px 14px' }}>
@@ -300,7 +302,7 @@ function SpecSidebar({ tab, onTab, nombre, disponible, onToggleDisp, onLogout }:
       </nav>
 
       <div style={{ padding: 16, borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Avatar name={nombre} size={36} />
+        <Avatar name={nombre} size={36} src={miFoto} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nombre || 'Especialista'}</div>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Especialista</div>

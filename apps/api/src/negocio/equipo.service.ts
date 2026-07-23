@@ -326,6 +326,37 @@ export class EquipoService {
   }
 
   /**
+   * Ficha del especialista que hay detrás del usuario de la sesión.
+   *
+   * Los endpoints `mi/…` la usan en lugar de aceptar un id por la URL: RLS
+   * acota al negocio, pero dentro de un mismo negocio un especialista podría
+   * escribir sobre la ficha de un compañero con solo cambiar el id. Al deducirlo
+   * de la sesión sencillamente no hay nada que manipular.
+   */
+  private async miEspecialistaId(ctx: TenantContext): Promise<string> {
+    if (!ctx.usuarioId) throw new ForbiddenException('La sesión no identifica a un usuario.');
+    const [e] = await runInTenantTx(ctx, (tx) =>
+      tx
+        .select({ id: especialista.id })
+        .from(especialista)
+        .where(and(eq(especialista.usuarioId, ctx.usuarioId!), eq(especialista.activo, true)))
+        .limit(1),
+    );
+    if (!e) throw new ForbiddenException('Tu usuario no está enlazado a un especialista.');
+    return e.id;
+  }
+
+  /** El propio especialista cambia su foto de perfil. */
+  async guardarMiFoto(ctx: TenantContext, dataUrl: string): Promise<{ fotoVersion: string }> {
+    return this.guardarFoto(ctx, await this.miEspecialistaId(ctx), dataUrl);
+  }
+
+  /** El propio especialista quita su foto y vuelve a la inicial. */
+  async borrarMiFoto(ctx: TenantContext): Promise<void> {
+    await this.borrarFoto(ctx, await this.miEspecialistaId(ctx));
+  }
+
+  /**
    * Bytes de la foto para servirla. Se lee con la conexión admin porque el
    * endpoint es PÚBLICO (la reserva del cliente final no tiene sesión) y esas
    * fotos ya se muestran en el enlace público de reservas.

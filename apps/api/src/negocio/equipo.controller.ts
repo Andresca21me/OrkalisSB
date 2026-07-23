@@ -75,6 +75,29 @@ export class EquipoController {
 
   // ── Foto de perfil ──────────────────────────────────────────────────────────
 
+  // Las rutas `mi/foto` van ANTES que `:id/foto`: Nest resuelve por orden de
+  // declaración y "mi" no es un UUID, así que el `ParseUUIDPipe` de la otra las
+  // rechazaría con un 400 antes de llegar aquí.
+
+  /**
+   * El propio especialista cambia su foto desde su panel.
+   *
+   * Sin id en la URL a propósito: se deduce de la sesión, de modo que nadie
+   * puede escribir sobre la ficha de un compañero del mismo negocio.
+   */
+  @Put('mi/foto')
+  @Roles(RolUsuario.Especialista, RolUsuario.Admin)
+  guardarMiFoto(@CurrentTenant() ctx: TenantContext, @Body() dto: FotoEspecialistaDto) {
+    return this.equipoService.guardarMiFoto(ctx, dto.dataUrl);
+  }
+
+  @Delete('mi/foto')
+  @Roles(RolUsuario.Especialista, RolUsuario.Admin)
+  @HttpCode(204)
+  async borrarMiFoto(@CurrentTenant() ctx: TenantContext): Promise<void> {
+    await this.equipoService.borrarMiFoto(ctx);
+  }
+
   /** Sube o reemplaza la foto (data URL ya reducido en el navegador). */
   @Put(':id/foto')
   guardarFoto(

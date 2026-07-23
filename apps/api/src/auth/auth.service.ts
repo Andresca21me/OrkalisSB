@@ -14,6 +14,7 @@ import { EstadoSuscripcion, PerfilNegocio, RolUsuario, tieneAcceso, type SesionU
 import { adminDb } from '../db/admin-client';
 import {
   especialista,
+  especialistaFoto,
   negocio,
   refreshToken,
   sucursal,
@@ -253,10 +254,13 @@ export class AuthService {
       .limit(1);
     if (!n) throw new UnauthorizedException('Negocio no encontrado.');
 
-    // Especialista enlazado (si el usuario es recurso de agenda).
+    // Especialista enlazado (si el usuario es recurso de agenda). Se trae de
+    // paso la fecha de su foto —no los bytes— para que el panel pueda componer
+    // la URL del avatar sin una petición extra.
     const [esp] = await adminDb
-      .select({ id: especialista.id })
+      .select({ id: especialista.id, fotoVersion: especialistaFoto.actualizadoEn })
       .from(especialista)
+      .leftJoin(especialistaFoto, eq(especialistaFoto.especialistaId, especialista.id))
       .where(and(eq(especialista.usuarioId, u.id), eq(especialista.activo, true)))
       .limit(1);
 
@@ -268,6 +272,7 @@ export class AuthService {
       negocioId: u.negocioId,
       sucursalIds: ctx.sucursalIds,
       especialistaId: esp?.id ?? null,
+      fotoVersion: esp?.fotoVersion?.toISOString() ?? null,
       negocio: {
         id: n.id,
         nombre: n.nombre,

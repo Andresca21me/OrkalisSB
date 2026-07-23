@@ -1,11 +1,13 @@
 import { config as loadEnv } from 'dotenv';
 loadEnv();
 
+import { randomUUID } from 'node:crypto';
+
 import { eq } from 'drizzle-orm';
 import { PerfilNegocio, PlanSuscripcion, RolUsuario } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { especialista, especialistaFoto, negocio, suscripcion } from '../db/schema';
+import { especialista, especialistaFoto, negocio, suscripcion, usuario } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { PlanService } from '../plans/plan.service';
 import { EquipoService } from './equipo.service';
@@ -96,6 +98,50 @@ describe('Foto del especialista', () => {
     expect(await equipo.leerFoto(espId)).toBeNull();
     const [e] = await equipo.listar(ctx);
     expect(e.fotoVersion).toBeNull();
+  });
+
+  // ── El propio especialista cambia su foto (endpoints `mi/foto`) ────────────
+  //
+  // Lo que se protege aquí: RLS acota al negocio, pero dentro de un mismo
+  // negocio un especialista podría escribir sobre la ficha de un compañero si
+  // el id viajara por la URL. Al deducirlo de la sesión no hay nada que tocar.
+  describe('mi propia foto', () => {
+    let miEspId: string;
+    let companeroId: string;
+    let miCtx: TenantContext;
+
+    beforeAll(async () => {
+      const [u] = await adminDb
+        .insert(usuario)
+        .values({ negocioId, nombre: 'Sofía', email: `sofia.foto.${Date.now()}@test.local`, passwordHash: 'x', rol: RolUsuario.Especialista })
+        .returning();
+      const [mio] = await adminDb.insert(especialista).values({ negocioId, nombre: 'Sofía', usuarioId: u.id }).returning();
+      miEspId = mio.id;
+      const [comp] = await adminDb.insert(especialista).values({ negocioId, nombre: 'Compañero' }).returning();
+      companeroId = comp.id;
+      miCtx = { negocioId, sucursalIds: null, rol: RolUsuario.Especialista, usuarioId: u.id };
+    });
+
+    it('guarda la foto en SU ficha, no en la de un compañero', async () => {
+      await equipo.guardarMiFoto(miCtx, PNG_1X1);
+      expect(await equipo.leerFoto(miEspId)).not.toBeNull();
+      expect(await equipo.leerFoto(companeroId)).toBeNull();
+    });
+
+    it('quitar la foto borra la suya', async () => {
+      await equipo.borrarMiFoto(miCtx);
+      expect(await equipo.leerFoto(miEspId)).toBeNull();
+    });
+
+    it('un usuario sin especialista enlazado no puede subir foto', async () => {
+      const huerfano: TenantContext = { negocioId, sucursalIds: null, rol: RolUsuario.Especialista, usuarioId: randomUUID() };
+      await expect(equipo.guardarMiFoto(huerfano, PNG_1X1)).rejects.toThrow(/no está enlazado/i);
+    });
+
+    it('sin usuario en la sesión tampoco', async () => {
+      const anonimo: TenantContext = { negocioId, sucursalIds: null, rol: RolUsuario.Especialista };
+      await expect(equipo.guardarMiFoto(anonimo, PNG_1X1)).rejects.toThrow(/no identifica/i);
+    });
   });
 
   it('al borrar el especialista se va su foto (cascade)', async () => {

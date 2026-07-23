@@ -25,6 +25,12 @@ export interface SesionUsuario {
   sucursalIds: string[] | null;
   /** Especialista enlazado (si el usuario es especialista con recurso de agenda). */
   especialistaId: string | null;
+  /**
+   * Fecha de la última foto del especialista enlazado, para componer su URL.
+   * Viaja en la sesión y no en una petición aparte porque el avatar sale en la
+   * cabecera del panel desde el primer render. `null` = sin foto (inicial).
+   */
+  fotoVersion: string | null;
   negocio: NegocioSesion;
 }
 
@@ -91,7 +97,13 @@ export interface RetencionResp {
 
 /** Respuesta de `otp/enviar` (devCode solo en desarrollo). */
 export interface OtpResp {
-  enviado: true;
+  /** false = no salió ningún SMS; el código viaja en `devCode` para mostrarlo. */
+  enviado: boolean;
+  /**
+   * Código en claro. Solo llega cuando la mensajería no está operativa (sin
+   * proveedor configurado o con el saldo pausado): sin esto nadie podría
+   * completar una reserva. Con la mensajería en marcha va siempre `undefined`.
+   */
   devCode?: string;
 }
 
