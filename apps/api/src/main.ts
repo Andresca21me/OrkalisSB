@@ -21,6 +21,15 @@ async function bootstrap(): Promise<void> {
   // Cabeceras de seguridad (FASE-14, RNF-012).
   app.use(helmet());
 
+  // Cuerpo JSON: el límite por defecto de Express es 100 KB y las imágenes de
+  // marca (logo del negocio, foto del especialista) viajan como data URL en
+  // base64, que añade ~33% al tamaño real. Con 100 KB el guardado del logo
+  // fallaba con "request entity too large". 1 MB deja margen sobre el tope real
+  // de 400 KB por imagen, que se sigue validando en cada servicio: subirlo aquí
+  // NO relaja esa comprobación.
+  app.useBodyParser('json', { limit: '1mb' });
+  app.useBodyParser('urlencoded', { limit: '1mb', extended: true });
+
   // Prefijo global /api (FASE-01, paso 6).
   app.setGlobalPrefix('api');
 

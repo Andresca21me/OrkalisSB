@@ -110,24 +110,73 @@ function hex(r: number, g: number, b: number): string {
 }
 
 /**
- * Prepara el LOGO. A diferencia del avatar no se recorta en cuadrado —un logo
- * suele ser apaisado y recortarlo lo mutilaría—: se encaja dentro de un lienzo
- * de 512 conservando la proporción, en PNG para no perder la transparencia.
+ * Prepara el LOGO.
+ *
+ * A diferencia del avatar no se recorta en cuadrado —un logo suele ser apaisado
+ * y recortarlo lo mutilaría—: se encaja conservando la proporción.
+ *
+ * **El formato se elige según el contenido, y esto importa de verdad:** un logo
+ * con fondo transparente TIENE que ir en PNG o saldría con un recuadro blanco
+ * encima del color del negocio. Pero PNG comprime fatal las imágenes
+ * fotográficas, y muchos "logos" que sube la gente son en realidad una foto del
+ * local. Guardar eso en PNG generaba un data URL de varios cientos de KB y el
+ * servidor lo rechazaba con "request entity too large".
+ *
+ * Por eso: transparencia → PNG; opaco → JPEG. Y si aun así se pasa de tamaño,
+ * se reintenta más pequeño en vez de fallar.
  */
 export async function prepararLogo(archivo: File): Promise<string> {
   if (!archivo.type.startsWith('image/')) throw new Error('El archivo debe ser una imagen.');
 
   const bitmap = await cargarImagen(archivo);
-  const MAX = 512;
-  const escala = Math.min(1, MAX / Math.max(bitmap.width, bitmap.height));
+
+  // Tope de bytes ya decodificados; el servidor rechaza por encima de 400 KB.
+  const MAX_BYTES = 320_000;
+  for (const lado of [512, 384, 256]) {
+    const dataUrl = dibujar(bitmap, lado);
+    if (pesoAproximado(dataUrl) <= MAX_BYTES) return dataUrl;
+  }
+  // Último recurso: el más pequeño y siempre en JPEG.
+  return dibujar(bitmap, 256, true);
+}
+
+/** Bytes reales que representa un data URL en base64. */
+function pesoAproximado(dataUrl: string): number {
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  return Math.floor((base64.length * 3) / 4);
+}
+
+function dibujar(bitmap: ImageBitmap | HTMLImageElement, max: number, forzarJpeg = false): string {
+  const escala = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * escala));
   const h = Math.max(1, Math.round(bitmap.height * escala));
 
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('Tu navegador no permite procesar la imagen.');
   ctx.drawImage(bitmap, 0, 0, w, h);
-  return c.toDataURL('image/png');
+
+  if (!forzarJpeg && tieneTransparencia(ctx, w, h)) return c.toDataURL('image/png');
+
+  // JPEG no admite alfa: se rellena en blanco antes, o el fondo saldría negro.
+  const plano = document.createElement('canvas');
+  plano.width = w;
+  plano.height = h;
+  const pctx = plano.getContext('2d');
+  if (!pctx) throw new Error('Tu navegador no permite procesar la imagen.');
+  pctx.fillStyle = '#ffffff';
+  pctx.fillRect(0, 0, w, h);
+  pctx.drawImage(c, 0, 0);
+  return plano.toDataURL('image/jpeg', 0.85);
+}
+
+/** ¿Algún píxel no es del todo opaco? Se muestrea: no hace falta ser exacto. */
+function tieneTransparencia(ctx: CanvasRenderingContext2D, w: number, h: number): boolean {
+  const { data } = ctx.getImageData(0, 0, w, h);
+  for (let i = 3; i < data.length; i += 4 * 7) {
+    if (data[i] < 250) return true;
+  }
+  return false;
 }
