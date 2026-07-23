@@ -4,6 +4,7 @@ import { useSucursal } from '../../lib/sucursal';
 import { hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { rangoDiaBogota, useCitas } from '../../lib/useCitas';
 import { efectivoDe, useConfig } from '../../lib/useConfig';
+import { useEquipo } from '../../lib/useEquipo';
 import {
   crearServicio,
   editarServicio,
@@ -39,6 +40,13 @@ export function ServiciosScreen() {
   // Repartición estándar de la config (finanzas) → default al crear un servicio.
   const cfg = useConfig(sucursalActivaId);
   const defaultProfPct = Number(efectivoDe(cfg.data, 'finanzas.reparticion_profesional')?.valor ?? 50);
+  // Cuántos especialistas activos realizan cada servicio. Quien no declara
+  // servicios los realiza todos, así que cuenta para cualquiera.
+  const equipo = useEquipo();
+  const cuantosRealizan = (servicioId: string): number =>
+    (equipo.data ?? []).filter(
+      (e) => e.activo && (e.servicioIds.length === 0 || e.servicioIds.includes(servicioId)),
+    ).length;
 
   const [sub, setSub] = useState('catalogo');
   const [query, setQuery] = useState('');
@@ -108,7 +116,7 @@ export function ServiciosScreen() {
                 <Card padding={0}><EmptyState icon="search" title="Sin resultados" desc="Ningún servicio coincide con el filtro." action={<Button variant="secondary" onClick={() => { setQuery(''); setCat('todas'); }}>Limpiar filtros</Button>} /></Card>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-                  {filtrados.map((s) => <ServiceCard key={s.id} s={s} onEdit={() => { setEditSv(s); setFormOpen(true); }} onDelete={() => setDelSv(s)} />)}
+                  {filtrados.map((s) => <ServiceCard key={s.id} s={s} cuantos={cuantosRealizan(s.id)} onEdit={() => { setEditSv(s); setFormOpen(true); }} onDelete={() => setDelSv(s)} />)}
                 </div>
               )}
             </>
@@ -132,7 +140,11 @@ function splitLabel(s: Servicio): string {
     : `${Number(s.splitValor)}% / ${100 - Number(s.splitValor)}%`;
 }
 
-function ServiceCard({ s, onEdit, onDelete }: { s: Servicio; onEdit: () => void; onDelete: () => void }) {
+function ServiceCard({ s, cuantos, onEdit, onDelete }: { s: Servicio; cuantos: number; onEdit: () => void; onDelete: () => void }) {
+  // Un servicio que nadie realiza no aparece en el enlace de reservas: se avisa
+  // aquí porque desde fuera parece que el catálogo está bien y no se entiende
+  // por qué el cliente no puede pedirlo.
+  const huerfano = s.activo && cuantos === 0;
   return (
     <Card padding={0} testId={`servicio-row-${s.id}`} style={{ display: 'flex', flexDirection: 'column', opacity: s.activo ? 1 : 0.72 }}>
       <div style={{ padding: '16px 16px 0', flex: 1 }}>
@@ -147,9 +159,22 @@ function ServiceCard({ s, onEdit, onDelete }: { s: Servicio; onEdit: () => void;
           <span className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-xl)', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>{money(s.precio)}</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}><Icon name="clock" size={14} color="var(--text-tertiary)" />{s.duracionMin} min</span>
         </div>
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <Badge tone="brand"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="percent" size={11} color="var(--brand)" />Reparto {splitLabel(s)}</span></Badge>
+          {s.activo && (
+            <Badge tone={huerfano ? 'warning' : 'neutral'}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Icon name="users" size={11} color={huerfano ? '#B45309' : 'var(--text-tertiary)'} />
+                {huerfano ? 'Sin especialista' : `Lo realizan ${cuantos}`}
+              </span>
+            </Badge>
+          )}
         </div>
+        {huerfano && (
+          <div style={{ marginTop: 10, fontSize: 'var(--text-xs)', color: '#B45309', lineHeight: 1.5 }}>
+            No aparece en el enlace de reservas. Asígnalo a alguien desde Equipo.
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', gap: 8, padding: '14px 16px', marginTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
         <Button variant="secondary" size="sm" iconLeft="edit" onClick={onEdit} style={{ flex: 1 }}>Editar</Button>

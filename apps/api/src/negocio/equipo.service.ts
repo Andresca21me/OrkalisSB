@@ -2,15 +2,27 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { and, count, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import * as argon2 from 'argon2';
 import { ForbiddenException } from '@nestjs/common';
-import { PlanSuscripcion, RolUsuario, type GananciasEspecialista } from '@orkalis/shared';
+import {
+  EstadoCita,
+  PlanSuscripcion,
+  RolUsuario,
+  type BajaEspecialistaResp,
+  type CitasFuturasResp,
+  type GananciasEspecialista,
+} from '@orkalis/shared';
 import { adminDb } from '../db/admin-client';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
 import {
   atencion,
+  cita,
+  citaServicio,
+  cliente,
   disponibilidad,
   especialista,
   especialistaFoto,
+  especialistaServicio,
   especialistaSucursal,
+  servicio,
   sucursal,
   suscripcion,
   usuario,
@@ -20,6 +32,12 @@ import {
 import type { TenantContext } from '../db/tenant-context';
 import { round2 } from '../finanzas/calculo';
 import { PlanService } from '../plans/plan.service';
+import { NotificacionesService } from '../notificaciones/notificaciones.service';
+import { transicionar } from '../agendamiento/cita-state-machine';
+import { filtrarPorServicios } from '../agendamiento/validators/capacidades';
+
+/** Qué hacer con las citas futuras al dar de baja a un especialista. */
+export type AccionBaja = 'reasignar' | 'cancelar';
 
 /** Credenciales opcionales del login del especialista (Gestión, Plan-Pagos). */
 /** Opciones del alta (FASE-06 añade teléfono verificado y apellidos). */
@@ -28,6 +46,8 @@ export interface OpcionesCrearEspecialista {
   telefonoVerificadoEn?: Date;
   apellidos?: string;
   credenciales?: CredencialesEspecialista;
+  /** Servicios que realiza. Vacío/ausente = todos (sin restricción). */
+  servicioIds?: string[];
 }
 
 export interface CredencialesEspecialista {
@@ -48,10 +68,15 @@ type Especialista = typeof especialista.$inferSelect;
  */
 @Injectable()
 export class EquipoService {
-  constructor(private readonly plans: PlanService) {}
+  constructor(
+    private readonly plans: PlanService,
+    private readonly notificaciones: NotificacionesService,
+  ) {}
 
-  /** Lista el equipo con las sucursales asignadas a cada especialista (FASE-07). */
-  listar(ctx: TenantContext): Promise<(Especialista & { sucursalIds: string[]; fotoVersion: string | null })[]> {
+  /** Lista el equipo con las sucursales y servicios asignados a cada uno (FASE-07). */
+  listar(
+    ctx: TenantContext,
+  ): Promise<(Especialista & { sucursalIds: string[]; servicioIds: string[]; fotoVersion: string | null })[]> {
     return runInTenantTx(ctx, async (tx) => {
       const esps = await tx.select().from(especialista);
       // Solo la marca de tiempo, nunca los bytes: el listado se pide a cada rato
@@ -69,7 +94,25 @@ export class EquipoService {
         arr.push(r.sucursalId);
         porEsp.set(r.especialistaId, arr);
       }
-      return esps.map((e) => ({ ...e, sucursalIds: porEsp.get(e.id) ?? [], fotoVersion: versionPorEsp.get(e.id) ?? null }));
+      // Servicios asignados. Se cruza con `servicio.activo` para no devolver
+      // como capacidad un servicio que el admin ya retiró del catálogo.
+      const servs = await tx
+        .select({ especialistaId: especialistaServicio.especialistaId, servicioId: especialistaServicio.servicioId })
+        .from(especialistaServicio)
+        .innerJoin(servicio, eq(servicio.id, especialistaServicio.servicioId))
+        .where(eq(servicio.activo, true));
+      const servPorEsp = new Map<string, string[]>();
+      for (const r of servs) {
+        const arr = servPorEsp.get(r.especialistaId) ?? [];
+        arr.push(r.servicioId);
+        servPorEsp.set(r.especialistaId, arr);
+      }
+      return esps.map((e) => ({
+        ...e,
+        sucursalIds: porEsp.get(e.id) ?? [],
+        servicioIds: servPorEsp.get(e.id) ?? [],
+        fotoVersion: versionPorEsp.get(e.id) ?? null,
+      }));
     });
   }
 
@@ -115,6 +158,14 @@ export class EquipoService {
             })),
           ),
         );
+      }
+      // Servicios que realiza (opcional). Sin esto queda sin restricción: los
+      // realiza todos, que es el comportamiento por defecto.
+      if (opciones.servicioIds?.length) {
+        await this.validarServicios(tx, opciones.servicioIds);
+        await tx
+          .insert(especialistaServicio)
+          .values(opciones.servicioIds.map((sid) => ({ especialistaId: e.id, servicioId: sid })));
       }
       // Acceso al panel (opcional): crea o enlaza el login del especialista, de
       // modo que el recurso de agenda y la cuenta sean UNA sola cosa (Plan-Pagos).
@@ -242,6 +293,39 @@ export class EquipoService {
     });
   }
 
+  /**
+   * Reemplaza el conjunto de servicios que el especialista realiza.
+   *
+   * Lista **vacía = sin restricción** (los realiza todos), no "no realiza
+   * ninguno": para que alguien no reciba reservas está el interruptor
+   * `disponible`. Quitar un servicio NO toca las citas ya agendadas —son un
+   * compromiso ya adquirido con el cliente—; solo impide reservas nuevas.
+   */
+  async asignarServicios(ctx: TenantContext, id: string, servicioIds: string[]): Promise<void> {
+    await runInTenantTx(ctx, async (tx) => {
+      await this.asegurarExiste(tx, id);
+      await this.validarServicios(tx, servicioIds);
+      await tx.delete(especialistaServicio).where(eq(especialistaServicio.especialistaId, id));
+      if (servicioIds.length) {
+        await tx
+          .insert(especialistaServicio)
+          .values(servicioIds.map((sid) => ({ especialistaId: id, servicioId: sid })));
+      }
+    });
+  }
+
+  /** Los servicios deben existir y ser del negocio (RLS ya acota la consulta). */
+  private async validarServicios(tx: DrizzleTx, servicioIds: string[]): Promise<void> {
+    if (!servicioIds.length) return;
+    const filas = await tx
+      .select({ id: servicio.id })
+      .from(servicio)
+      .where(inArray(servicio.id, servicioIds));
+    if (filas.length !== new Set(servicioIds).size) {
+      throw new BadRequestException('Algún servicio no existe en este negocio.');
+    }
+  }
+
   async editar(
     ctx: TenantContext,
     id: string,
@@ -258,9 +342,216 @@ export class EquipoService {
     return e;
   }
 
-  /** Baja lógica: deja de aparecer pero conserva su historial (HU-ADM-005). */
-  async darDeBaja(ctx: TenantContext, id: string): Promise<void> {
+  /**
+   * Citas futuras aún vivas del especialista (pendientes de atender). Son las
+   * que hay que resolver antes de darlo de baja: las pasadas y las ya cerradas
+   * son historial y no se tocan.
+   */
+  async citasFuturas(ctx: TenantContext, id: string): Promise<CitasFuturasResp> {
+    return runInTenantTx(ctx, async (tx) => {
+      const filas = await tx
+        .select({
+          id: cita.id,
+          inicio: cita.inicio,
+          clienteNombre: cliente.nombre,
+        })
+        .from(cita)
+        .leftJoin(cliente, eq(cliente.id, cita.clienteId))
+        .where(
+          and(
+            eq(cita.especialistaId, id),
+            gte(cita.inicio, new Date()),
+            inArray(cita.estado, [EstadoCita.Solicitada, EstadoCita.Confirmada]),
+          ),
+        )
+        .orderBy(cita.inicio);
+      const muestra = filas.slice(0, 5);
+      const nombres = new Map<string, string[]>();
+      if (muestra.length) {
+        const servs = await tx
+          .select({ citaId: citaServicio.citaId, nombre: servicio.nombre })
+          .from(citaServicio)
+          .innerJoin(servicio, eq(servicio.id, citaServicio.servicioId))
+          .where(inArray(citaServicio.citaId, muestra.map((m) => m.id)));
+        for (const s of servs) {
+          const arr = nombres.get(s.citaId) ?? [];
+          arr.push(s.nombre);
+          nombres.set(s.citaId, arr);
+        }
+      }
+      return {
+        total: filas.length,
+        muestra: muestra.map((m) => ({
+          id: m.id,
+          inicio: m.inicio.toISOString(),
+          clienteNombre: m.clienteNombre,
+          servicios: nombres.get(m.id) ?? [],
+        })),
+      };
+    });
+  }
+
+  /**
+   * Baja lógica: deja de aparecer pero conserva su historial (HU-ADM-005).
+   *
+   * Si tiene citas futuras sin atender, **no se ejecuta a ciegas**: lanza 409
+   * con el conteo para que el admin decida qué hacer con ellas. Dejar citas
+   * asignadas a alguien que ya no trabaja es peor que cualquiera de las dos
+   * salidas, porque nadie se entera hasta que el cliente se presenta.
+   */
+  async darDeBaja(ctx: TenantContext, id: string, accion?: AccionBaja): Promise<BajaEspecialistaResp> {
+    const futuras = await this.citasFuturas(ctx, id);
+    if (futuras.total > 0 && !accion) {
+      throw new ConflictException({
+        message: 'El especialista tiene citas futuras pendientes.',
+        citasFuturas: futuras.total,
+      });
+    }
+    const resultado = futuras.total > 0 ? await this.resolverCitasFuturas(ctx, id, accion!) : { reasignadas: 0, canceladas: 0 };
     await this.setActivo(ctx, id, false);
+    return resultado;
+  }
+
+  /**
+   * Reubica o cancela las citas futuras antes de la baja.
+   *
+   * Cada cita va en su PROPIA transacción a propósito: si una choca por solape
+   * con la agenda del candidato, solo se pierde ese intento y no se deshace el
+   * trabajo ya hecho con las demás.
+   */
+  private async resolverCitasFuturas(
+    ctx: TenantContext,
+    id: string,
+    accion: AccionBaja,
+  ): Promise<BajaEspecialistaResp> {
+    const pendientes = await runInTenantTx(ctx, (tx) =>
+      tx
+        .select({ id: cita.id, sucursalId: cita.sucursalId, inicio: cita.inicio })
+        .from(cita)
+        .where(
+          and(
+            eq(cita.especialistaId, id),
+            gte(cita.inicio, new Date()),
+            inArray(cita.estado, [EstadoCita.Solicitada, EstadoCita.Confirmada]),
+          ),
+        )
+        .orderBy(cita.inicio),
+    );
+
+    let reasignadas = 0;
+    let canceladas = 0;
+    for (const c of pendientes) {
+      let movida = false;
+      if (accion === 'reasignar') {
+        const candidatos = await this.candidatosPara(ctx, c.id, c.sucursalId, id);
+        for (const cand of candidatos) {
+          try {
+            await this.reasignarCita(ctx, c.id, cand);
+            movida = true;
+            reasignadas++;
+            break;
+          } catch {
+            // Solape u otro rechazo con ESE candidato: se prueba el siguiente.
+          }
+        }
+      }
+      // Sin candidato viable (o acción "cancelar"): se cancela y se avisa al
+      // cliente. Es la única salida honesta: una cita que nadie puede atender.
+      if (!movida) {
+        await this.cancelarCita(ctx, c.id);
+        canceladas++;
+      }
+    }
+    return { reasignadas, canceladas };
+  }
+
+  /**
+   * Mueve la cita al nuevo especialista. Se implementa aquí y no reutilizando
+   * `AgendamientoService` porque ese módulo ya depende de este: invertir la
+   * dependencia crearía un ciclo. El EXCLUDE de la base sigue siendo la garantía
+   * de que no se pisen dos turnos.
+   */
+  private async reasignarCita(ctx: TenantContext, citaId: string, especialistaId: string): Promise<void> {
+    await runInTenantTx(ctx, async (tx) => {
+      try {
+        await tx
+          .update(cita)
+          .set({ especialistaId, actualizadoEn: new Date() })
+          .where(eq(cita.id, citaId));
+      } catch (e) {
+        if ((e as { code?: string }).code === '23P01') {
+          throw new ConflictException('El destino ya tiene un turno en esa franja.');
+        }
+        throw e;
+      }
+    });
+  }
+
+  /** Cancela la cita y avisa al cliente: se quedó sin quien la atienda. */
+  private async cancelarCita(ctx: TenantContext, citaId: string): Promise<void> {
+    const datos = await runInTenantTx(ctx, async (tx) => {
+      const [c] = await tx
+        .select({
+          estado: cita.estado,
+          inicio: cita.inicio,
+          sucursalId: cita.sucursalId,
+          telefono: cliente.telefono,
+          sucursalNombre: sucursal.nombre,
+          especialistaNombre: especialista.nombre,
+        })
+        .from(cita)
+        .innerJoin(sucursal, eq(sucursal.id, cita.sucursalId))
+        .innerJoin(especialista, eq(especialista.id, cita.especialistaId))
+        .leftJoin(cliente, eq(cliente.id, cita.clienteId))
+        .where(eq(cita.id, citaId))
+        .limit(1);
+      if (!c) return null;
+      const nuevoEstado = transicionar(c.estado as EstadoCita, 'cancelar');
+      await tx.update(cita).set({ estado: nuevoEstado, actualizadoEn: new Date() }).where(eq(cita.id, citaId));
+      return c;
+    });
+    // Post-commit y sin propagar: si la mensajería falla, la cita ya quedó
+    // cancelada y eso es lo que no puede perderse.
+    if (datos?.telefono) {
+      try {
+        await this.notificaciones.encolarAviso(
+          ctx.negocioId,
+          datos.telefono,
+          { sucursalNombre: datos.sucursalNombre, especialistaNombre: datos.especialistaNombre, inicio: datos.inicio },
+          { sucursalId: datos.sucursalId, citaId },
+        );
+      } catch {
+        /* el aviso es best-effort */
+      }
+    }
+  }
+
+  /** Quién puede hacerse cargo de esta cita: activo, libre, de la sede y capacitado. */
+  private async candidatosPara(
+    ctx: TenantContext,
+    citaId: string,
+    sucursalId: string,
+    excluirId: string,
+  ): Promise<string[]> {
+    return runInTenantTx(ctx, async (tx) => {
+      const servs = await tx
+        .select({ id: citaServicio.servicioId })
+        .from(citaServicio)
+        .where(eq(citaServicio.citaId, citaId));
+      const equipo = await tx
+        .select({ id: especialista.id })
+        .from(especialista)
+        .innerJoin(especialistaSucursal, eq(especialistaSucursal.especialistaId, especialista.id))
+        .where(
+          and(
+            eq(especialistaSucursal.sucursalId, sucursalId),
+            eq(especialista.activo, true),
+            eq(especialista.disponible, true),
+          ),
+        );
+      const ids = equipo.map((e) => e.id).filter((x) => x !== excluirId);
+      return filtrarPorServicios(tx, ids, servs.map((s) => s.id));
+    });
   }
 
   /** Reactiva, respetando el cupo de especialistas pagados (FASE-08). */

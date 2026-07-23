@@ -80,6 +80,12 @@ export interface PublicServicio {
   precio: string;
   duracionMin: number;
   categoria: string | null;
+  /**
+   * Especialistas de ESTA sucursal (activos y libres) que realizan el servicio.
+   * Con esta lista el cliente resuelve todo el filtrado por intersección: si
+   * llega vacía, nadie puede atenderlo y el servicio no se ofrece.
+   */
+  especialistaIds: string[];
 }
 
 /** Franja libre devuelta por `disponibilidad` (incluye el especialista asignado). */
@@ -130,6 +136,8 @@ export interface CitaAgenda {
   origen: OrigenCita;
   precioEst: string | null;
   servicios: { nombre: string; precio: string }[];
+  /** Ids de los servicios de la cita: permiten filtrar quién puede atenderla al reasignar. */
+  servicioIds: string[];
 }
 
 /** Resumen del panel admin (`GET /reportes/panel?fecha&sucursalId`). */
@@ -216,8 +224,26 @@ export interface EspecialistaEquipo {
   activo: boolean;
   /** Sucursales asignadas (vía `especialista_sucursal`). */
   sucursalIds: string[];
+  /**
+   * Servicios que realiza. **Lista vacía = realiza todos** (convención de
+   * `especialista_servicio`: sin restricción declarada, no hay restricción).
+   */
+  servicioIds: string[];
   /** Fecha de la foto (hace de versión en la URL) o null si no tiene. */
   fotoVersion: string | null;
+}
+
+/** Citas futuras pendientes de un especialista (previo a darlo de baja). */
+export interface CitasFuturasResp {
+  total: number;
+  /** Primeras citas para mostrar en el aviso (no es la lista completa). */
+  muestra: { id: string; inicio: string; clienteNombre: string | null; servicios: string[] }[];
+}
+
+/** Resultado de dar de baja resolviendo las citas futuras. */
+export interface BajaEspecialistaResp {
+  reasignadas: number;
+  canceladas: number;
 }
 
 /** Producto de inventario (`GET /inventario/productos`). Dinero como string numérico. */

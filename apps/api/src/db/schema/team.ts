@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { boolean, customType, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { negocio, sucursal, usuario } from './tenant';
+import { servicio } from './catalog';
 import { estadoVerificacionEnum } from './_shared';
 
 /**
@@ -41,6 +42,33 @@ export const especialistaSucursal = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.especialistaId, t.sucursalId] }),
+  }),
+);
+
+/**
+ * Relación N:N especialista↔servicio: qué servicios está capacitado para realizar.
+ *
+ * **Ausencia total de filas = realiza TODOS los servicios.** Es la misma
+ * convención de `sucursal_dia_laborable` y `servicio_dia` (ausencia = permitido),
+ * y es lo que hace que introducir esta tabla no cambie el comportamiento de los
+ * negocios que ya existen: nadie desaparece del enlace de reservas al desplegar.
+ * El filtrado solo empieza a actuar cuando el admin asigna un subconjunto.
+ *
+ * Para "que no reciba reservas" NO se usa una lista vacía, sino el interruptor
+ * `especialista.disponible`.
+ */
+export const especialistaServicio = pgTable(
+  'especialista_servicio',
+  {
+    especialistaId: uuid('especialista_id')
+      .notNull()
+      .references(() => especialista.id, { onDelete: 'cascade' }),
+    servicioId: uuid('servicio_id')
+      .notNull()
+      .references(() => servicio.id, { onDelete: 'cascade' }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.especialistaId, t.servicioId] }),
   }),
 );
 

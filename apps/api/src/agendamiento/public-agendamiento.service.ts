@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { and, eq, inArray, lt, sql } from 'drizzle-orm';
 import { BadRequestException } from '@nestjs/common';
-import { EstadoCita, OrigenCita, PerfilNegocio, type CitaPublica } from '@orkalis/shared';
+import { EstadoCita, OrigenCita, PerfilNegocio, type CitaPublica, type PublicServicio } from '@orkalis/shared';
 import { adminDb } from '../db/admin-client';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
 import {
@@ -26,6 +26,7 @@ import { ConfigResolverService } from '../config-module/config-resolver.service'
 import { DisponibilidadService, type FranjaPublica } from './disponibilidad.service';
 import { OtpService } from './otp.service';
 import { HorarioService } from './horario.service';
+import { capacidadesDe } from './validators/capacidades';
 import { ValidadorFactory } from './validators/validador.factory';
 import { bogotaParts } from './validators/validador-cita.port';
 import { transicionar } from './cita-state-machine';
@@ -228,15 +229,43 @@ export class PublicAgendamientoService {
     });
   }
 
-  /** Catálogo de servicios activos del negocio (para reservar). */
-  async serviciosPublicos(sucursalId: string): Promise<{ id: string; nombre: string; precio: string; duracionMin: number; categoria: string | null }[]> {
+  /**
+   * Catálogo de servicios activos del negocio (para reservar), cada uno con los
+   * especialistas de ESTA sucursal que pueden realizarlo.
+   *
+   * Ese `especialistaIds` es lo que permite al cliente filtrar sin más viajes al
+   * servidor: ocultar lo que nadie atiende y descartar combinaciones imposibles.
+   * Se devuelven también los servicios con lista vacía —el front decide ocultarlos—
+   * para que una cita ya creada pueda seguir mostrando su nombre.
+   */
+  async serviciosPublicos(sucursalId: string): Promise<PublicServicio[]> {
     const ctx = await this.ctxDeSucursal(sucursalId);
-    return runInTenantTx(ctx, (tx) =>
-      tx
+    return runInTenantTx(ctx, async (tx) => {
+      const servicios = await tx
         .select({ id: servicio.id, nombre: servicio.nombre, precio: servicio.precio, duracionMin: servicio.duracionMin, categoria: servicio.categoria })
         .from(servicio)
-        .where(eq(servicio.activo, true)),
-    );
+        .where(eq(servicio.activo, true));
+      if (servicios.length === 0) return [];
+
+      // Equipo elegible de la sucursal (activo y libre).
+      const equipo = await tx
+        .select({ id: especialista.id })
+        .from(especialista)
+        .innerJoin(especialistaSucursal, eq(especialistaSucursal.especialistaId, especialista.id))
+        .where(and(eq(especialistaSucursal.sucursalId, sucursalId), eq(especialista.activo, true), eq(especialista.disponible, true)));
+      const candidatos = equipo.map((e) => e.id);
+
+      // UNA consulta para todo el equipo y el cruce en memoria: quien no declara
+      // servicios los realiza todos (por eso no aparece en el mapa y pasa siempre).
+      const capacidades = await capacidadesDe(tx, candidatos);
+      return servicios.map((s) => ({
+        ...s,
+        especialistaIds: candidatos.filter((id) => {
+          const declarados = capacidades.get(id);
+          return !declarados || declarados.has(s.id);
+        }),
+      }));
+    });
   }
 
   async franjas(
@@ -345,7 +374,16 @@ export class PublicAgendamientoService {
 
       await this.validadores
         .paraOrigen(OrigenCita.AgendamientoPublico)
-        .validar(tx, { negocioId: ctx.negocioId, sucursalId, especialistaId: ret.especialistaId, inicio, fin });
+        .validar(tx, {
+          negocioId: ctx.negocioId,
+          sucursalId,
+          especialistaId: ret.especialistaId,
+          inicio,
+          fin,
+          // Entre retener y confirmar pudieron quitarle el servicio al
+          // especialista (o darlo de baja): se revalida contra la retención.
+          servicioIds: input.servicioIds,
+        });
 
       // get_or_create cliente por teléfono (RF-034). Si ya existe y llega un
       // nombre nuevo, se ACTUALIZA: el teléfono es la identidad, pero el cliente

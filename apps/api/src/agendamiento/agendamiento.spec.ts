@@ -111,7 +111,7 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
       avisos,
       estadoMensajeria,
     );
-    agenda = new AgendamientoService(validadores, avisos);
+    agenda = new AgendamientoService(validadores, avisos, notificaciones);
   });
 
   afterAll(async () => {

@@ -1,4 +1,9 @@
-import type { EspecialistaEquipo, LiquidacionResultado } from '@orkalis/shared';
+import type {
+  BajaEspecialistaResp,
+  CitasFuturasResp,
+  EspecialistaEquipo,
+  LiquidacionResultado,
+} from '@orkalis/shared';
 import { api } from './api';
 import { useApi } from './useApi';
 
@@ -26,8 +31,22 @@ export function asignarSucursales(id: string, sucursalIds: string[]): Promise<un
   return api.put(`/especialistas/${id}/sucursales`, { sucursalIds });
 }
 
-export function darDeBajaEspecialista(id: string): Promise<unknown> {
-  return api.del(`/especialistas/${id}`);
+/**
+ * Da de baja al especialista. Sin `accion`, si tiene citas futuras el servidor
+ * responde 409 con el conteo para que el admin decida qué hacer con ellas.
+ */
+export function darDeBajaEspecialista(id: string, accion?: 'reasignar' | 'cancelar'): Promise<BajaEspecialistaResp> {
+  return api.del(`/especialistas/${id}${accion ? `?accion=${accion}` : ''}`);
+}
+
+/** Citas futuras pendientes del especialista (para el aviso previo a la baja). */
+export function citasFuturasEspecialista(id: string): Promise<CitasFuturasResp> {
+  return api.get(`/especialistas/${id}/citas-futuras`);
+}
+
+/** Servicios que el especialista realiza. Lista vacía = todos (sin restricción). */
+export function asignarServicios(id: string, servicioIds: string[]): Promise<unknown> {
+  return api.put(`/especialistas/${id}/servicios`, { servicioIds });
 }
 
 /** Vista previa de liquidación (no persiste). Requiere partición ON. */
@@ -46,6 +65,7 @@ export interface IniciarVerificacionBody {
   sucursalIds?: string[];
   email?: string;
   password?: string;
+  servicioIds?: string[];
 }
 
 /** Paso 1: guarda el borrador y envía el código por SMS. */

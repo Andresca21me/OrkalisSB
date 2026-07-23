@@ -1,14 +1,15 @@
 import { Body, Controller, Delete, Get, Header, HttpCode, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { Public } from '../auth/decorators/public.decorator';
-import { RolUsuario } from '@orkalis/shared';
+import { RolUsuario, type BajaEspecialistaResp } from '@orkalis/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import type { TenantContext } from '../db/tenant-context';
-import { EquipoService } from './equipo.service';
+import { EquipoService, type AccionBaja } from './equipo.service';
 import { Throttle } from '@nestjs/throttler';
 import { VerificacionEspecialistaService } from './verificacion-especialista.service';
 import {
+  AsignarServiciosDto,
   AsignarSucursalesDto,
   ConfirmarVerificacionDto,
   CrearEspecialistaDto,
@@ -70,7 +71,10 @@ export class EquipoController {
   crear(@CurrentTenant() ctx: TenantContext, @Body() dto: CrearEspecialistaDto) {
     const credenciales =
       dto.email && dto.password ? { email: dto.email, password: dto.password } : undefined;
-    return this.equipoService.crear(ctx, dto.nombre, dto.especialidad, dto.sucursalIds ?? [], { credenciales });
+    return this.equipoService.crear(ctx, dto.nombre, dto.especialidad, dto.sucursalIds ?? [], {
+      credenciales,
+      servicioIds: dto.servicioIds,
+    });
   }
 
   // ── Foto de perfil ──────────────────────────────────────────────────────────
@@ -136,11 +140,44 @@ export class EquipoController {
     await this.equipoService.asignarSucursales(ctx, id, dto.sucursalIds);
   }
 
-  /** Baja lógica (conserva historial). */
-  @Delete(':id')
+  /** Servicios que el especialista realiza. Lista vacía = todos (sin restricción). */
+  @Put(':id/servicios')
   @HttpCode(204)
-  async darDeBaja(@CurrentTenant() ctx: TenantContext, @Param('id') id: string): Promise<void> {
-    await this.equipoService.darDeBaja(ctx, id);
+  async asignarServicios(
+    @CurrentTenant() ctx: TenantContext,
+    @Param('id') id: string,
+    @Body() dto: AsignarServiciosDto,
+  ): Promise<void> {
+    await this.equipoService.asignarServicios(ctx, id, dto.servicioIds);
+  }
+
+  /** Citas futuras pendientes: lo que hay que resolver antes de darlo de baja. */
+  @Get(':id/citas-futuras')
+  citasFuturas(@CurrentTenant() ctx: TenantContext, @Param('id') id: string) {
+    return this.equipoService.citasFuturas(ctx, id);
+  }
+
+  /**
+   * Baja lógica (conserva historial). Con citas futuras pendientes responde 409
+   * salvo que se indique qué hacer con ellas vía `?accion=reasignar|cancelar`.
+   *
+   * Sin `accion` mantiene el contrato de siempre (204 sin cuerpo); con `accion`
+   * devuelve 200 con el recuento de lo que se hizo con las citas, que es
+   * justamente lo que el admin necesita ver.
+   */
+  @Delete(':id')
+  async darDeBaja(
+    @CurrentTenant() ctx: TenantContext,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+    @Query('accion') accion?: AccionBaja,
+  ): Promise<BajaEspecialistaResp | undefined> {
+    const r = await this.equipoService.darDeBaja(ctx, id, accion);
+    if (!accion) {
+      res.status(204);
+      return undefined;
+    }
+    return r;
   }
 
   @Post(':id/reactivar')

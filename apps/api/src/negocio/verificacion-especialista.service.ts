@@ -29,6 +29,8 @@ type Borrador = {
   apellidos?: string;
   especialidad?: string;
   sucursalIds: string[];
+  /** Servicios que realizará. Vacío/ausente = todos (sin restricción). */
+  servicioIds?: string[];
   email?: string;
   /** Hash argon2 — la contraseña en claro NUNCA se persiste. */
   passwordHash?: string;
@@ -40,6 +42,7 @@ export interface IniciarInput {
   celular: string;
   especialidad?: string;
   sucursalIds?: string[];
+  servicioIds?: string[];
   email?: string;
   password?: string;
 }
@@ -91,6 +94,7 @@ export class VerificacionEspecialistaService {
       apellidos: input.apellidos?.trim() || undefined,
       especialidad: input.especialidad?.trim() || undefined,
       sucursalIds: input.sucursalIds ?? [],
+      servicioIds: input.servicioIds ?? [],
       email: input.email?.trim().toLowerCase() || undefined,
       passwordHash: input.password ? await argon2.hash(input.password) : undefined,
     };
@@ -148,6 +152,7 @@ export class VerificacionEspecialistaService {
       telefono: fila.telefono,
       telefonoVerificadoEn: new Date(),
       apellidos: b.apellidos,
+      servicioIds: b.servicioIds,
       credenciales: b.email && b.passwordHash ? { email: b.email, passwordHash: b.passwordHash } : undefined,
     });
 

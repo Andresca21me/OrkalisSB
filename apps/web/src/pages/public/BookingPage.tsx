@@ -95,6 +95,19 @@ export function BookingPage() {
     return { elegidos, total, totalMin, espNombre };
   }, [catalogo.data, equipo.data, servicios, especialistaId]);
 
+  /**
+   * Especialistas que pueden atender TODOS los servicios elegidos (intersección).
+   * `null` mientras no haya selección.
+   */
+  const aptos = useMemo(() => {
+    const elegidos = (catalogo.data ?? []).filter((s) => servicios.includes(s.id));
+    if (elegidos.length === 0) return null;
+    return elegidos.reduce<string[]>(
+      (acc, s) => acc.filter((id) => s.especialistaIds.includes(id)),
+      [...elegidos[0].especialistaIds],
+    );
+  }, [catalogo.data, servicios]);
+
   function toggleServicio(id: string) {
     setServicios((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
   }
@@ -239,6 +252,7 @@ export function BookingPage() {
         <Especialistas
           negocio={negocio}
           equipo={equipo}
+          aptos={aptos}
           value={especialistaId}
           onPick={setEspecialistaId}
           onBack={() => setStep('servicios')}
@@ -365,10 +379,28 @@ function Inicio({ info, servicios, onReservar, onGestionar }: { info: PublicInfo
 
 // ════════════════════ Servicios ════════════════════
 function Servicios({ negocio, catalogo, seleccion, onToggle, resumen, onBack, onContinue }: { negocio: string; catalogo: ReturnType<typeof useApi<PublicServicio[]>>; seleccion: string[]; onToggle: (id: string) => void; resumen: { total: number; totalMin: number; elegidos: PublicServicio[] }; onBack: () => void; onContinue: () => void }) {
-  const lista = catalogo.data ?? [];
+  // Solo se ofrece lo que alguien puede atender: un servicio sin especialista
+  // capaz (por baja, por estar ocupado o porque nadie lo tiene asignado) llevaría
+  // al cliente hasta el paso de horario para no encontrar ninguna franja.
+  const lista = useMemo(() => (catalogo.data ?? []).filter((s) => s.especialistaIds.length > 0), [catalogo.data]);
   const categorias = useMemo(() => ['Todos', ...Array.from(new Set(lista.map((s) => s.categoria).filter(Boolean) as string[]))], [lista]);
   const [cat, setCat] = useState('Todos');
   const visibles = cat === 'Todos' ? lista : lista.filter((s) => s.categoria === cat);
+
+  // Quién podría atender TODO lo ya elegido. Un servicio solo se puede sumar si
+  // deja esa intersección con alguien dentro: la cita es una sola y la atiende
+  // una sola persona.
+  const compatibles = useMemo(() => {
+    const elegidos = lista.filter((s) => seleccion.includes(s.id));
+    if (elegidos.length === 0) return null; // sin selección, todo es elegible
+    return elegidos.reduce<string[]>(
+      (acc, s) => acc.filter((id) => s.especialistaIds.includes(id)),
+      [...elegidos[0].especialistaIds],
+    );
+  }, [lista, seleccion]);
+
+  const puedeSumar = (s: PublicServicio): boolean =>
+    seleccion.includes(s.id) || compatibles === null || compatibles.some((id) => s.especialistaIds.includes(id));
 
   return (
     <>
@@ -394,14 +426,17 @@ function Servicios({ negocio, catalogo, seleccion, onToggle, resumen, onBack, on
           <ListaSkeleton />
         ) : catalogo.error ? (
           <ErrorState onRetry={catalogo.recargar} />
+        ) : lista.length === 0 ? (
+          <EmptyState icon="scissors" title="Reservas no disponibles" desc="Por ahora no hay servicios con especialista disponible. Vuelve más tarde o comunícate con el negocio." />
         ) : visibles.length === 0 ? (
           <EmptyState icon="scissors" title="Sin servicios en esta categoría" desc="Prueba con otra categoría o vuelve más tarde." />
         ) : (
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {visibles.map((s) => {
               const on = seleccion.includes(s.id);
+              const disponible = puedeSumar(s);
               return (
-                <Card key={s.id} interactive selected={on} padding={14} onClick={() => onToggle(s.id)} testId="booking-servicio">
+                <Card key={s.id} interactive={disponible} selected={on} padding={14} onClick={disponible ? () => onToggle(s.id) : undefined} testId="booking-servicio" style={disponible ? undefined : { opacity: 0.5, cursor: 'not-allowed' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--text-primary)', marginBottom: 6 }}>{s.nombre}</div>
@@ -411,6 +446,11 @@ function Servicios({ negocio, catalogo, seleccion, onToggle, resumen, onBack, on
                           <Icon name="clock" size={13} color="var(--text-tertiary)" />{s.duracionMin} min
                         </span>
                       </div>
+                      {!disponible && (
+                        <div style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+                          Nadie atiende este servicio junto con tu selección.
+                        </div>
+                      )}
                     </div>
                     <span style={{ width: 26, height: 26, borderRadius: 8, flex: 'none', marginTop: 2, border: `2px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, background: on ? 'var(--brand)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {on && <Icon name="check" size={16} color="#fff" />}
@@ -441,7 +481,10 @@ function Servicios({ negocio, catalogo, seleccion, onToggle, resumen, onBack, on
 }
 
 // ════════════════════ Especialista ════════════════════
-function Especialistas({ negocio, equipo, value, onPick, onBack, onContinue }: { negocio: string; equipo: ReturnType<typeof useApi<PublicEspecialista[]>>; value: string | null; onPick: (v: string) => void; onBack: () => void; onContinue: () => void }) {
+function Especialistas({ negocio, equipo, aptos, value, onPick, onBack, onContinue }: { negocio: string; equipo: ReturnType<typeof useApi<PublicEspecialista[]>>; aptos: string[] | null; value: string | null; onPick: (v: string) => void; onBack: () => void; onContinue: () => void }) {
+  // Solo quienes realizan TODOS los servicios elegidos. `null` = sin restricción
+  // (no debería ocurrir con servicios ya elegidos, pero no se asume).
+  const visibles = (equipo.data ?? []).filter((e) => aptos === null || aptos.includes(e.id));
   return (
     <>
       <AppHeader title="Elige tu especialista" sub={negocio} onBack={onBack} />
@@ -469,7 +512,7 @@ function Especialistas({ negocio, equipo, value, onPick, onBack, onContinue }: {
               </div>
             </Card>
 
-            {(equipo.data ?? []).map((e) => (
+            {visibles.map((e) => (
               <Card key={e.id} interactive selected={value === e.id} padding={14} onClick={() => onPick(e.id)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <Avatar name={e.nombre} size={44} src={urlFotoEspecialista(e.id, e.fotoVersion)} />

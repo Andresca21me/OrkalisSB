@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import type { DrizzleTx } from '../../db/tx';
 import { especialista, especialistaSucursal, sucursal } from '../../db/schema';
+import { realizaServicios } from './capacidades';
 
 /** Datos mínimos de una cita a validar. */
 export interface DatosCita {
@@ -10,6 +11,14 @@ export interface DatosCita {
   especialistaId: string;
   inicio: Date;
   fin: Date;
+  /** Servicios de la cita: se exige que el especialista los realice todos. */
+  servicioIds?: string[];
+  /**
+   * `false` solo para el walk-in RETROACTIVO: registra una atención que YA
+   * ocurrió. Bloquearla no cambia lo que pasó en el salón, solo impide dejarlo
+   * asentado y descuadra las finanzas.
+   */
+  validarServicios?: boolean;
 }
 
 /**
@@ -45,6 +54,14 @@ export async function validarEntidades(tx: DrizzleTx, datos: DatosCita): Promise
     .where(eq(especialistaSucursal.especialistaId, datos.especialistaId));
   if (!asignaciones.some((a) => a.s === datos.sucursalId)) {
     throw new BadRequestException('El especialista no está asignado a esa sucursal.');
+  }
+
+  // Y debe realizar todos los servicios de la cita (sin restricción declarada,
+  // los realiza todos). El front ya filtra, pero aquí es donde se garantiza.
+  if (datos.validarServicios !== false && datos.servicioIds?.length) {
+    if (!(await realizaServicios(tx, datos.especialistaId, datos.servicioIds))) {
+      throw new BadRequestException('El especialista no realiza alguno de los servicios seleccionados.');
+    }
   }
 }
 

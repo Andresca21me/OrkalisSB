@@ -19,7 +19,20 @@ import {
 const NAV: NavItem[] = [{ id: 'agenda', label: 'Agenda del día', icon: 'calendar' }];
 
 interface Sucursal { id: string; nombre: string; activa: boolean }
-interface Especialista { id: string; nombre: string; especialidad: string | null }
+interface Especialista {
+  id: string;
+  nombre: string;
+  especialidad: string | null;
+  activo: boolean;
+  sucursalIds: string[];
+  /** Vacío = realiza todos los servicios. */
+  servicioIds: string[];
+}
+
+/** ¿Puede atender TODOS estos servicios? (sin lista declarada, los realiza todos). */
+function realizaTodos(e: Especialista, servicioIds: string[]): boolean {
+  return e.servicioIds.length === 0 || servicioIds.every((id) => e.servicioIds.includes(id));
+}
 interface ServicioOpt { id: string; nombre: string; precio: string; activo: boolean }
 
 export function RecepcionApp() {
@@ -136,7 +149,16 @@ function ReasignarDialog({ cita, especialistas, onClose, onDone }: { cita: CitaA
   const [esp, setEsp] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const opciones = especialistas.filter((e) => e.id !== cita.especialistaId);
+  // Solo quien puede REALMENTE hacerse cargo: activo, de la misma sede y capaz de
+  // realizar los servicios de la cita. Antes se ofrecía a todo el equipo y el
+  // backend rechazaba (o peor, aceptaba a alguien de otra sede).
+  const opciones = especialistas.filter(
+    (e) =>
+      e.id !== cita.especialistaId &&
+      e.activo &&
+      e.sucursalIds.includes(cita.sucursalId) &&
+      realizaTodos(e, cita.servicioIds),
+  );
 
   async function guardar() {
     if (!esp) return;
@@ -164,6 +186,11 @@ function ReasignarDialog({ cita, especialistas, onClose, onDone }: { cita: CitaA
           <option value="">Selecciona…</option>
           {opciones.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
         </Select>
+        {opciones.length === 0 && (
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--error)', margin: 0 }}>
+            Ningún otro especialista de esta sede puede atender los servicios de la cita.
+          </p>
+        )}
         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', margin: '4px 0 0', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <Icon name="info" size={13} color="var(--text-tertiary)" />
           Si el destino ya tiene un turno en esa franja, no se permitirá (anti-solape).
@@ -185,6 +212,17 @@ function WalkinModal({ sucursalId, especialistas, onClose, onDone }: { sucursalI
   const total = activos.filter((s) => sel.includes(s.id)).reduce((a, s) => a + Number(s.precio), 0);
   const valido = !!sucursalId && !!esp && sel.length > 0;
   const toggle = (id: string) => setSel((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
+
+  // Este selector no filtraba por nada: mostraba a todo el equipo, incluso de
+  // otras sedes. Ahora solo los de ESTA sede que realicen lo seleccionado.
+  const espOpciones = especialistas.filter(
+    (e) => e.activo && (!sucursalId || e.sucursalIds.includes(sucursalId)) && realizaTodos(e, sel),
+  );
+  const servicioPosible = (id: string): boolean =>
+    sel.includes(id) ||
+    especialistas.some(
+      (e) => e.activo && (!sucursalId || e.sucursalIds.includes(sucursalId)) && realizaTodos(e, [...sel, id]),
+    );
 
   async function guardar() {
     if (!valido) return;
@@ -211,7 +249,7 @@ function WalkinModal({ sucursalId, especialistas, onClose, onDone }: { sucursalI
           <span style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>Especialista</span>
           <Select value={esp} onChange={(e) => setEsp(e.target.value)}>
             <option value="">Selecciona…</option>
-            {especialistas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+            {espOpciones.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
           </Select>
         </label>
         <div>
@@ -220,8 +258,9 @@ function WalkinModal({ sucursalId, especialistas, onClose, onDone }: { sucursalI
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {activos.map((s) => {
                 const on = sel.includes(s.id);
+                const posible = servicioPosible(s.id);
                 return (
-                  <button key={s.id} type="button" onClick={() => toggle(s.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 12px', cursor: 'pointer', borderRadius: 'var(--radius-sm)', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, background: on ? 'var(--brand-tint)' : 'var(--surface-card)', color: on ? 'var(--brand)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                  <button key={s.id} type="button" disabled={!posible} title={posible ? undefined : 'Nadie de esta sede atiende esta combinación'} onClick={() => toggle(s.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 12px', cursor: posible ? 'pointer' : 'not-allowed', opacity: posible ? 1 : 0.45, borderRadius: 'var(--radius-sm)', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, background: on ? 'var(--brand-tint)' : 'var(--surface-card)', color: on ? 'var(--brand)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
                     {on && <Icon name="check" size={15} />}{s.nombre} · {money(s.precio)}
                   </button>
                 );

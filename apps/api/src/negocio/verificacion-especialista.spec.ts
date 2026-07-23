@@ -7,6 +7,7 @@ import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
 import { especialista, negocio, sucursal, suscripcion, usuario, verificacionEspecialista } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
+import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { PlanService } from '../plans/plan.service';
 import { EquipoService } from './equipo.service';
 import { VerificacionEspecialistaService } from './verificacion-especialista.service';
@@ -43,7 +44,7 @@ describe('Alta de especialista con celular verificado (FASE-06, D3)', () => {
 
     verify = new VerifySpy();
     const remitente = new RemitenteResolver({ get: () => undefined } as never);
-    servicio = new VerificacionEspecialistaService(new EquipoService(new PlanService()), remitente, verify, new MensajeriaEstadoService());
+    servicio = new VerificacionEspecialistaService(new EquipoService(new PlanService(), { encolarAviso: async () => {} } as unknown as NotificacionesService), remitente, verify, new MensajeriaEstadoService());
   });
 
   afterAll(async () => {

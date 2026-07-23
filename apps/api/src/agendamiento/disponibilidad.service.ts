@@ -12,6 +12,7 @@ import {
 } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { horaAMinutos } from './validators/validador-cita.port';
+import { filtrarPorServicios, realizaServicios } from './validators/capacidades';
 import { HorarioService } from './horario.service';
 
 export interface Franja {
@@ -70,7 +71,9 @@ export class DisponibilidadService {
       }
       const duracion = servs.reduce((a, s) => a + s.dur, 0);
 
-      // Especialistas objetivo.
+      // Especialistas objetivo, ya filtrados por quién realiza el combo elegido:
+      // ofrecer una franja de alguien que no puede atenderla solo produciría un
+      // rechazo al confirmar.
       let especialistaIds: string[];
       if (especialistaParam === 'any') {
         const rows = await tx
@@ -84,8 +87,11 @@ export class DisponibilidadService {
               eq(especialista.disponible, true),
             ),
           );
-        especialistaIds = rows.map((r) => r.id);
+        especialistaIds = await filtrarPorServicios(tx, rows.map((r) => r.id), servicioIds);
       } else {
+        // Especialista concreto que no realiza el combo: sin franjas (no es un
+        // error; el front ya no debería ofrecerlo).
+        if (!(await realizaServicios(tx, especialistaParam, servicioIds))) return [];
         especialistaIds = [especialistaParam];
       }
 

@@ -9,6 +9,7 @@ import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
 import { especialista, especialistaFoto, negocio, suscripcion, usuario } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
+import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { PlanService } from '../plans/plan.service';
 import { EquipoService } from './equipo.service';
 
@@ -41,7 +42,9 @@ describe('Foto del especialista', () => {
     espAjenoId = espAjeno.id;
 
     ctx = { negocioId, sucursalIds: null, rol: RolUsuario.Admin };
-    equipo = new EquipoService(new PlanService());
+    // Doble mínimo: estos tests no ejercitan la baja con citas futuras,
+    // que es lo único que usa las notificaciones.
+    equipo = new EquipoService(new PlanService(), { encolarAviso: async () => {} } as unknown as NotificacionesService);
   });
 
   afterAll(async () => {

@@ -2,12 +2,14 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { and, asc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, OrigenCita, type CitaAgenda } from '@orkalis/shared';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
-import { cita, citaServicio, cliente, especialista, servicio } from '../db/schema';
+import { cita, citaServicio, cliente, especialista, servicio, sucursal } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { sucursalScope } from '../common/scope';
 import { transicionar, type EventoCita } from './cita-state-machine';
 import { ValidadorFactory } from './validators/validador.factory';
+import { validarEntidades } from './validators/validador-cita.port';
 import { AvisosEspecialistaService } from './avisos-especialista.service';
+import { NotificacionesService } from '../notificaciones/notificaciones.service';
 
 const EXCLUSION_VIOLATION = '23P01';
 
@@ -19,6 +21,7 @@ export class AgendamientoService {
   constructor(
     private readonly validadores: ValidadorFactory,
     private readonly avisos: AvisosEspecialistaService,
+    private readonly notificaciones: NotificacionesService,
   ) {}
 
   /**
@@ -64,15 +67,24 @@ export class AgendamientoService {
       // Servicios de todas las citas listadas, en una sola consulta.
       const ids = filas.map((f) => f.id);
       const servs = await tx
-        .select({ citaId: citaServicio.citaId, nombre: servicio.nombre, precio: citaServicio.precioAplicado })
+        .select({
+          citaId: citaServicio.citaId,
+          servicioId: citaServicio.servicioId,
+          nombre: servicio.nombre,
+          precio: citaServicio.precioAplicado,
+        })
         .from(citaServicio)
         .innerJoin(servicio, eq(servicio.id, citaServicio.servicioId))
         .where(inArray(citaServicio.citaId, ids));
       const porCita = new Map<string, { nombre: string; precio: string }[]>();
+      const idsPorCita = new Map<string, string[]>();
       for (const s of servs) {
         const arr = porCita.get(s.citaId) ?? [];
         arr.push({ nombre: s.nombre, precio: s.precio });
         porCita.set(s.citaId, arr);
+        const idArr = idsPorCita.get(s.citaId) ?? [];
+        idArr.push(s.servicioId);
+        idsPorCita.set(s.citaId, idArr);
       }
 
       return filas.map((f) => ({
@@ -88,6 +100,7 @@ export class AgendamientoService {
         origen: f.origen as OrigenCita,
         precioEst: f.precioEst,
         servicios: porCita.get(f.id) ?? [],
+        servicioIds: idsPorCita.get(f.id) ?? [],
       }));
     });
   }
@@ -135,6 +148,23 @@ export class AgendamientoService {
       const [esp] = await tx.select({ id: especialista.id }).from(especialista).where(eq(especialista.id, especialistaId)).limit(1);
       if (!esp) throw new NotFoundException('Especialista no encontrado.');
 
+      // Hasta aquí solo se comprobaba que el destino EXISTIERA: se podía reasignar
+      // a alguien dado de baja, de otra sede o que no realiza el servicio. Se
+      // reutiliza el validador común para que la reasignación exija lo mismo que
+      // la creación (activo + sucursal + capacidades).
+      const servs = await tx
+        .select({ id: citaServicio.servicioId })
+        .from(citaServicio)
+        .where(eq(citaServicio.citaId, citaId));
+      await validarEntidades(tx, {
+        negocioId: ctx.negocioId,
+        sucursalId: actual.sucursalId,
+        especialistaId,
+        inicio: actual.inicio,
+        fin: actual.fin,
+        servicioIds: servs.map((s) => s.id),
+      });
+
       try {
         const [c] = await tx
           .update(cita)
@@ -160,7 +190,42 @@ export class AgendamientoService {
   async cancelar(ctx: TenantContext, citaId: string): Promise<Cita> {
     const c = await this.transicion(ctx, citaId, 'cancelar');
     await this.avisos.avisar(ctx, citaId, 'Cita cancelada');
+    // Y al CLIENTE: hasta ahora una cancelación hecha desde el panel solo se le
+    // avisaba al especialista, así que el cliente se presentaba a una cita que ya
+    // no existía. La cancelación pública sí avisaba; esto iguala ambos caminos.
+    await this.avisarClienteCancelacion(ctx, citaId);
     return c;
+  }
+
+  /** Aviso de cancelación al cliente. Best-effort: la cita ya quedó cancelada. */
+  private async avisarClienteCancelacion(ctx: TenantContext, citaId: string): Promise<void> {
+    try {
+      const [d] = await runInTenantTx(ctx, (tx) =>
+        tx
+          .select({
+            inicio: cita.inicio,
+            sucursalId: cita.sucursalId,
+            telefono: cliente.telefono,
+            sucursalNombre: sucursal.nombre,
+            especialistaNombre: especialista.nombre,
+          })
+          .from(cita)
+          .innerJoin(sucursal, eq(sucursal.id, cita.sucursalId))
+          .innerJoin(especialista, eq(especialista.id, cita.especialistaId))
+          .leftJoin(cliente, eq(cliente.id, cita.clienteId))
+          .where(eq(cita.id, citaId))
+          .limit(1),
+      );
+      if (!d?.telefono) return;
+      await this.notificaciones.encolarAviso(
+        ctx.negocioId,
+        d.telefono,
+        { sucursalNombre: d.sucursalNombre, especialistaNombre: d.especialistaNombre, inicio: d.inicio },
+        { sucursalId: d.sucursalId, citaId },
+      );
+    } catch {
+      /* el aviso nunca debe tumbar la cancelación */
+    }
   }
   noAsistio(ctx: TenantContext, citaId: string): Promise<Cita> {
     return this.transicion(ctx, citaId, 'no_asistio');
@@ -194,7 +259,10 @@ export class AgendamientoService {
       metodoPago: MetodoPago;
     },
   ): Promise<Cita> {
-    return this.crearInterna(ctx, { ...input, estado: EstadoCita.Completada });
+    // `validarServicios: false` — la atención ya ocurrió; impedir registrarla
+    // porque hoy el especialista no tenga ese servicio asignado solo dejaría el
+    // trabajo sin cobrar ni liquidar.
+    return this.crearInterna(ctx, { ...input, estado: EstadoCita.Completada, validarServicios: false });
   }
 
   private async crearInterna(
@@ -207,6 +275,8 @@ export class AgendamientoService {
       inicio: Date;
       fin?: Date;
       estado: EstadoCita;
+      /** El retroactivo no valida capacidades: registra algo que ya ocurrió. */
+      validarServicios?: boolean;
     },
   ): Promise<Cita> {
     return runInTenantTx(ctx, async (tx) => {
@@ -229,6 +299,8 @@ export class AgendamientoService {
           especialistaId: input.especialistaId,
           inicio: input.inicio,
           fin,
+          servicioIds: input.servicioIds,
+          validarServicios: input.validarServicios,
         });
 
       let nueva: Cita;

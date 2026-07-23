@@ -272,7 +272,7 @@ interface ServicioOpt { id: string; nombre: string; precio: string; duracionMin:
 
 export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucursalId: string | null; fechaIso: string; onClose: () => void; onDone: () => void }) {
   const sucursales = useApi<(Opcion & { activa: boolean })[]>(() => api.get('/sucursales'), []);
-  const especialistas = useApi<(Opcion & { sucursalIds?: string[] })[]>(() => api.get('/especialistas'), []);
+  const especialistas = useApi<(Opcion & { sucursalIds?: string[]; servicioIds?: string[] })[]>(() => api.get('/especialistas'), []);
   const clientes = useApi<Opcion[]>(() => api.get('/clientes'), []);
   const servicios = useApi<ServicioOpt[]>(() => api.get('/servicios'), []);
 
@@ -288,10 +288,26 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
   const sucEfectiva = suc || sucursales.data?.[0]?.id || '';
   // Solo especialistas asignados a la sede elegida (HU-ADM-012): no ofrecer
   // opciones que el backend rechazaría por no pertenecer a la sucursal.
+  // Y que además realicen TODOS los servicios elegidos (sin lista declarada, los
+  // realiza todos). El backend valida lo mismo; esto evita ofrecer lo imposible.
   const espOpciones = useMemo(
-    () => (especialistas.data ?? []).filter((e) => !e.sucursalIds || !sucEfectiva || e.sucursalIds.includes(sucEfectiva)),
-    [especialistas.data, sucEfectiva],
+    () =>
+      (especialistas.data ?? [])
+        .filter((e) => !e.sucursalIds || !sucEfectiva || e.sucursalIds.includes(sucEfectiva))
+        .filter((e) => servSel.length === 0 || !e.servicioIds?.length || servSel.every((sid) => e.servicioIds!.includes(sid))),
+    [especialistas.data, sucEfectiva, servSel],
   );
+
+  /** ¿Se puede sumar este servicio sin dejar la selección sin nadie que la atienda? */
+  const servicioPosible = (id: string): boolean => {
+    if (servSel.includes(id)) return true;
+    const combo = [...servSel, id];
+    return (especialistas.data ?? []).some(
+      (e) =>
+        (!e.sucursalIds || !sucEfectiva || e.sucursalIds.includes(sucEfectiva)) &&
+        (!e.servicioIds?.length || combo.every((sid) => e.servicioIds!.includes(sid))),
+    );
+  };
   // Si la sede cambia y el especialista elegido ya no es válido, deselecciónalo.
   useEffect(() => {
     if (esp && !espOpciones.some((e) => e.id === esp)) setEsp('');
@@ -345,8 +361,9 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {(servicios.data ?? []).map((s) => {
               const on = servSel.includes(s.id);
+              const posible = servicioPosible(s.id);
               return (
-                <button key={s.id} type="button" onClick={() => toggle(s.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 12px', cursor: 'pointer', borderRadius: 'var(--radius-sm)', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, background: on ? 'var(--brand-tint)' : 'var(--surface-card)', color: on ? 'var(--brand)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                <button key={s.id} type="button" disabled={!posible} title={posible ? undefined : 'Nadie de esta sede atiende esta combinación'} onClick={() => toggle(s.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 12px', cursor: posible ? 'pointer' : 'not-allowed', opacity: posible ? 1 : 0.45, borderRadius: 'var(--radius-sm)', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, background: on ? 'var(--brand-tint)' : 'var(--surface-card)', color: on ? 'var(--brand)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
                   {on && <Icon name="check" size={15} />}
                   {s.nombre} · {money(s.precio)}
                 </button>

@@ -134,6 +134,13 @@
       "when": 1784826680132,
       "tag": "0018_equal_bill_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784838142403,
+      "tag": "0019_wet_sugar_man",
+      "breakpoints": true
     }
   ]
 }

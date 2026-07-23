@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { EspecialistaEquipo, LiquidacionResultado } from '@orkalis/shared';
+import type { CitasFuturasResp, EspecialistaEquipo, LiquidacionResultado } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { useSucursal } from '../../lib/sucursal';
@@ -7,10 +7,12 @@ import { money } from '../../lib/format';
 import { urlFotoEspecialista } from '../../lib/api';
 import { prepararFoto } from '../../lib/imagen';
 import {
+  asignarServicios,
   asignarSucursales,
   borrarFotoEspecialista,
   subirFotoEspecialista,
   confirmarVerificacion,
+  citasFuturasEspecialista,
   darDeBajaEspecialista,
   editarEspecialista,
   iniciarVerificacion,
@@ -37,6 +39,7 @@ import {
   Textarea,
   useToast,
 } from '../../ui/ui';
+import { useServicios } from '../../lib/useServicios';
 import { GConfirm, GField, GSummaryRow, RowMenu } from './gestion-ui';
 
 interface Sucursal { id: string; nombre: string; activa: boolean }
@@ -47,11 +50,17 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
   const { data, cargando, error, recargar } = useEquipo();
   const sucs = useApi<Sucursal[]>(() => api.get('/sucursales'));
   const sucNombre = useMemo(() => new Map((sucs.data ?? []).map((s) => [s.id, s.nombre])), [sucs.data]);
+  const servicios = useServicios();
+  const serviciosActivos = useMemo(() => (servicios.data ?? []).filter((x) => x.activo), [servicios.data]);
+  const servNombre = useMemo(() => new Map(serviciosActivos.map((x) => [x.id, x.nombre])), [serviciosActivos]);
 
   const [filtro, setFiltro] = useState('todos');
   const [formOpen, setFormOpen] = useState(false);
   const [editSp, setEditSp] = useState<EspecialistaEquipo | null>(null);
   const [delSp, setDelSp] = useState<EspecialistaEquipo | null>(null);
+  // Cuando la baja choca con citas futuras, el servidor las cuenta y aquí se
+  // decide qué hacer con ellas antes de reintentar.
+  const [conflicto, setConflicto] = useState<{ esp: EspecialistaEquipo; citas: CitasFuturasResp } | null>(null);
 
   useEffect(() => { if (!particion && filtro === 'liquidacion') setFiltro('todos'); }, [particion, filtro]);
 
@@ -81,6 +90,32 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
       await darDeBajaEspecialista(e.id);
       setDelSp(null);
       toast(`${e.nombre} dado de baja`, 'info');
+      await recargar();
+    } catch (err) {
+      // 409 = tiene citas futuras. No es un error del admin: es una decisión
+      // que solo él puede tomar, así que se le presenta en vez de fallar.
+      if (/citas futuras/i.test((err as Error).message)) {
+        try {
+          const citas = await citasFuturasEspecialista(e.id);
+          setDelSp(null);
+          setConflicto({ esp: e, citas });
+          return;
+        } catch { /* si falla, cae al toast de abajo */ }
+      }
+      toast((err as Error).message, 'error');
+    }
+  }
+
+  async function resolverBaja(accion: 'reasignar' | 'cancelar') {
+    if (!conflicto) return;
+    try {
+      const r = await darDeBajaEspecialista(conflicto.esp.id, accion);
+      const partes = [
+        r.reasignadas ? `${r.reasignadas} cita(s) reasignada(s)` : '',
+        r.canceladas ? `${r.canceladas} cancelada(s)` : '',
+      ].filter(Boolean);
+      toast(`${conflicto.esp.nombre} dado de baja · ${partes.join(' y ') || 'sin citas afectadas'}`, 'info');
+      setConflicto(null);
       await recargar();
     } catch (err) { toast((err as Error).message, 'error'); }
   }
@@ -143,20 +178,82 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           {lista.map((e) => (
-            <SpecialistCard key={e.id} s={e} sucNombre={sucNombre} onToggle={() => toggleDisponible(e)} onEdit={() => { setEditSp(e); setFormOpen(true); }} onDelete={() => setDelSp(e)} />
+            <SpecialistCard key={e.id} s={e} sucNombre={sucNombre} servNombre={servNombre} onToggle={() => toggleDisponible(e)} onEdit={() => { setEditSp(e); setFormOpen(true); }} onDelete={() => setDelSp(e)} />
           ))}
         </div>
       )}
 
-      {formOpen && <SpecialistModal especialista={editSp} sucursales={sucs.data ?? []} onClose={() => { setFormOpen(false); setEditSp(null); }} onSaved={async () => { setFormOpen(false); setEditSp(null); await recargar(); }} />}
+      {formOpen && <SpecialistModal especialista={editSp} sucursales={sucs.data ?? []} servicios={serviciosActivos} onClose={() => { setFormOpen(false); setEditSp(null); }} onSaved={async () => { setFormOpen(false); setEditSp(null); await recargar(); }} />}
       <GConfirm open={!!delSp} title="Dar de baja al especialista" danger confirmLabel="Dar de baja" confirmIcon="user-x"
         desc={delSp ? <span><strong style={{ color: 'var(--text-primary)' }}>{delSp.nombre}</strong> dejará de aparecer en el equipo, pero su historial de servicios y liquidaciones se conserva (borrado lógico).</span> : ''}
         onClose={() => setDelSp(null)} onConfirm={() => delSp && eliminar(delSp)} />
+
+      {conflicto && (
+        <Dialog
+          open
+          onClose={() => setConflicto(null)}
+          width={520}
+          title="Tiene citas pendientes"
+          subtitle={`${conflicto.esp.nombre} · ${conflicto.citas.total} cita(s) por atender`}
+          footer={<Button variant="ghost" onClick={() => setConflicto(null)}>Volver</Button>}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '4px 0 8px' }}>
+            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              No se puede dar de baja sin decidir qué pasa con estas citas: si se quedan asignadas a alguien que ya no trabaja, nadie las atenderá.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)' }}>
+              {conflicto.citas.muestra.map((c) => (
+                <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.clienteNombre ?? 'Sin cliente'} · {c.servicios.join(', ') || '—'}
+                  </span>
+                  <span className="data" style={{ flex: 'none' }}>
+                    {new Date(c.inicio).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              ))}
+              {conflicto.citas.total > conflicto.citas.muestra.length && (
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>y {conflicto.citas.total - conflicto.citas.muestra.length} más…</div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Button variant="primary" fullWidth iconLeft="repeat" onClick={() => void resolverBaja('reasignar')}>
+                Reasignar a otro especialista
+              </Button>
+              <p style={{ margin: '-4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                Cada cita pasa a alguien de la misma sede que realice sus servicios. Las que nadie pueda atender se cancelan y se avisa al cliente.
+              </p>
+              <Button variant="secondary" fullWidth iconLeft="x-circle" onClick={() => void resolverBaja('cancelar')}>
+                Cancelar todas las citas
+              </Button>
+              <p style={{ margin: '-4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                Se cancelan las {conflicto.citas.total} y se avisa a cada cliente.
+              </p>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }
 
-function SpecialistCard({ s, sucNombre, onToggle, onEdit, onDelete }: { s: EspecialistaEquipo; sucNombre: Map<string, string>; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
+/** Píldora de la tarjeta (sucursal o servicio). */
+function Chip({ icon, children, tone }: { icon: string; children: React.ReactNode; tone?: 'muted' }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 24, padding: '0 9px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', fontSize: 'var(--text-xs)', color: tone === 'muted' ? 'var(--text-tertiary)' : 'var(--text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+      <Icon name={icon} size={12} color="var(--text-tertiary)" />{children}
+    </span>
+  );
+}
+
+function SpecialistCard({ s, sucNombre, servNombre, onToggle, onEdit, onDelete }: { s: EspecialistaEquipo; sucNombre: Map<string, string>; servNombre: Map<string, string>; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
+  // Sin servicios declarados realiza todos: se dice en claro para que el admin no
+  // lo lea como "no tiene ninguno asignado".
+  const todos = s.servicioIds.length === 0;
+  const visibles = s.servicioIds.slice(0, 3);
+  const resto = s.servicioIds.length - visibles.length;
   return (
     <Card padding={0} testId={`esp-row-${s.id}`} style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '16px 16px 0', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -167,6 +264,7 @@ function SpecialistCard({ s, sucNombre, onToggle, onEdit, onDelete }: { s: Espec
         </div>
         <RowMenu items={[
           { icon: 'edit', label: 'Editar', onClick: onEdit },
+          { icon: 'scissors', label: 'Asignar servicios', onClick: onEdit },
           { divider: true },
           { icon: 'trash-2', label: 'Eliminar', danger: true, onClick: onDelete },
         ]} />
@@ -175,12 +273,21 @@ function SpecialistCard({ s, sucNombre, onToggle, onEdit, onDelete }: { s: Espec
       {s.sucursalIds.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '12px 16px 0' }}>
           {s.sucursalIds.map((id) => (
-            <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 24, padding: '0 9px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', fontWeight: 500 }}>
-              <Icon name="store" size={12} color="var(--text-tertiary)" />{sucNombre.get(id) ?? 'Sucursal'}
-            </span>
+            <Chip key={id} icon="store">{sucNombre.get(id) ?? 'Sucursal'}</Chip>
           ))}
         </div>
       )}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 16px 0' }}>
+        {todos ? (
+          <Chip icon="scissors" tone="muted">Todos los servicios</Chip>
+        ) : (
+          <>
+            {visibles.map((id) => <Chip key={id} icon="scissors">{servNombre.get(id) ?? 'Servicio'}</Chip>)}
+            {resto > 0 && <Chip icon="plus" tone="muted">{resto} más</Chip>}
+          </>
+        )}
+      </div>
 
       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '14px 16px 16px', padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', cursor: 'pointer' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -193,7 +300,7 @@ function SpecialistCard({ s, sucNombre, onToggle, onEdit, onDelete }: { s: Espec
   );
 }
 
-function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { especialista: EspecialistaEquipo | null; sucursales: Sucursal[]; onClose: () => void; onSaved: () => void }) {
+function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved }: { especialista: EspecialistaEquipo | null; sucursales: Sucursal[]; servicios: { id: string; nombre: string }[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [nombre, setNombre] = useState(especialista?.nombre ?? '');
   const [apellidos, setApellidos] = useState('');
@@ -212,6 +319,9 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
   const fotoActual = especialista ? urlFotoEspecialista(especialista.id, especialista.fotoVersion) : null;
   const [disponible, setDisponible] = useState(especialista?.disponible ?? true);
   const [sel, setSel] = useState<string[]>(especialista?.sucursalIds ?? (sucursales[0] ? [sucursales[0].id] : []));
+  // Servicios que realiza. Vacío = todos (no es "ninguno"): así el alta sin
+  // tocar nada deja al especialista disponible para todo el catálogo.
+  const [selServ, setSelServ] = useState<string[]>(especialista?.servicioIds ?? []);
   const [notas, setNotas] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -261,6 +371,10 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
     setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
 
+  function toggleServ(id: string) {
+    setSelServ((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  }
+
   async function guardar() {
     setTouched(true);
     if (!valid) return;
@@ -269,6 +383,7 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
       if (especialista) {
         await editarEspecialista(especialista.id, { nombre: nombre.trim(), especialidad: especialidad.trim() || undefined, disponible });
         await asignarSucursales(especialista.id, sel);
+        await asignarServicios(especialista.id, selServ);
         await guardarFoto(especialista.id);
         toast('Especialista actualizado', 'success');
       } else {
@@ -279,6 +394,7 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
           celular: celularDigitos,
           especialidad: especialidad.trim() || undefined,
           sucursalIds: sel,
+          servicioIds: selServ,
           ...(quiereLogin ? { email: email.trim(), password } : {}),
         });
         setVerificacionId(vid);
@@ -412,6 +528,33 @@ function SpecialistModal({ especialista, sucursales, onClose, onSaved }: { espec
               );
             })}
           </div>
+        </GField>
+
+        <GField
+          label="Servicios que realiza"
+          hint={selServ.length === 0
+            ? 'Sin selección: realiza TODOS los servicios del catálogo.'
+            : `Solo aparecerá en las reservas de estos ${selServ.length} servicio(s).`}
+        >
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {servicios.map((sv) => {
+              const on = selServ.includes(sv.id);
+              return (
+                <button key={sv.id} type="button" onClick={() => toggleServ(sv.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 12px', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: on ? 'var(--brand-tint)' : 'var(--surface-card)', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-primary)' }}>
+                  {on && <Icon name="check" size={13} color="var(--brand)" />}
+                  {sv.nombre}
+                </button>
+              );
+            })}
+            {servicios.length === 0 && (
+              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Aún no hay servicios en el catálogo.</span>
+            )}
+          </div>
+          {selServ.length > 0 && (
+            <button type="button" onClick={() => setSelServ([])} style={{ marginTop: 10, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)', color: 'var(--brand)', fontWeight: 600 }}>
+              Quitar selección (que realice todos)
+            </button>
+          )}
         </GField>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>

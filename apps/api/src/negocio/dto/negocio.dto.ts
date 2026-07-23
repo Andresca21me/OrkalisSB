@@ -54,6 +54,7 @@ export class CrearEspecialistaDto {
   // especialista sin recurso, se ENLAZA a ese (rescata cuentas huérfanas).
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @MinLength(8) password?: string;
+  @IsOptional() @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) servicioIds?: string[];
 }
 
 /**
@@ -72,6 +73,7 @@ export class IniciarVerificacionDto {
   @IsOptional() @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) sucursalIds?: string[];
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @MinLength(8) password?: string;
+  @IsOptional() @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) servicioIds?: string[];
 }
 
 /** Paso 2: el código recibido por SMS. */
@@ -130,6 +132,11 @@ export class DisponibilidadDto {
 
 export class AsignarSucursalesDto {
   @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) sucursalIds!: string[];
+}
+
+export class AsignarServiciosDto {
+  /** Vacío = sin restricción: realiza todos los servicios. */
+  @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) servicioIds!: string[];
 }
 
 /** Roles internos que un admin puede asignar (no operador de plataforma). */
