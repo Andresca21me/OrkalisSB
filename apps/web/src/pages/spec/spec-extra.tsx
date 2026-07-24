@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { hora, hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { useAuth, useMiFoto } from '../../lib/auth';
-import { prepararFoto } from '../../lib/imagen';
 import { borrarMiFoto, subirMiFoto } from '../../lib/useEquipo';
+import { EditorFoto } from '../../ui/EditorFoto';
 import { rangoDiaBogota, useCitas } from '../../lib/useCitas';
 import { useGanancias } from '../../lib/useEspecialista';
 import { diasATimestamps, etiquetaRango, presetRango, type RangoDias } from '../../lib/useReportes';
@@ -131,6 +131,8 @@ function MiFoto({ nombre }: { nombre: string }) {
   const input = useRef<HTMLInputElement>(null);
   const [menu, setMenu] = useState(false);
   const [ocupado, setOcupado] = useState(false);
+  // Foto recién elegida, a la espera de encuadre en el editor.
+  const [editando, setEditando] = useState<File | null>(null);
 
   async function aplicar(accion: () => Promise<unknown>, ok: string) {
     setMenu(false);
@@ -176,9 +178,20 @@ function MiFoto({ nombre }: { nombre: string }) {
           // Se limpia para que volver a elegir el MISMO archivo cuente como
           // cambio y el onChange se dispare otra vez.
           e.target.value = '';
-          if (archivo) void aplicar(async () => subirMiFoto(await prepararFoto(archivo)), 'Foto actualizada');
+          if (archivo) setEditando(archivo);
         }}
       />
+
+      {editando && (
+        <EditorFoto
+          archivo={editando}
+          onCancelar={() => setEditando(null)}
+          onConfirmar={(dataUrl) => {
+            setEditando(null);
+            void aplicar(() => subirMiFoto(dataUrl), 'Foto actualizada');
+          }}
+        />
+      )}
 
       <Sheet open={menu} onClose={() => setMenu(false)} title="Tu foto de perfil">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 8 }}>

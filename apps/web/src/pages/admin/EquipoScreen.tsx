@@ -5,7 +5,7 @@ import { useApi } from '../../lib/useApi';
 import { useSucursal } from '../../lib/sucursal';
 import { money } from '../../lib/format';
 import { urlFotoEspecialista } from '../../lib/api';
-import { prepararFoto } from '../../lib/imagen';
+import { EditorFoto } from '../../ui/EditorFoto';
 import {
   asignarServicios,
   asignarSucursales,
@@ -316,6 +316,8 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
   // crear no hay id todavía (el alta pasa por la verificación del celular).
   const [foto, setFoto] = useState<string | null>(null);
   const [fotoQuitada, setFotoQuitada] = useState(false);
+  // Foto recién elegida, a la espera de encuadre en el editor.
+  const [editandoFoto, setEditandoFoto] = useState<File | null>(null);
   const fotoActual = especialista ? urlFotoEspecialista(especialista.id, especialista.fotoVersion) : null;
   const [disponible, setDisponible] = useState(especialista?.disponible ?? true);
   const [sel, setSel] = useState<string[]>(especialista?.sucursalIds ?? (sucursales[0] ? [sucursales[0].id] : []));
@@ -357,14 +359,8 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
     }
   }
 
-  async function elegirFoto(archivo: File | undefined) {
-    if (!archivo) return;
-    try {
-      setFoto(await prepararFoto(archivo));
-      setFotoQuitada(false);
-    } catch (err) {
-      toast((err as Error).message, 'error');
-    }
+  function elegirFoto(archivo: File | undefined) {
+    if (archivo) setEditandoFoto(archivo);
   }
 
   function toggleSuc(id: string) {
@@ -490,14 +486,14 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
           {/* Foto: se ve como se verá luego (círculo), para que el admin
               entienda que se recorta al centro. */}
-          <GField label="Foto" optional span={2} hint="Se recorta en cuadrado y se reduce en tu equipo antes de subirla.">
+          <GField label="Foto" optional span={2} hint="Podrás mover, acercar y girar la imagen antes de guardarla.">
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <Avatar name={nombre || '?'} size={64} src={fotoQuitada ? null : (foto ?? fotoActual)} />
+              <Avatar name={nombre || '?'} size={72} src={fotoQuitada ? null : (foto ?? fotoActual)} />
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--surface-card)', color: 'var(--brand)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
                   <Icon name="image" size={15} color="var(--brand)" />
                   {foto || (fotoActual && !fotoQuitada) ? 'Cambiar foto' : 'Subir foto'}
-                  <input type="file" accept="image/*" onChange={(e) => elegirFoto(e.target.files?.[0])} style={{ display: 'none' }} />
+                  <input type="file" accept="image/*" onChange={(e) => { elegirFoto(e.target.files?.[0]); e.target.value = ''; }} style={{ display: 'none' }} />
                 </label>
                 {(foto || (fotoActual && !fotoQuitada)) && (
                   <Button size="md" variant="ghost" onClick={() => { setFoto(null); setFotoQuitada(true); }}>Quitar</Button>
@@ -505,6 +501,13 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
               </div>
             </div>
           </GField>
+          {editandoFoto && (
+            <EditorFoto
+              archivo={editandoFoto}
+              onCancelar={() => setEditandoFoto(null)}
+              onConfirmar={(dataUrl) => { setFoto(dataUrl); setFotoQuitada(false); setEditandoFoto(null); }}
+            />
+          )}
           <GField label="Nombre" error={nombreErr}><Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Andrés" /></GField>
           <GField label="Apellidos" optional><Input value={apellidos} onChange={(e) => setApellidos(e.target.value)} placeholder="Ej.: Mejía" /></GField>
           {!especialista && (

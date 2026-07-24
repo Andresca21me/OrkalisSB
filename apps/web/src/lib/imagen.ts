@@ -10,9 +10,9 @@
  */
 
 /** Lado del cuadrado final. 256 basta para un avatar nítido en pantallas retina. */
-const LADO = 256;
+export const LADO = 256;
 /** Calidad JPEG: por encima de 0.82 el archivo crece sin que se note. */
-const CALIDAD = 0.82;
+export const CALIDAD = 0.82;
 
 export async function prepararFoto(archivo: File): Promise<string> {
   if (!archivo.type.startsWith('image/')) {

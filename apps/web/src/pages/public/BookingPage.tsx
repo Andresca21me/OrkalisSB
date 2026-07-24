@@ -497,9 +497,9 @@ function Especialistas({ negocio, equipo, aptos, value, onPick, onBack, onContin
         ) : (
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <Card interactive selected={value === 'any'} padding={14} onClick={() => onPick('any')}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ width: 44, height: 44, borderRadius: 9999, flex: 'none', background: 'var(--brand-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name="sparkles" size={20} color="var(--brand)" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <span style={{ width: 60, height: 60, borderRadius: 9999, flex: 'none', background: 'var(--brand-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="sparkles" size={26} color="var(--brand)" />
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -514,8 +514,8 @@ function Especialistas({ negocio, equipo, aptos, value, onPick, onBack, onContin
 
             {visibles.map((e) => (
               <Card key={e.id} interactive selected={value === e.id} padding={14} onClick={() => onPick(e.id)}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <Avatar name={e.nombre} size={44} src={urlFotoEspecialista(e.id, e.fotoVersion)} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <Avatar name={e.nombre} size={60} src={urlFotoEspecialista(e.id, e.fotoVersion)} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{e.nombre}</div>
                     {e.especialidad && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 1 }}>{e.especialidad}</div>}
@@ -965,7 +965,7 @@ function ListaSkeleton({ avatar }: { avatar?: boolean }) {
       {Array.from({ length: 4 }).map((_, i) => (
         <Card key={i} padding={16}>
           <div style={{ display: 'flex', gap: 12 }}>
-            {avatar && <div className="ork-shimmer" style={{ width: 44, height: 44, borderRadius: 9999 }} />}
+            {avatar && <div className="ork-shimmer" style={{ width: 60, height: 60, borderRadius: 9999 }} />}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div className="ork-shimmer" style={{ width: '60%', height: 14, borderRadius: 6 }} />
               <div className="ork-shimmer" style={{ width: '35%', height: 11, borderRadius: 6 }} />
