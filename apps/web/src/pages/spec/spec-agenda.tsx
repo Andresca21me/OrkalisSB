@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { CitaAgenda } from '@orkalis/shared';
 import { hora, hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { rangoDiaBogota, useCitas } from '../../lib/useCitas';
@@ -6,20 +6,33 @@ import { AppHeader, FooterBar, ScrollArea } from '../../ui';
 import { Avatar, Button, Card, EmptyState, ErrorState, Icon, Skeleton, Segmented } from '../../ui/ui';
 import { ESTADO_COLOR, ESTADO_TINT, EstadoBadgeSpec, SectionLabel, Sheet, minutosDelDia, turnoCliente, turnoTotal } from './spec-ui';
 
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const navBtn: CSSProperties = { flex: 'none', width: 34, height: 34, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--surface-card)', cursor: 'pointer' };
+
+/** Etiqueta compacta del rango de la semana, p. ej. «14 – 20 jul» o «28 jul – 3 ago». */
+function rangoSemanaLabel(lunesIso: string) {
+  const dom = sumarDiasISO(lunesIso, 6);
+  const d1 = Number(lunesIso.slice(8, 10)), m1 = Number(lunesIso.slice(5, 7)) - 1;
+  const d2 = Number(dom.slice(8, 10)), m2 = Number(dom.slice(5, 7)) - 1;
+  return m1 === m2 ? `${d1} – ${d2} ${MESES[m2]}` : `${d1} ${MESES[m1]} – ${d2} ${MESES[m2]}`;
+}
+
 // ── Agenda ───────────────────────────────────────────────────────────────────
 export function AgendaSpec({ turnos, cargando, error, onRetry, sucursalId, especialistaId, onOpen }: {
   turnos: CitaAgenda[]; cargando: boolean; error: boolean; onRetry: () => void;
   sucursalId: string | null; especialistaId: string; onOpen: (t: CitaAgenda) => void;
 }) {
   const [view, setView] = useState('dia');
+  // Semana mostrada, en desplazamiento respecto a la actual (0 = esta semana, +1 = siguiente…).
+  const [semOffset, setSemOffset] = useState(0);
 
-  // Semana actual (lunes a domingo) en zona Bogotá.
+  // Semana visible (lunes a domingo) en zona Bogotá, corrida por `semOffset`.
   const semana = useMemo(() => {
     const hoy = new Date(`${hoyISO()}T12:00:00Z`);
     const dow = (hoy.getUTCDay() + 6) % 7; // 0 = lunes
-    const lunes = sumarDiasISO(hoyISO(), -dow);
+    const lunes = sumarDiasISO(hoyISO(), -dow + semOffset * 7);
     return { lunesIso: lunes, desde: rangoDiaBogota(lunes).desde, hasta: rangoDiaBogota(sumarDiasISO(lunes, 6)).hasta };
-  }, []);
+  }, [semOffset]);
   const semanaCitas = useCitas({ desde: semana.desde, hasta: semana.hasta, sucursalId, especialistaId, });
 
   return (
@@ -27,6 +40,23 @@ export function AgendaSpec({ turnos, cargando, error, onRetry, sucursalId, espec
       <AppHeader title="Agenda" />
       <div style={{ flex: 'none', padding: '14px 20px', background: 'var(--surface-card)', borderBottom: '1px solid var(--border-subtle)' }}>
         <Segmented options={[{ value: 'dia', label: 'Día' }, { value: 'semana', label: 'Semana' }]} value={view} onChange={setView} />
+        {view === 'semana' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+            <button type="button" aria-label="Semana anterior" onClick={() => setSemOffset((o) => o - 1)}
+              style={navBtn}><Icon name="chevron-left" size={18} color="var(--text-secondary)" /></button>
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{rangoSemanaLabel(semana.lunesIso)}</div>
+              {semOffset !== 0 && (
+                <button type="button" onClick={() => setSemOffset(0)}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--brand)', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '2px 0' }}>
+                  Volver a esta semana
+                </button>
+              )}
+            </div>
+            <button type="button" aria-label="Semana siguiente" onClick={() => setSemOffset((o) => o + 1)}
+              style={navBtn}><Icon name="chevron-right" size={18} color="var(--text-secondary)" /></button>
+          </div>
+        )}
       </div>
 
       <ScrollArea>

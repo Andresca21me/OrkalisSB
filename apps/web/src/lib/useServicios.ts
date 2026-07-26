@@ -11,6 +11,7 @@ export interface Servicio {
   categoria: string | null;
   splitType: SplitType;
   splitValor: string;
+  favorito: boolean;
   activo: boolean;
 }
 
@@ -21,6 +22,7 @@ export interface ServicioInput {
   categoria?: string;
   splitType: SplitType;
   splitValor: number;
+  favorito?: boolean;
 }
 
 export function useServicios() {

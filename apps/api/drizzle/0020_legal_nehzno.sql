@@ -1,0 +1,1 @@
+ALTER TABLE "servicio" ADD COLUMN "favorito" boolean DEFAULT false NOT NULL;

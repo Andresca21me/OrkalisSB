@@ -49,6 +49,9 @@ export const servicio = pgTable('servicio', {
   splitType: splitTypeEnum('split_type').notNull().default('porcentaje'),
   // % (0–100) o valor fijo al profesional, según split_type.
   splitValor: numeric('split_valor', { precision: 12, scale: 2 }).notNull().default('0'),
+  // Destacado manual: si el negocio no tiene aún historial de reservas, estos
+  // son los que aparecen en «Lo más reservado» del enlace público.
+  favorito: boolean('favorito').notNull().default(false),
   activo: boolean('activo').notNull().default(true),
   creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
   actualizadoEn: timestamp('actualizado_en', { withTimezone: true }),

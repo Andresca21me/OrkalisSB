@@ -79,6 +79,16 @@ export function ServiciosScreen() {
     } catch (e) { toast((e as Error).message, 'error'); }
   }
 
+  // Marca/desmarca un servicio como destacado: es el respaldo de «Lo más
+  // reservado» del enlace público cuando aún no hay historial de reservas.
+  async function toggleFav(s: Servicio) {
+    try {
+      await editarServicio(s.id, { favorito: !s.favorito });
+      toast(s.favorito ? `${s.nombre} ya no es destacado` : `${s.nombre} marcado como destacado`, 'success');
+      await recargar();
+    } catch (e) { toast((e as Error).message, 'error'); }
+  }
+
   return (
     <div>
       <PageHead title="Servicios" desc={`Catálogo del negocio y registro de lo realizado · ${scope}`} action={sub === 'catalogo' ? <Button iconLeft="plus" onClick={() => { setEditSv(null); setFormOpen(true); }}>Nuevo servicio</Button> : undefined} />
@@ -116,7 +126,7 @@ export function ServiciosScreen() {
                 <Card padding={0}><EmptyState icon="search" title="Sin resultados" desc="Ningún servicio coincide con el filtro." action={<Button variant="secondary" onClick={() => { setQuery(''); setCat('todas'); }}>Limpiar filtros</Button>} /></Card>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-                  {filtrados.map((s) => <ServiceCard key={s.id} s={s} cuantos={cuantosRealizan(s.id)} onEdit={() => { setEditSv(s); setFormOpen(true); }} onDelete={() => setDelSv(s)} />)}
+                  {filtrados.map((s) => <ServiceCard key={s.id} s={s} cuantos={cuantosRealizan(s.id)} onEdit={() => { setEditSv(s); setFormOpen(true); }} onDelete={() => setDelSv(s)} onToggleFav={() => toggleFav(s)} />)}
                 </div>
               )}
             </>
@@ -140,7 +150,7 @@ function splitLabel(s: Servicio): string {
     : `${Number(s.splitValor)}% / ${100 - Number(s.splitValor)}%`;
 }
 
-function ServiceCard({ s, cuantos, onEdit, onDelete }: { s: Servicio; cuantos: number; onEdit: () => void; onDelete: () => void }) {
+function ServiceCard({ s, cuantos, onEdit, onDelete, onToggleFav }: { s: Servicio; cuantos: number; onEdit: () => void; onDelete: () => void; onToggleFav: () => void }) {
   // Un servicio que nadie realiza no aparece en el enlace de reservas: se avisa
   // aquí porque desde fuera parece que el catálogo está bien y no se entiende
   // por qué el cliente no puede pedirlo.
@@ -153,13 +163,20 @@ function ServiceCard({ s, cuantos, onEdit, onDelete }: { s: Servicio; cuantos: n
             <div style={{ fontWeight: 600, fontSize: 'var(--text-md)', color: 'var(--text-primary)', lineHeight: 1.2, overflowWrap: 'anywhere' }}>{s.nombre}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 4 }}>{s.categoria || 'Sin categoría'}</div>
           </div>
-          <Badge tone={s.activo ? 'success' : 'neutral'} dot>{s.activo ? 'Activo' : 'Inactivo'}</Badge>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+            <button type="button" onClick={onToggleFav} title={s.favorito ? 'Quitar de destacados' : 'Marcar como destacado'} aria-label={s.favorito ? 'Quitar de destacados' : 'Marcar como destacado'} aria-pressed={s.favorito}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 2, display: 'inline-flex', lineHeight: 0 }}>
+              <Icon name="star" size={19} color={s.favorito ? 'var(--brand)' : 'var(--text-disabled)'} fill={s.favorito ? 'var(--brand)' : undefined} />
+            </button>
+            <Badge tone={s.activo ? 'success' : 'neutral'} dot>{s.activo ? 'Activo' : 'Inactivo'}</Badge>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 14 }}>
           <span className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-xl)', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>{money(s.precio)}</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}><Icon name="clock" size={14} color="var(--text-tertiary)" />{s.duracionMin} min</span>
         </div>
         <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {s.favorito && <Badge tone="brand"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="star" size={11} color="var(--brand)" fill="var(--brand)" />Destacado</span></Badge>}
           <Badge tone="brand"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="percent" size={11} color="var(--brand)" />Reparto {splitLabel(s)}</span></Badge>
           {s.activo && (
             <Badge tone={huerfano ? 'warning' : 'neutral'}>
@@ -194,6 +211,7 @@ function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio
   const [splitType, setSplitType] = useState<SplitType>(servicio?.splitType ?? SplitType.Porcentaje);
   // Al crear: default = repartición de la config (editable). Al editar: el % del servicio.
   const [splitValor, setSplitValor] = useState<MoneyValue>(servicio ? Number(servicio.splitValor) : defaultProfPct);
+  const [favorito, setFavorito] = useState<boolean>(servicio?.favorito ?? false);
   const [touched, setTouched] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
@@ -216,6 +234,7 @@ function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio
       categoria: categoria.trim() || undefined,
       splitType,
       splitValor: Number(splitValor) || 0,
+      favorito,
     };
     try {
       if (servicio) {
@@ -278,6 +297,19 @@ function ServiceModal({ servicio, defaultProfPct, onClose, onSaved }: { servicio
             </div>
           </div>
         </div>
+
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: 'var(--radius-md)', border: `1px solid ${favorito ? 'var(--brand)' : 'var(--border-subtle)'}`, background: favorito ? 'var(--brand-tint)' : 'var(--surface-card)', cursor: 'pointer' }}>
+          <input type="checkbox" checked={favorito} onChange={(e) => setFavorito(e.target.checked)} style={{ width: 18, height: 18, marginTop: 1, flex: 'none', accentColor: 'var(--brand)' }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>
+              <Icon name="star" size={15} color="var(--brand)" fill={favorito ? 'var(--brand)' : undefined} />
+              Mostrar en «Lo más reservado»
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.5 }}>
+              El enlace de reservas prioriza los servicios que la gente más pide. Mientras no haya historial, se muestran los que marques aquí como destacados.
+            </div>
+          </div>
+        </label>
       </div>
     </Dialog>
   );

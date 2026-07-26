@@ -141,6 +141,13 @@
       "when": 1784838142403,
       "tag": "0019_wet_sugar_man",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785083279980,
+      "tag": "0020_legal_nehzno",
+      "breakpoints": true
     }
   ]
 }

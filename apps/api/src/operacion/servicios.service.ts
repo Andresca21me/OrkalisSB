@@ -14,6 +14,7 @@ export interface ServicioInput {
   categoria?: string;
   splitType?: SplitType;
   splitValor?: number;
+  favorito?: boolean;
 }
 
 /** Catálogo de servicios (FASE-10, RF-035/RF-036). Alimenta el motor financiero. */
@@ -35,6 +36,7 @@ export class ServiciosService {
           categoria: input.categoria,
           splitType: input.splitType ?? SplitType.Porcentaje,
           splitValor: (input.splitValor ?? 0).toFixed(2),
+          favorito: input.favorito ?? false,
         })
         .returning();
       return s;
@@ -49,6 +51,7 @@ export class ServiciosService {
     if (input.categoria !== undefined) set.categoria = input.categoria;
     if (input.splitType !== undefined) set.splitType = input.splitType;
     if (input.splitValor !== undefined) set.splitValor = input.splitValor.toFixed(2);
+    if (input.favorito !== undefined) set.favorito = input.favorito;
 
     const [s] = await runInTenantTx(ctx, (tx) =>
       tx.update(servicio).set(set).where(eq(servicio.id, id)).returning(),

@@ -232,6 +232,7 @@ export function BookingPage() {
           info={info.data}
           servicios={catalogo}
           onReservar={() => setStep('servicios')}
+          onElegirServicio={(id) => { setServicios([id]); setEspecialistaId(null); setStep('especialista'); }}
           onGestionar={() => { setAppointment(null); setStep('gestion'); }}
         />
       )}
@@ -311,9 +312,19 @@ export function BookingPage() {
 }
 
 // ════════════════════ Inicio ════════════════════
-function Inicio({ info, servicios, onReservar, onGestionar }: { info: PublicInfo; servicios: ReturnType<typeof useApi<PublicServicio[]>>; onReservar: () => void; onGestionar: () => void }) {
+function Inicio({ info, servicios, onReservar, onElegirServicio, onGestionar }: { info: PublicInfo; servicios: ReturnType<typeof useApi<PublicServicio[]>>; onReservar: () => void; onElegirServicio: (id: string) => void; onGestionar: () => void }) {
   const logoNegocio = urlLogoNegocio(info.negocioId, info.logoVersion);
-  const populares = (servicios.data ?? []).slice(0, 3);
+  // «Lo más reservado» de verdad: primero lo que la gente más pide (detección
+  // automática por nº de reservas); si el negocio es nuevo y no hay historial,
+  // los que el administrador marcó como destacados; y en último caso, el
+  // catálogo tal cual. Solo se muestran servicios que alguien pueda atender.
+  const populares = useMemo(() => {
+    const disponibles = (servicios.data ?? []).filter((s) => s.especialistaIds.length > 0);
+    const conReservas = disponibles.filter((s) => s.reservas > 0).sort((a, b) => b.reservas - a.reservas);
+    const favoritos = disponibles.filter((s) => s.favorito);
+    const base = conReservas.length ? conReservas : favoritos.length ? favoritos : disponibles;
+    return base.slice(0, 3);
+  }, [servicios.data]);
   return (
     <>
       <ScrollArea style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
@@ -349,7 +360,7 @@ function Inicio({ info, servicios, onReservar, onGestionar }: { info: PublicInfo
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {populares.map((s) => (
-                <Card key={s.id} padding={14} interactive onClick={onReservar}>
+                <Card key={s.id} padding={14} interactive onClick={() => onElegirServicio(s.id)}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <span style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--brand-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
                       <Icon name="scissors" size={18} color="var(--brand)" />

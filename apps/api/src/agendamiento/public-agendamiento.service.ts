@@ -242,10 +242,26 @@ export class PublicAgendamientoService {
     const ctx = await this.ctxDeSucursal(sucursalId);
     return runInTenantTx(ctx, async (tx) => {
       const servicios = await tx
-        .select({ id: servicio.id, nombre: servicio.nombre, precio: servicio.precio, duracionMin: servicio.duracionMin, categoria: servicio.categoria })
+        .select({ id: servicio.id, nombre: servicio.nombre, precio: servicio.precio, duracionMin: servicio.duracionMin, categoria: servicio.categoria, favorito: servicio.favorito })
         .from(servicio)
         .where(eq(servicio.activo, true));
       if (servicios.length === 0) return [];
+
+      // «Lo más reservado» se detecta solo: cuántas veces se ha pedido cada
+      // servicio en esta sucursal (sin contar canceladas ni ausencias). El front
+      // ordena por esto; si el negocio es nuevo (todo en 0) usa los `favorito`.
+      const conteos = await tx
+        .select({ servicioId: citaServicio.servicioId, n: sql<number>`count(*)::int` })
+        .from(citaServicio)
+        .innerJoin(cita, eq(cita.id, citaServicio.citaId))
+        .where(
+          and(
+            eq(cita.sucursalId, sucursalId),
+            inArray(cita.estado, [EstadoCita.Solicitada, EstadoCita.Confirmada, EstadoCita.EnProgreso, EstadoCita.Completada]),
+          ),
+        )
+        .groupBy(citaServicio.servicioId);
+      const reservasPorServicio = new Map(conteos.map((c) => [c.servicioId, Number(c.n)]));
 
       // Equipo elegible de la sucursal (activo y libre).
       const equipo = await tx
@@ -260,6 +276,7 @@ export class PublicAgendamientoService {
       const capacidades = await capacidadesDe(tx, candidatos);
       return servicios.map((s) => ({
         ...s,
+        reservas: reservasPorServicio.get(s.id) ?? 0,
         especialistaIds: candidatos.filter((id) => {
           const declarados = capacidades.get(id);
           return !declarados || declarados.has(s.id);

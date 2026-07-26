@@ -80,6 +80,10 @@ export interface PublicServicio {
   precio: string;
   duracionMin: number;
   categoria: string | null;
+  /** Marcado como destacado por el administrador (respaldo de «Lo más reservado»). */
+  favorito: boolean;
+  /** Veces que se ha reservado en la sucursal (sin canceladas ni ausencias). */
+  reservas: number;
   /**
    * Especialistas de ESTA sucursal (activos y libres) que realizan el servicio.
    * Con esta lista el cliente resuelve todo el filtrado por intersección: si

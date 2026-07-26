@@ -21,11 +21,14 @@ export function Icon({
   name,
   size = 20,
   color = 'currentColor',
+  fill,
   style,
 }: {
   name: string;
   size?: number;
   color?: string;
+  /** Relleno del trazo (p. ej. una estrella sólida). Por defecto sin relleno. */
+  fill?: string;
   style?: CSSProperties;
 }) {
   const Comp = ICONS[name];
@@ -35,7 +38,7 @@ export function Icon({
   }
   return (
     <span style={{ display: 'inline-flex', width: size, height: size, flex: 'none', ...style }}>
-      <Comp width={size} height={size} stroke={color} strokeWidth={2} />
+      <Comp width={size} height={size} stroke={color} strokeWidth={2} fill={fill ?? 'none'} />
     </span>
   );
 }

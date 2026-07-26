@@ -29,6 +29,7 @@ export class ServicioDto {
   @IsOptional() @IsString() categoria?: string;
   @IsOptional() @IsEnum(SplitType) splitType?: SplitType;
   @IsOptional() @IsNumber() @Min(0) splitValor?: number;
+  @IsOptional() @IsBoolean() favorito?: boolean;
 }
 export class EditarServicioDto {
   @IsOptional() @IsString() @MinLength(2) nombre?: string;
@@ -37,6 +38,7 @@ export class EditarServicioDto {
   @IsOptional() @IsString() categoria?: string;
   @IsOptional() @IsEnum(SplitType) splitType?: SplitType;
   @IsOptional() @IsNumber() @Min(0) splitValor?: number;
+  @IsOptional() @IsBoolean() favorito?: boolean;
 }
 
 export class ProductoDto {
