@@ -1,7 +1,7 @@
 import { config as loadEnv } from 'dotenv';
 loadEnv();
 
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { EstadoCita, NivelConfig, OrigenCita, PerfilNegocio, PlanSuscripcion } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
@@ -273,6 +273,35 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
 
     // Un SID desconocido no rompe nada.
     expect(await outbox.aplicarEstadoProveedor('SM-inexistente', 'entregado')).toBe('desconocido');
+  });
+
+  it('webhook fallido (operador tiró el SMS): lo transaccional se REENVÍA, no se pierde', async () => {
+    // El caso real detrás de "a veces no llega la confirmación": Twilio acepta
+    // el mensaje, el operador lo filtra después y avisa por webhook.
+    const [fila] = await adminDb
+      .insert(mensaje)
+      .values({ negocioId, sucursalId, canal: 'sms', cupoCanal: 'sms', tipo: 'confirmacion', destino: '3004443322', cuerpo: 'Confirmacion filtrada' })
+      .returning({ id: mensaje.id });
+    await outbox.drain(); // primer envío: queda 'enviado' con proveedorId
+    let [m] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
+    expect(m.estado).toBe('enviado');
+
+    // El operador lo rechaza → vuelve a 'pendiente' con backoff, no a 'fallido'.
+    expect(await outbox.aplicarEstadoProveedor(m.proveedorId!, 'fallido', 'carrier filter 30007')).toBe('aplicado');
+    [m] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
+    expect(m.estado).toBe('pendiente');
+
+    // Adelantando el backoff, el worker lo reenvía de verdad.
+    await adminDb.execute(sql`UPDATE "mensaje" SET "proximo_intento_en" = now() WHERE "id" = ${fila.id}`);
+    await outbox.drain();
+    [m] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
+    expect(m.estado).toBe('enviado');
+
+    // Con los intentos agotados, el mismo webhook sí es terminal.
+    await adminDb.execute(sql`UPDATE "mensaje" SET "intento" = 3 WHERE "id" = ${fila.id}`);
+    expect(await outbox.aplicarEstadoProveedor(m.proveedorId!, 'fallido', 'carrier filter 30007')).toBe('aplicado');
+    [m] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
+    expect(m.estado).toBe('fallido');
   });
 
   it('clasificación de errores: 429/5xx/red son transitorios; 400 no', () => {

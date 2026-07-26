@@ -273,17 +273,38 @@ export class OutboxWorker {
    * Aplica el estado real de entrega a la fila del `proveedorId`. **Idempotente**:
    * el mismo evento dos veces no cambia nada y un evento tardío nunca retrocede
    * el ciclo de vida (se compara el rango del estado).
+   *
+   * **Re-envío tras rechazo del operador.** Que Twilio acepte el SMS no
+   * garantiza nada: el operador móvil puede tirarlo después (filtrado 30007,
+   * congestión) y avisarlo por este webhook. Antes eso era terminal — el
+   * cliente se quedaba sin su confirmación "a veces sí, a veces no". Ahora un
+   * mensaje transaccional con intentos disponibles vuelve a `pendiente` y el
+   * worker lo reenvía; el tope de `MAX_INTENTOS` (que crece en cada reclamo)
+   * acota el gasto si el operador lo rechaza siempre.
    */
   async aplicarEstadoProveedor(
     proveedorId: string,
     nuevo: EstadoProveedor,
     error?: string,
   ): Promise<'aplicado' | 'ignorado' | 'desconocido'> {
-    const [fila] = await adminDb.execute<{ id: string; estado: string; canal: Canal }>(sql`
-      SELECT "id", "estado", "canal" FROM "mensaje" WHERE "proveedor_id" = ${proveedorId} LIMIT 1
+    const [fila] = await adminDb.execute<{ id: string; estado: string; canal: Canal; transaccional: boolean; intento: number }>(sql`
+      SELECT "id", "estado", "canal", "transaccional", "intento" FROM "mensaje" WHERE "proveedor_id" = ${proveedorId} LIMIT 1
     `);
     if (!fila) return 'desconocido';
     if (RANGO[nuevo] <= RANGO[fila.estado]) return 'ignorado';
+
+    if (nuevo === 'fallido' && fila.transaccional && fila.intento < OutboxWorker.MAX_INTENTOS) {
+      const motivo = error ?? 'el operador no entregó el mensaje';
+      await adminDb.execute(sql`
+        UPDATE "mensaje"
+        SET "estado" = 'pendiente', "error" = ${motivo}, "actualizado_en" = now(),
+            "proximo_intento_en" = now() + interval '90 seconds'
+        WHERE "id" = ${fila.id}
+      `);
+      this.metrics.incPor(METRICAS.mensajesReintentados, fila.canal);
+      this.logger.warn(`Mensaje ${fila.id} no entregado por el operador; se reenvía (intento ${fila.intento}): ${motivo}`);
+      return 'aplicado';
+    }
 
     await adminDb.execute(sql`
       UPDATE "mensaje"
