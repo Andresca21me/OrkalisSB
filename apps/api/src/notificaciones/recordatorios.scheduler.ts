@@ -8,19 +8,19 @@ import { ConfigResolverService } from '../config-module/config-resolver.service'
 import { NotificacionesService } from './notificaciones.service';
 import { MensajeriaEstadoService } from './mensajeria-estado.service';
 
-/** Ventanas soportadas (FASE-08). `config` es la ventana libre del negocio. */
-type Ventana = 'h24' | 'h2' | 'config';
+/**
+ * Ventana soportada. Hubo más (`h24` y la libre `config`, FASE-08), pero se
+ * retiraron: con el aviso de 2 h basta y el de 24 h duplicaba costo y ruido.
+ * Los valores viejos siguen en el enum de Postgres por las filas históricas.
+ */
+type Ventana = 'h2';
 
 /**
  * Jobs programados: escanea citas próximas para encolar recordatorios y limpia
  * retenciones expiradas. Usa la conexión admin (tarea de plataforma, cross-tenant).
  *
- * **FASE-08 — varias ventanas.** Antes había un único booleano
- * `cita.recordatorio_enviado`, así que solo cabía un recordatorio por cita.
- * Ahora cada ventana (24 h, 2 h y la configurable del negocio) se resuelve por
- * separado y deja su propia fila en `cita_recordatorio`; la clave primaria
- * `(cita_id, ventana)` es lo que garantiza que un reinicio a mitad de escaneo no
- * duplique avisos.
+ * La fila en `cita_recordatorio` con clave `(cita_id, ventana)` es lo que
+ * garantiza que un reinicio a mitad de escaneo no duplique avisos.
  */
 @Injectable()
 export class RecordatoriosScheduler {
@@ -137,18 +137,7 @@ export class RecordatoriosScheduler {
     negocioId: string,
     sucursalId: string,
   ): Promise<{ ventana: Ventana; horas: number }[]> {
-    const [h24, h2, horasConfig] = await Promise.all([
-      this.config.resolverModulo(negocioId, sucursalId, 'agendamiento.recordatorio_24h'),
-      this.config.resolverModulo(negocioId, sucursalId, 'agendamiento.recordatorio_2h'),
-      this.config.resolverNumero(negocioId, sucursalId, 'agendamiento.ventana_recordatorio_horas'),
-    ]);
-    const ventanas: { ventana: Ventana; horas: number }[] = [];
-    if (h24) ventanas.push({ ventana: 'h24', horas: 24 });
-    if (h2) ventanas.push({ ventana: 'h2', horas: 2 });
-    // La ventana libre solo aporta si no coincide con las fijas ya activas.
-    if (horasConfig > 0 && !ventanas.some((v) => v.horas === horasConfig)) {
-      ventanas.push({ ventana: 'config', horas: horasConfig });
-    }
-    return ventanas;
+    const h2 = await this.config.resolverModulo(negocioId, sucursalId, 'agendamiento.recordatorio_2h');
+    return h2 ? [{ ventana: 'h2', horas: 2 }] : [];
   }
 }

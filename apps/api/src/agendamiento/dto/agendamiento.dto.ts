@@ -38,7 +38,8 @@ export class ConfirmarDto {
   @IsUUID('4') retencionId!: string;
   @IsString() @MinLength(7) telefono!: string;
   @IsOptional() @IsString() nombre?: string;
-  @IsString() @MinLength(4) codigoOtp!: string;
+  /** Opcional: un teléfono que ya es cliente del negocio confirma sin código. */
+  @IsOptional() @IsString() @MinLength(4) codigoOtp?: string;
   @IsArray() @ArrayNotEmpty() @ArrayUnique() @IsUUID('4', { each: true }) servicioIds!: string[];
 }
 

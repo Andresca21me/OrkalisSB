@@ -96,14 +96,14 @@ describe('Configuración (ConfigResolver + escritura)', () => {
   });
 
   it('clonar copia los overrides de una sucursal (instantánea, no enlace vivo)', async () => {
-    await writer.upsert(ctx, NivelConfig.Sucursal, s1, 'agendamiento.ventana_recordatorio_horas', 48);
+    await writer.upsert(ctx, NivelConfig.Sucursal, s1, 'agendamiento.antelacion_cancelacion_horas', 48);
     await writer.clonar(ctx, s1, s2);
-    expect((await resolver.resolver(negocioId, s2, 'agendamiento.ventana_recordatorio_horas')).valor).toBe(48);
+    expect((await resolver.resolver(negocioId, s2, 'agendamiento.antelacion_cancelacion_horas')).valor).toBe(48);
 
     // Cambiar el origen DESPUÉS no afecta al destino (es instantánea).
-    await writer.upsert(ctx, NivelConfig.Sucursal, s1, 'agendamiento.ventana_recordatorio_horas', 12);
-    expect((await resolver.resolver(negocioId, s2, 'agendamiento.ventana_recordatorio_horas')).valor).toBe(48);
-    expect((await resolver.resolver(negocioId, s1, 'agendamiento.ventana_recordatorio_horas')).valor).toBe(12);
+    await writer.upsert(ctx, NivelConfig.Sucursal, s1, 'agendamiento.antelacion_cancelacion_horas', 12);
+    expect((await resolver.resolver(negocioId, s2, 'agendamiento.antelacion_cancelacion_horas')).valor).toBe(48);
+    expect((await resolver.resolver(negocioId, s1, 'agendamiento.antelacion_cancelacion_horas')).valor).toBe(12);
   });
 
   it('borrar un override vuelve a heredar', async () => {

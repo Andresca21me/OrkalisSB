@@ -337,31 +337,54 @@ export class PublicAgendamientoService {
     });
   }
 
+  /** ¿El teléfono ya pertenece a un cliente del negocio? (mismo criterio que el get-or-create). */
+  private async clienteConocido(tx: DrizzleTx, negocioId: string, telefono: string): Promise<boolean> {
+    const [cli] = await tx
+      .select({ id: cliente.id })
+      .from(cliente)
+      .where(and(eq(cliente.negocioId, negocioId), eq(cliente.telefono, telefono)))
+      .limit(1);
+    return !!cli;
+  }
+
   /**
-   * Genera y envía un OTP.
+   * Genera y envía un OTP — solo la primera vez que un teléfono reserva.
+   *
+   * Si el número ya es cliente del negocio no se genera nada: `requerido:false`
+   * y el front confirma directo (el servidor revalida en `confirmar`). Ahorra
+   * un SMS por cada reserva repetida y quita fricción al cliente habitual.
    *
    * Si la mensajería no está operativa (sin Twilio o con el interruptor de saldo
    * apagado) el SMS no sale y se devuelve el código en `devCode` para que la
    * pantalla se lo enseñe al cliente. Sin eso nadie podría reservar: el flujo
    * entero se apoya en un código que no llegaría nunca.
    */
-  async enviarOtp(sucursalId: string, telefono: string): Promise<{ enviado: boolean; devCode?: string }> {
+  async enviarOtp(sucursalId: string, telefono: string): Promise<{ enviado: boolean; requerido: boolean; devCode?: string }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
+    const conocido = await runInTenantTx(ctx, (tx) => this.clienteConocido(tx, ctx.negocioId, telefono));
+    if (conocido) return { enviado: false, requerido: false };
     const codigo = await runInTenantTx(ctx, (tx) => this.otp.generar(tx, ctx.negocioId, telefono));
-    if (this.estadoMensajeria.sinMensajes()) return { enviado: false, devCode: codigo };
+    if (this.estadoMensajeria.sinMensajes()) return { enviado: false, requerido: true, devCode: codigo };
     await this.notificaciones.encolarOtp(ctx.negocioId, telefono, codigo, { sucursalId }); // outbox: persiste y sigue
-    return { enviado: true };
+    return { enviado: true, requerido: true };
   }
 
   /** Confirma la reserva: verifica OTP, crea cliente y cita (EXCLUDE = garantía). */
   async confirmar(
     sucursalId: string,
-    input: { retencionId: string; telefono: string; nombre?: string; codigoOtp: string; servicioIds: string[] },
+    input: { retencionId: string; telefono: string; nombre?: string; codigoOtp?: string; servicioIds: string[] },
   ): Promise<{ citaId: string; codigo: string; estado: EstadoCita }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
 
     const resultado = await runInTenantTx(ctx, async (tx) => {
-      await this.otp.verificar(tx, ctx.negocioId, input.telefono, input.codigoOtp);
+      // El código solo se exige la primera vez que un teléfono reserva en el
+      // negocio: si ya es cliente, el número quedó verificado en su día. La
+      // decisión se toma AQUÍ con la base, nunca fiándose de lo que diga el
+      // navegador (que un cliente omita el código no puede abrir la puerta).
+      if (!(await this.clienteConocido(tx, ctx.negocioId, input.telefono))) {
+        if (!input.codigoOtp) throw new BadRequestException('Necesitas el código de verificación para tu primera reserva.');
+        await this.otp.verificar(tx, ctx.negocioId, input.telefono, input.codigoOtp);
+      }
 
       // Retención: fuente de la franja. Si no existe → ya usada/expirada (idempotencia).
       const [ret] = await tx

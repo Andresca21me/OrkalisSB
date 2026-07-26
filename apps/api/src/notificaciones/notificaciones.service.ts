@@ -170,13 +170,20 @@ export class NotificacionesService implements OnModuleInit {
       citaId?: string | null;
     },
   ): Promise<void> {
-    // Modo sin mensajes: ni siquiera se encola. Dejarlo en `pendiente` sería
-    // peor que no hacer nada — se acumularían días de recordatorios que, al
-    // reanudar, saldrían todos de golpe (avisando de citas ya pasadas y
-    // fundiendo el crédito recién comprado en un minuto).
+    // Mensajería pausada por saldo: los RECORDATORIOS y el MARKETING no se
+    // encolan — acumular días de recordatorios haría que, al reanudar, salieran
+    // todos de golpe avisando de citas pasadas y fundiendo el crédito nuevo.
+    // Los mensajes PUNTUALES de una cita (confirmación y avisos) sí se encolan:
+    // perderlos en silencio era el motivo de que "a veces no llegara" la
+    // confirmación. Quedan `pendiente`, el worker no los reclama mientras dure
+    // la pausa y, al reanudar, descarta los que ya caducaron (cita pasada).
     if (this.estado.pausada() && canalDePago(fila.canal)) {
-      this.logger.debug(`Mensajería pausada: '${fila.tipo}' por ${fila.canal} no se encola (negocio ${negocioId}).`);
-      return;
+      const puntual = fila.tipo === 'confirmacion' || fila.tipo === 'aviso' || fila.tipo === 'aviso_especialista';
+      if (!puntual) {
+        this.logger.debug(`Mensajería pausada: '${fila.tipo}' por ${fila.canal} no se encola (negocio ${negocioId}).`);
+        return;
+      }
+      this.logger.log(`Mensajería pausada: '${fila.tipo}' queda en cola y saldrá al reanudar (negocio ${negocioId}).`);
     }
 
     const transaccional = fila.transaccional ?? true;

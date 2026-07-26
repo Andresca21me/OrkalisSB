@@ -63,12 +63,12 @@ export class BookingPage {
   async ingresarDatos(nombre: string, telefono: string) {
     await this.page.getByPlaceholder('Ej. Daniel Ríos').fill(nombre);
     await this.page.getByPlaceholder('311 845 2210').fill(telefono);
-    await this.page.getByRole('button', { name: 'Enviar código' }).click();
+    await this.page.getByRole('button', { name: 'Continuar' }).click();
   }
 
-  /** Lee el código de demo que la UI muestra en el paso OTP ("Demo: el código es ..."). */
+  /** Lee el código que la UI muestra en el paso OTP cuando no hay SMS real. */
   async leerDevCode(): Promise<string> {
-    const demo = this.page.getByText(/Demo: el código es/);
+    const demo = this.page.getByText(/Tu código es/);
     await expect(demo).toBeVisible({ timeout: 15_000 });
     const txt = (await demo.textContent()) ?? '';
     const m = txt.match(/(\d{6})/);

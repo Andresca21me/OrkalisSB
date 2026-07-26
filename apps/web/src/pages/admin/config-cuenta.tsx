@@ -23,7 +23,7 @@ const CANAL_LABEL: Record<CanalCupo, { label: string; icon: string }> = {
 
 const EVENTO_LABEL: Record<EventoPlantilla, { name: string; desc: string }> = {
   confirmacion: { name: 'Confirmación de cita', desc: 'Se envía al cliente en cuanto queda la reserva.' },
-  recordatorio: { name: 'Recordatorio', desc: 'Se envía dentro de la ventana configurada antes de la cita.' },
+  recordatorio: { name: 'Recordatorio', desc: 'Se envía 2 horas antes de la cita.' },
   aviso: { name: 'Cancelación', desc: 'Se envía cuando la cita se cancela.' },
   aviso_especialista: { name: 'Aviso al especialista', desc: 'Novedades de su agenda (se activa en una fase posterior).' },
   marketing: { name: 'Campaña', desc: 'Mensaje promocional. Se detiene si se agota el cupo del plan.' },

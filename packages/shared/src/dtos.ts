@@ -110,6 +110,12 @@ export interface OtpResp {
   /** false = no salió ningún SMS; el código viaja en `devCode` para mostrarlo. */
   enviado: boolean;
   /**
+   * false = el teléfono ya es cliente del negocio: no hace falta código y la
+   * reserva puede confirmarse directamente. El código solo se pide la primera
+   * vez que un número reserva en el negocio.
+   */
+  requerido: boolean;
+  /**
    * Código en claro. Solo llega cuando la mensajería no está operativa (sin
    * proveedor configurado o con el saldo pausado): sin esto nadie podría
    * completar una reserva. Con la mensajería en marcha va siempre `undefined`.

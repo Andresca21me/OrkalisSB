@@ -100,11 +100,12 @@ export async function sembrarReserva(
   const { retencionId } = await ret.json();
 
   const otp = await request.post(`/api/public/${sucursalId}/otp/enviar`, { data: { telefono } });
-  const { devCode } = await otp.json();
-  expect(devCode, 'devCode de OTP en dev').toBeTruthy();
+  const { requerido, devCode } = await otp.json();
+  // Un teléfono ya conocido por el negocio confirma sin código (requerido=false).
+  if (requerido !== false) expect(devCode, 'devCode de OTP en dev').toBeTruthy();
 
   const conf = await request.post(`/api/public/${sucursalId}/confirmar`, {
-    data: { retencionId, telefono, nombre, codigoOtp: devCode, servicioIds: [servicioId] },
+    data: { retencionId, telefono, nombre, ...(requerido !== false ? { codigoOtp: devCode } : {}), servicioIds: [servicioId] },
   });
   expect(conf.status(), await conf.text()).toBe(201);
   const { citaId } = await conf.json();

@@ -25,13 +25,14 @@ describe('Plantillas de mensaje (FASE-04, D5)', () => {
       const sinNombre = { ...DATOS, clienteNombre: undefined };
       const out = renderizar('Hola {{cliente}}, tu cita es a las {{hora}}.', valoresDe(sinNombre));
       expect(out).not.toContain('{{');
-      expect(out).toBe('Hola , tu cita es a las 2:00 p. m..');
+      expect(out).toBe('Hola , tu cita es a las 2:00 p.m..');
     });
 
     it('{{hora}} y {{fecha}} salen en zona Bogotá', () => {
       const valores = valoresDe(DATOS);
       expect(valores.hora).toContain('2:00');
-      expect(valores.fecha).toContain('10 de marzo de 2030');
+      // Formato compacto GSM-7 (sin «á» de sábado ni fecha de lujo): «dom 10 mar, …»
+      expect(valores.fecha).toContain('10 mar');
     });
 
     it('detecta las variables usadas, sin repetir', () => {

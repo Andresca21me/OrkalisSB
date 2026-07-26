@@ -163,26 +163,15 @@ export const REGISTRY: Record<string, DefinicionClave> = {
     defaults: { [PerfilNegocio.Salon]: 'auto', [PerfilNegocio.Barberia]: 'auto' },
     descripcion: 'Canal preferido para las campañas de marketing.',
   }),
-  'agendamiento.recordatorio_24h': def({
-    clave: 'agendamiento.recordatorio_24h',
-    tipo: 'boolean',
-    nivelMinimoEdicion: NivelConfig.Negocio,
-    defaults: { [PerfilNegocio.Salon]: true, [PerfilNegocio.Barberia]: true },
-    descripcion: 'Enviar recordatorio 24 horas antes de la cita.',
-  }),
+  // Las claves 'agendamiento.recordatorio_24h' y 'agendamiento.ventana_recordatorio_horas'
+  // se retiraron: el único recordatorio del sistema es el de 2 horas. Las filas
+  // que algún negocio hubiera guardado para ellas quedan huérfanas e inocuas.
   'agendamiento.recordatorio_2h': def({
     clave: 'agendamiento.recordatorio_2h',
     tipo: 'boolean',
     nivelMinimoEdicion: NivelConfig.Negocio,
     defaults: { [PerfilNegocio.Salon]: true, [PerfilNegocio.Barberia]: true },
     descripcion: 'Enviar recordatorio 2 horas antes de la cita.',
-  }),
-  'agendamiento.ventana_recordatorio_horas': def({
-    clave: 'agendamiento.ventana_recordatorio_horas',
-    tipo: 'numero',
-    nivelMinimoEdicion: NivelConfig.Negocio,
-    defaults: { [PerfilNegocio.Salon]: 24, [PerfilNegocio.Barberia]: 24 },
-    descripcion: 'Horas antes de la cita para enviar el recordatorio.',
   }),
   'agendamiento.duracion_retencion_min': def({
     clave: 'agendamiento.duracion_retencion_min',

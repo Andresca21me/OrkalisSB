@@ -176,11 +176,31 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       await estadoMensajeria.reanudar(0);
     });
 
-    it('un SMS ni siquiera se encola', async () => {
+    it('la CONFIRMACIÓN sí se encola y queda esperando la reanudación', async () => {
+      // Perderla en silencio era el motivo de que "a veces no llegara": ahora
+      // queda `pendiente` (el worker no la reclama mientras dure la pausa).
       const antes = await adminDb.select({ id: mensaje.id }).from(mensaje).where(eq(mensaje.negocioId, negocioId));
       await notificaciones.encolarConfirmacion(
         negocioId,
         '3007776666',
+        { sucursalNombre: 'Sede', especialistaNombre: 'Nadie', inicio: new Date('2030-03-10T19:00:00Z') },
+        { sucursalId },
+      );
+      const despues = await adminDb.select({ id: mensaje.id, estado: mensaje.estado }).from(mensaje).where(eq(mensaje.negocioId, negocioId));
+      expect(despues).toHaveLength(antes.length + 1);
+      await outbox.drain();
+      const [fila] = await adminDb
+        .select()
+        .from(mensaje)
+        .where(and(eq(mensaje.negocioId, negocioId), eq(mensaje.destino, '3007776666')));
+      expect(fila.estado).toBe('pendiente'); // en espera, no perdida ni enviada
+    });
+
+    it('un RECORDATORIO ni siquiera se encola (al reanudar se recalcula)', async () => {
+      const antes = await adminDb.select({ id: mensaje.id }).from(mensaje).where(eq(mensaje.negocioId, negocioId));
+      await notificaciones.encolarRecordatorio(
+        negocioId,
+        '3007776667',
         { sucursalNombre: 'Sede', especialistaNombre: 'Nadie', inicio: new Date('2030-03-10T19:00:00Z') },
         { sucursalId },
       );
@@ -544,9 +564,8 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
         .returning({ id: cita.id });
       return c.id;
     };
-    // Orden fijo (24 h → 2 h → config) para que las aserciones se lean como el
-    // paso del tiempo; ordenar por texto pondría "h24" antes que "h2".
-    const ORDEN = ['h24', 'h2', 'config'];
+    // Orden fijo por si vuelven a existir varias ventanas; hoy solo queda h2.
+    const ORDEN = ['h2'];
     /** Recordatorios encolados PARA ESTA cita (el escaneo recorre todas). */
     const recordatoriosDe = async (citaId: string) =>
       (await adminDb
@@ -558,43 +577,43 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
         .sort((a, b) => ORDEN.indexOf(a.ventana) - ORDEN.indexOf(b.ventana))
         .map((r) => `${r.ventana}:${r.enviadoEn ? 'enviado' : 'omitido'}`);
 
-    it('una cita lejana (>24 h) todavía no dispara ninguna ventana', async () => {
+    it('una cita lejana (>2 h) todavía no dispara la ventana', async () => {
       const id = await crearCita(100 * 24);
       await scheduler.escanearRecordatorios();
       expect(await ventanasDe(id)).toEqual([]);
     });
 
-    it('a 23 h envía SOLO la ventana de 24 h; la de 2 h sigue pendiente', async () => {
+    it('ya no existe recordatorio de 24 h: a 23 h no sale nada', async () => {
       const id = await crearCita(23);
       await scheduler.escanearRecordatorios();
-      expect(await ventanasDe(id)).toEqual(['h24:enviado']);
+      await outbox.drain();
+      expect(await recordatoriosDe(id)).toBe(0);
     });
 
-    it('al llegar a 1 h envía la de 2 h, sin repetir la de 24 h', async () => {
+    it('al entrar en la ventana de 2 h se envía el aviso', async () => {
       const id = await crearCita(22);
-      await scheduler.escanearRecordatorios(); // dispara h24
+      await scheduler.escanearRecordatorios(); // aún lejos: nada
       // Se simula el paso del tiempo adelantando el reloj del escaneo.
       await scheduler.escanearRecordatorios(new Date(Date.now() + 21 * 3600_000));
-      expect(await ventanasDe(id)).toEqual(['h24:enviado', 'h2:enviado']);
+      expect(await ventanasDe(id)).toEqual(['h2:enviado']);
     });
 
-    it('reserva creada con 1 h de antelación: un solo aviso, no dos', async () => {
+    it('reserva creada con 1 h de antelación: un solo aviso', async () => {
       const id = await crearCita(1);
       await scheduler.escanearRecordatorios();
       await outbox.drain();
 
-      // La de 2 h se envía; la de 24 h se registra como omitida (ya inalcanzable).
-      expect(await ventanasDe(id)).toEqual(['h24:omitido', 'h2:enviado']);
+      expect(await ventanasDe(id)).toEqual(['h2:enviado']);
       expect(await recordatoriosDe(id)).toBe(1); // UN solo aviso, no dos
     });
 
     it('reescanear (o reiniciar el proceso) NO duplica recordatorios', async () => {
-      const id = await crearCita(21);
+      const id = await crearCita(1.5);
       await scheduler.escanearRecordatorios();
       await scheduler.escanearRecordatorios();
       await scheduler.escanearRecordatorios();
       await outbox.drain();
-      expect(await ventanasDe(id)).toEqual(['h24:enviado']);
+      expect(await ventanasDe(id)).toEqual(['h2:enviado']);
       expect(await recordatoriosDe(id)).toBe(1); // los reescaneos no repiten
     });
   });

@@ -178,7 +178,6 @@ const MODULOS_AVANZADOS = ['modulo.inventario', 'modulo.particion_por_especialis
 
 const AGENDA_NUM = [
   { clave: 'agendamiento.antelacion_cancelacion_horas', title: 'Antelación para cancelar', hint: 'Horas mínimas antes de la cita para cancelar/reagendar.', suffix: 'horas', step: 1 },
-  { clave: 'agendamiento.ventana_recordatorio_horas', title: 'Ventana de recordatorio', hint: 'Horas antes de la cita para enviar el recordatorio.', suffix: 'h antes', step: 1 },
   { clave: 'agendamiento.duracion_retencion_min', title: 'Retención de franja', hint: 'Minutos que se reserva la franja mientras el cliente confirma.', suffix: 'min', step: 5 },
 ];
 

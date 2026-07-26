@@ -24,6 +24,7 @@ type FilaMensaje = {
   variables: Record<string, string> | null;
   asunto: string | null;
   intento: number;
+  cita_id: string | null;
 };
 
 /** Estados que puede reportar el proveedor por webhook. */
@@ -132,7 +133,7 @@ export class OutboxWorker {
         FOR UPDATE SKIP LOCKED
       )
       RETURNING "id", "negocio_id", "canal", "cupo_canal", "tipo", "transaccional",
-                "destino", "cuerpo", "plantilla_clave", "variables", "asunto", "intento"
+                "destino", "cuerpo", "plantilla_clave", "variables", "asunto", "intento", "cita_id"
     `);
     return [...filas];
   }
@@ -152,6 +153,20 @@ export class OutboxWorker {
 
   private async procesar(fila: FilaMensaje): Promise<void> {
     try {
+      // Caducidad: un mensaje ligado a una cita que ya empezó hace rato no se
+      // envía. Pasa con los que esperaron una pausa de saldo — confirmar o
+      // recordar una cita pasada solo confunde al cliente y quema crédito. El
+      // margen de 15 min protege a los walk-ins registrados sobre la hora.
+      if (fila.cita_id && fila.tipo !== 'otp') {
+        const [caducada] = await adminDb.execute<{ id: string }>(sql`
+          SELECT "id" FROM "cita" WHERE "id" = ${fila.cita_id} AND "inicio" < now() - interval '15 minutes'
+        `);
+        if (caducada) {
+          await this.marcarFallido(fila, 'Caducado: la cita ya había pasado cuando se pudo enviar.');
+          return;
+        }
+      }
+
       // Política de cupo (ADR-009): el marketing se DETIENE al agotarse; lo
       // transaccional (OTP, confirmaciones, recordatorios) se envía igual.
       const cupo = await this.cupos.verificar(fila.negocio_id, fila.cupo_canal);

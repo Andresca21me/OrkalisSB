@@ -159,22 +159,34 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     expect(res.estado).toBe(EstadoCita.Confirmada);
   });
 
-  it('reserva repetida con el mismo teléfono ACTUALIZA el nombre del cliente', async () => {
+  it('reserva repetida: sin código la 2ª vez, y ACTUALIZA el nombre del cliente', async () => {
     const tel = '3001110009';
-    // 1ª reserva a nombre de Camilo (franja libre 09:00).
+    // 1ª reserva a nombre de Camilo (franja libre 09:00): teléfono nuevo → pide código.
     const a = await pub.retener(sucursalId, espId, instante(FECHA, 9 * 60), instante(FECHA, 9 * 60 + 30));
     const otpA = await pub.enviarOtp(sucursalId, tel);
+    expect(otpA.requerido).toBe(true);
     await pub.confirmar(sucursalId, { retencionId: a.retencionId, telefono: tel, nombre: 'Camilo', codigoOtp: otpA.devCode!, servicioIds: [servId] });
-    // 2ª reserva mismo teléfono, ahora a nombre de Pedro (franja libre 10:00).
+    // 2ª reserva mismo teléfono, ahora a nombre de Pedro (franja libre 10:00):
+    // el número ya es cliente → ni se genera código ni hace falta enviarlo.
     const b = await pub.retener(sucursalId, espId, instante(FECHA, 10 * 60), instante(FECHA, 10 * 60 + 30));
     const otpB = await pub.enviarOtp(sucursalId, tel);
-    await pub.confirmar(sucursalId, { retencionId: b.retencionId, telefono: tel, nombre: 'Pedro', codigoOtp: otpB.devCode!, servicioIds: [servId] });
+    expect(otpB.requerido).toBe(false);
+    expect(otpB.devCode).toBeUndefined();
+    await pub.confirmar(sucursalId, { retencionId: b.retencionId, telefono: tel, nombre: 'Pedro', servicioIds: [servId] });
 
     const [c] = await adminDb
       .select({ nombre: cliente.nombre })
       .from(cliente)
       .where(and(eq(cliente.telefono, tel), eq(cliente.negocioId, negocioId)));
     expect(c.nombre).toBe('Pedro'); // antes se quedaba en 'Camilo'
+  });
+
+  it('un teléfono DESCONOCIDO no puede confirmar sin código', async () => {
+    const tel = '3001110019';
+    const r = await pub.retener(sucursalId, espId, instante(FECHA, 16 * 60), instante(FECHA, 16 * 60 + 30));
+    await expect(
+      pub.confirmar(sucursalId, { retencionId: r.retencionId, telefono: tel, servicioIds: [servId] }),
+    ).rejects.toThrow(/código/);
   });
 
   it('con aprobación manual ON la reserva entra como SOLICITADA', async () => {

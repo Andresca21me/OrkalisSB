@@ -30,8 +30,10 @@ export class PlantillasService {
    * avisarle con el texto genérico.
    */
   async cuerpoSms(negocioId: string, evento: EventoPlantilla, datos: DatosCita): Promise<string> {
-    const porDefecto = this.porDefecto(evento, datos);
+    // Dentro del try: si hasta el default fallara (dato corrupto), reventar aquí
+    // tumbaría la operación de negocio que ya se confirmó (p. ej. la reserva).
     try {
+      const porDefecto = this.porDefecto(evento, datos);
       const [fila] = await runInTenantTx({ negocioId, sucursalIds: null, rol: 'sistema' }, (tx) =>
         tx
           .select({ contenido: plantillaMensaje.contenidoSms, activo: plantillaMensaje.activo })
@@ -49,7 +51,7 @@ export class PlantillasService {
       const cuerpo = renderizar(fila.contenido, valoresDe(datos));
       return cuerpo || porDefecto;
     } catch {
-      return porDefecto;
+      return 'Tienes una novedad de tu cita. Escribe al negocio para conocer el detalle.';
     }
   }
 

@@ -124,17 +124,26 @@ export function BookingPage() {
     setReagendando(false);
   }
 
-  // Retiene la franja y envía el OTP justo antes de identificar. Recibe el
-  // teléfono por parámetro: el estado `contacto` puede no estar actualizado aún
-  // en el mismo tick del envío (setContacto es asíncrono).
-  async function retenerYEnviar(telefono: string): Promise<boolean> {
-    if (!slot) return false;
+  // Retiene la franja y decide si hace falta código. Recibe los datos por
+  // parámetro: el estado `contacto` puede no estar actualizado aún en el mismo
+  // tick del envío (setContacto es asíncrono).
+  //
+  // Devuelve 'otp' si se envió un código (primera reserva de ese número),
+  // 'directo' si el teléfono ya es cliente y la reserva quedó confirmada aquí
+  // mismo sin código, o null si algo falló.
+  async function retenerYEnviar(datos: { nombre: string; telefono: string }): Promise<'otp' | 'directo' | null> {
+    if (!slot) return null;
     try {
       const r = await api.post<RetencionResp>(`/public/${sucursalId}/retener`, { especialistaId: slot.especialistaId, inicio: slot.inicio, fin: slot.fin }, false);
       setRetencionId(r.retencionId);
-      const otp = await api.post<OtpResp>(`/public/${sucursalId}/otp/enviar`, { telefono }, false);
+      const otp = await api.post<OtpResp>(`/public/${sucursalId}/otp/enviar`, { telefono: datos.telefono }, false);
       setDevCode(otp.devCode);
-      return true;
+      if (otp.requerido === false) {
+        // Cliente conocido: confirmación directa (el servidor lo revalida).
+        await confirmarCon('', { retencionId: r.retencionId, ...datos });
+        return 'directo';
+      }
+      return 'otp';
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         toast('Esa hora la acaban de reservar. Elige otra.', 'error');
@@ -143,12 +152,19 @@ export function BookingPage() {
       } else {
         toast((e as Error).message, 'error');
       }
-      return false;
+      return null;
     }
   }
 
-  async function confirmar(codigoOtp: string) {
-    if (!retencionId) return;
+  function confirmar(codigoOtp: string) {
+    return confirmarCon(codigoOtp, { retencionId, telefono: contacto.telefono, nombre: contacto.nombre });
+  }
+
+  // La variante con datos explícitos existe para la confirmación directa (sin
+  // código), que ocurre en el mismo tick en que `retencionId`/`contacto` acaban
+  // de fijarse y el estado de React aún no se refrescó.
+  async function confirmarCon(codigoOtp: string, d: { retencionId: string | null; telefono: string; nombre: string }) {
+    if (!d.retencionId) return;
     setEnviando(true);
     try {
       // Reagendar = cancelar la anterior antes de crear la nueva.
@@ -157,7 +173,8 @@ export function BookingPage() {
       }
       const r = await api.post<ConfirmarResp>(
         `/public/${sucursalId}/confirmar`,
-        { retencionId, telefono: contacto.telefono, nombre: contacto.nombre, codigoOtp, servicioIds: servicios },
+        // Sin código (cliente conocido) no se manda el campo: el DTO lo valida solo si viene.
+        { retencionId: d.retencionId, telefono: d.telefono, nombre: d.nombre, ...(codigoOtp ? { codigoOtp } : {}), servicioIds: servicios },
         false,
       );
       const detalle = await api.get<CitaPublica>(`/public/${sucursalId}/cita/${r.citaId}`, false);
@@ -169,7 +186,7 @@ export function BookingPage() {
         toast('Esa hora la acaban de reservar. Elige otra.', 'error');
         setSlot(null);
         setStep('horario');
-      } else if (e instanceof ApiError && (e.status === 400 || e.status === 401)) {
+      } else if (codigoOtp && e instanceof ApiError && (e.status === 400 || e.status === 401)) {
         toast('Código incorrecto. Inténtalo de nuevo.', 'error');
       } else {
         toast((e as Error).message, 'error');
@@ -653,7 +670,7 @@ function SlotGroup({ label, slots, slot, onPick }: { label: string; slots: Franj
 }
 
 // ════════════════════ Identificación + OTP ════════════════════
-function Identificacion({ negocio, contacto, onChange, devCode, onEnviar, onVerificar, enviando, onBack }: { negocio: string; contacto: { nombre: string; telefono: string }; onChange: (c: { nombre: string; telefono: string }) => void; devCode?: string; onEnviar: (telefono: string) => Promise<boolean>; onVerificar: (code: string) => void; enviando: boolean; onBack: () => void }) {
+function Identificacion({ negocio, contacto, onChange, devCode, onEnviar, onVerificar, enviando, onBack }: { negocio: string; contacto: { nombre: string; telefono: string }; onChange: (c: { nombre: string; telefono: string }) => void; devCode?: string; onEnviar: (datos: { nombre: string; telefono: string }) => Promise<'otp' | 'directo' | null>; onVerificar: (code: string) => void; enviando: boolean; onBack: () => void }) {
   const [fase, setFase] = useState<'datos' | 'otp'>('datos');
   const [nombre, setNombre] = useState(contacto.nombre);
   const [telefono, setTelefono] = useState(contacto.telefono);
@@ -678,9 +695,10 @@ function Identificacion({ negocio, contacto, onChange, devCode, onEnviar, onVeri
     if (!nombreOk || !telOk) return;
     setSending(true);
     onChange({ nombre: nombre.trim(), telefono: digits });
-    const ok = await onEnviar(digits);
+    const r = await onEnviar({ nombre: nombre.trim(), telefono: digits });
     setSending(false);
-    if (ok) {
+    // 'directo' = cliente conocido: la reserva ya quedó confirmada sin código.
+    if (r === 'otp') {
       setFase('otp');
       setSecs(30);
       setTimeout(() => refs.current[0]?.focus(), 60);
@@ -715,7 +733,7 @@ function Identificacion({ negocio, contacto, onChange, devCode, onEnviar, onVeri
               <Campo label="Nombre completo" error={tocado && !nombreOk ? 'Escribe tu nombre (mín. 3 letras)' : undefined}>
                 <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Daniel Ríos" style={inputCss(tocado && !nombreOk)} />
               </Campo>
-              <Campo label="Celular" hint="Te enviaremos un código por SMS." error={tocado && !telOk ? 'Debe tener 10 dígitos' : undefined}>
+              <Campo label="Celular" hint="Si es tu primera reserva, te enviaremos un código por SMS." error={tocado && !telOk ? 'Debe tener 10 dígitos' : undefined}>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div style={{ ...inputCss(false), width: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontWeight: 600, flex: 'none' }}>+57</div>
                   <input value={telefono} onChange={(e) => setTelefono(e.target.value.replace(/[^\d ]/g, '').slice(0, 12))} inputMode="numeric" placeholder="311 845 2210" className="data" style={{ ...inputCss(tocado && !telOk), flex: 1 }} />
@@ -761,8 +779,8 @@ function Identificacion({ negocio, contacto, onChange, devCode, onEnviar, onVeri
 
       <FooterBar>
         {fase === 'datos' ? (
-          <Button fullWidth iconRight="arrow-right" disabled={sending} onClick={() => void enviar()}>
-            {sending ? 'Enviando código…' : 'Enviar código'}
+          <Button fullWidth iconRight="arrow-right" disabled={sending || enviando} onClick={() => void enviar()}>
+            {sending || enviando ? 'Un momento…' : 'Continuar'}
           </Button>
         ) : (
           <Button fullWidth disabled={full.length !== 6 || enviando} onClick={() => onVerificar(full)}>
