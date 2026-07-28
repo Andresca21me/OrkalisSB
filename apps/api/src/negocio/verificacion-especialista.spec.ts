@@ -13,7 +13,15 @@ import { EquipoService } from './equipo.service';
 import { VerificacionEspecialistaService } from './verificacion-especialista.service';
 import { RemitenteResolver } from '../notificaciones/remitente/remitente.resolver';
 import { CODIGO_VERIFY_MOCK, MockVerifyAdapter } from '../notificaciones/verify/mock-verify.adapter';
-import { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
+import type { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
+
+/**
+ * Doble del estado de mensajería. `sinMensajes()` es lo único que consulta el
+ * servicio, y decide entre las dos rutas del alta: código por Verify (false) o
+ * código local mostrado en pantalla (true).
+ */
+const estadoFalso = (sinMensajes: boolean) =>
+  ({ sinMensajes: () => sinMensajes }) as unknown as MensajeriaEstadoService;
 
 /** Verify mock que además cuenta los envíos (para probar cooldown/reenvíos). */
 class VerifySpy extends MockVerifyAdapter {
@@ -44,7 +52,12 @@ describe('Alta de especialista con celular verificado (FASE-06, D3)', () => {
 
     verify = new VerifySpy();
     const remitente = new RemitenteResolver({ get: () => undefined } as never);
-    servicio = new VerificacionEspecialistaService(new EquipoService(new PlanService(), { encolarAviso: async () => {} } as unknown as NotificacionesService), remitente, verify, new MensajeriaEstadoService());
+    // Estado de mensajería FIJO en "hay mensajes": este bloque prueba la ruta de
+    // Twilio Verify. Con el servicio real, `sinMensajes()` depende de que existan
+    // claves TWILIO_* en el entorno, así que las pruebas pasaban o fallaban según
+    // el `.env` de cada máquina (y en CI, que no las define, fallaban siempre).
+    // La ruta contraria —código local en pantalla— se prueba más abajo.
+    servicio = new VerificacionEspecialistaService(new EquipoService(new PlanService(), { encolarAviso: async () => {} } as unknown as NotificacionesService), remitente, verify, estadoFalso(false));
   });
 
   afterAll(async () => {
@@ -160,5 +173,29 @@ describe('Alta de especialista con celular verificado (FASE-06, D3)', () => {
     await expect(iniciar({ nombre: 'SinCupo' })).rejects.toThrow(/cupo/i);
     expect(verify.envios.length).toBe(envios);
     await adminDb.update(suscripcion).set({ numEspecialistas: 10 }).where(eq(suscripcion.negocioId, negocioId));
+  });
+
+  it('en modo sin mensajes el código se genera en casa y se devuelve para verlo en pantalla', async () => {
+    const sinSaldo = new VerificacionEspecialistaService(
+      new EquipoService(new PlanService(), { encolarAviso: async () => {} } as unknown as NotificacionesService),
+      new RemitenteResolver({ get: () => undefined } as never),
+      verify,
+      estadoFalso(true),
+    );
+    const envios = verify.envios.length;
+    const { verificacionId, codigoVisible } = await sinSaldo.iniciar(ctx, {
+      nombre: 'SinSaldo',
+      celular: '3001112233',
+      sucursalIds: [sucursalId],
+    });
+
+    expect(codigoVisible).toMatch(/^\d{6}$/);
+    expect(verify.envios.length).toBe(envios); // no se tocó Verify: no hay SMS que mandar
+
+    // El código de Verify no vale: aquí se comprueba contra el hash local.
+    await expect(sinSaldo.confirmar(ctx, verificacionId, '000000')).rejects.toThrow(/incorrecto/i);
+    const creado = await sinSaldo.confirmar(ctx, verificacionId, codigoVisible!);
+    expect(creado.nombre).toBe('SinSaldo');
+    expect(creado.telefonoVerificadoEn).not.toBeNull();
   });
 });
