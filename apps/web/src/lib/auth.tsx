@@ -15,6 +15,12 @@ export interface RegistroPayload {
   modo: 'prueba' | 'pago';
 }
 
+/** Opciones del alta. */
+export interface RegistroOpciones {
+  /** Activar la sesión al terminar (default `true`). Ver `registrar`. */
+  entrar?: boolean;
+}
+
 /** Resultado del alta: a dónde enrutar el front. */
 export interface RegistroResultado {
   negocioId: string;
@@ -31,7 +37,7 @@ interface AuthState {
   cuentaSuspendida: boolean;
   motivoBloqueo: MotivoBloqueo | null;
   login: (email: string, password: string) => Promise<void>;
-  registrar: (datos: RegistroPayload) => Promise<RegistroResultado>;
+  registrar: (datos: RegistroPayload, opts?: RegistroOpciones) => Promise<RegistroResultado>;
   logout: () => Promise<void>;
   refrescar: () => Promise<void>;
 }
@@ -127,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const registrar = useCallback(async (datos: RegistroPayload): Promise<RegistroResultado> => {
+  const registrar = useCallback(async (datos: RegistroPayload, opts?: RegistroOpciones): Promise<RegistroResultado> => {
     setSuspendida(false);
     const r = await api.post<RegistroResultado & { accessToken: string; refreshToken: string }>(
       '/auth/registro',
@@ -138,7 +144,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Modo prueba: entra de una vez (carga la sesión → el router lleva al panel).
     // Modo pago: dejamos los tokens pero NO iniciamos sesión todavía; el front
     // enruta al checkout (FASE-05) y allí, tras pagar, se entra al panel.
-    if (!r.requierePago) {
+    //
+    // `entrar: false` (asistente de alta): la sesión queda EMITIDA pero sin
+    // activar. Es lo que permite seguir configurando el negocio recién creado
+    // —sucursal, módulos, equipo— sin que el router saque al usuario del
+    // asistente al último paso; se entra con `refrescar()` cuando él decide.
+    if (!r.requierePago && (opts?.entrar ?? true)) {
       const me = await api.get<Usuario>('/auth/me');
       setUsuario(me);
       setSuspendida(me.negocio.estadoSuscripcion === EstadoSuscripcion.Suspendida);

@@ -4,7 +4,8 @@ import { MktNav, SiteFooter, SITE_CSS, type Funnel, type Go } from './site-ui';
 import type { Vertical } from './site-data';
 import { applyVertical, loadLandingVertical, saveLandingVertical } from '../../lib/theme';
 import { CalculatorPage, ComparePage, ContactPage, FAQPage, LandingPage, LegalPage, PricingPage } from './site-pages';
-import { CheckoutPage, SignupPage, WelcomePage } from './site-funnel';
+import { CheckoutPage, WelcomePage } from './site-funnel';
+import { SignupPage } from './alta-wizard';
 
 /** Sitio de marketing + funnel (FASE-12, SOLO VISUAL). Rutas públicas. */
 export function SiteApp() {
@@ -47,10 +48,14 @@ export function SiteApp() {
   const onVertical = (v: Vertical) => { setVertical(v); setFunnel((f) => ({ ...f, vertical: v })); };
   const shared = { vertical, go, funnel, setFunnel };
 
+  // El alta es un asistente a pantalla completa (réplica del prototipo): trae
+  // su propia cabecera y no debe competir con el nav ni el footer del sitio.
+  const asistente = location.pathname === '/alta';
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-page)' }}>
       <style>{SITE_CSS}</style>
-      <MktNav vertical={vertical} onVertical={onVertical} go={go} />
+      {!asistente && <MktNav vertical={vertical} onVertical={onVertical} go={go} />}
       <main style={{ flex: 1 }}>
         <Routes>
           <Route index element={<LandingPage {...shared} />} />
@@ -67,7 +72,7 @@ export function SiteApp() {
           <Route path="*" element={<LandingPage {...shared} />} />
         </Routes>
       </main>
-      <SiteFooter go={go} />
+      {!asistente && <SiteFooter go={go} />}
     </div>
   );
 }

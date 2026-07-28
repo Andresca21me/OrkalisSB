@@ -1,94 +1,14 @@
 import { useState } from 'react';
-import type { PerfilNegocio, PlanSuscripcion } from '@orkalis/shared';
 import { useAuth } from '../../lib/auth';
 import { money } from '../../lib/format';
 import { Badge, Button, Icon } from '../../ui/ui';
 import { monthly, planById, VERTICAL, type Vertical } from './site-data';
-import { PlanSummary, SField, SInput, SSeg, Section, SectionHead, type Funnel, type Go } from './site-ui';
+import { PlanSummary, Section, SectionHead, type Funnel, type Go } from './site-ui';
 import { CheckoutMercadoPago } from './checkout-mp';
 
 interface Props { vertical: Vertical; go: Go; funnel: Funnel; setFunnel: (f: (p: Funnel) => Funnel) => void }
 
-// ── 8.5 · Registro (alta real · Plan-Pagos FASE-03) ──────────────────────────
-export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
-  const { registrar } = useAuth();
-  const [form, setForm] = useState({ negocio: '', tipo: vertical as string, responsable: '', email: '', tel: '', pass: '' });
-  const [touched, setTouched] = useState(false);
-  const [busy, setBusy] = useState<null | 'prueba' | 'pago'>(null);
-  const [serverErr, setServerErr] = useState<string>();
-  const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const emailValid = /.+@.+\..+/.test(form.email);
-  const errs = {
-    negocio: touched && !form.negocio.trim() ? 'Escribe el nombre de tu negocio' : undefined,
-    responsable: touched && !form.responsable.trim() ? 'Escribe tu nombre' : undefined,
-    email: touched && !emailValid ? 'Correo no válido' : undefined,
-    pass: touched && form.pass.length < 8 ? 'Mínimo 8 caracteres' : undefined,
-  };
-  const valid = form.negocio.trim() && form.responsable.trim() && emailValid && form.pass.length >= 8;
-
-  async function crear(modo: 'prueba' | 'pago') {
-    setTouched(true);
-    setServerErr(undefined);
-    if (!valid || busy) return;
-    setBusy(modo);
-    setFunnel((f) => ({ ...f, vertical: form.tipo as Vertical, negocio: form.negocio }));
-    try {
-      const plan = planById(funnel.planId);
-      // El cupo no puede ser menor que los especialistas incluidos del plan.
-      const numEspecialistas = Math.max(funnel.specialists, plan.included);
-      const r = await registrar({
-        negocioNombre: form.negocio.trim(),
-        perfil: form.tipo as PerfilNegocio,
-        plan: funnel.planId as PlanSuscripcion,
-        numEspecialistas,
-        admin: { nombre: form.responsable.trim(), email: form.email.trim(), password: form.pass },
-        modo,
-      });
-      // Modo prueba: el router entra solo al panel (la sesión ya quedó activa).
-      // Modo pago: vamos al checkout (FASE-05).
-      if (r.requierePago) go('pago');
-    } catch (e) {
-      setServerErr(e instanceof Error ? e.message : 'No se pudo crear la cuenta. Intenta de nuevo.');
-      setBusy(null);
-    }
-  }
-
-  return (
-    <Section>
-      <div className="mkt-funnel" style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 32, maxWidth: 940, margin: '0 auto', alignItems: 'start' }}>
-        <div>
-          <SectionHead eyebrow="Crear cuenta" eyebrowTone="brand" title="Crea tu cuenta de Orkalis" sub="Solo lo mínimo para empezar. Configuras el resto después." />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SField label="Nombre del negocio" error={errs.negocio}><SInput value={form.negocio} onChange={set('negocio')} placeholder={VERTICAL[vertical].sample} invalid={!!errs.negocio} /></SField>
-            <SField label="Tipo de negocio">
-              <SSeg value={form.tipo} onChange={set('tipo')} options={[{ value: 'salon', label: 'Salón de belleza' }, { value: 'barberia', label: 'Barbería' }]} />
-            </SField>
-            <div className="mkt-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <SField label="Nombre del responsable" error={errs.responsable}><SInput value={form.responsable} onChange={set('responsable')} placeholder="Ej.: Catalina Mejía" invalid={!!errs.responsable} /></SField>
-              <SField label="Teléfono" optional><SInput value={form.tel} onChange={set('tel')} placeholder="300 000 0000" /></SField>
-            </div>
-            <SField label="Correo" error={errs.email}><SInput value={form.email} onChange={set('email')} type="email" placeholder="nombre@negocio.co" invalid={!!errs.email} /></SField>
-            <SField label="Contraseña" hint="Mínimo 8 caracteres." error={errs.pass}><SInput value={form.pass} onChange={set('pass')} type="password" placeholder="Crea una contraseña" invalid={!!errs.pass} /></SField>
-
-            {serverErr && (
-              <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 'var(--radius-sm)', background: 'var(--error-tint)', border: '1px solid var(--error)', fontSize: 'var(--text-sm)', color: 'var(--error)' }}>
-                <Icon name="alert-circle" size={16} color="var(--error)" />{serverErr}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Button variant="primary" size="lg" fullWidth iconRight={busy === 'prueba' ? undefined : 'arrow-right'} loading={busy === 'prueba'} disabled={!!busy} onClick={() => crear('prueba')}>Empezar prueba gratis (15 días)</Button>
-              <Button variant="secondary" size="lg" fullWidth iconLeft={busy === 'pago' ? undefined : 'credit-card'} loading={busy === 'pago'} disabled={!!busy} onClick={() => crear('pago')}>Pagar y empezar ya</Button>
-            </div>
-            <p style={{ textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', margin: 0 }}>La prueba no pide tarjeta. Puedes cancelar cuando quieras.</p>
-            <p style={{ textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: 0 }}>¿Ya tienes cuenta? <button type="button" onClick={() => go('login')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--brand)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>Inicia sesión</button></p>
-          </div>
-        </div>
-        <PlanSummary funnel={funnel} setFunnel={setFunnel} editable />
-      </div>
-    </Section>
-  );
-}
+// El alta (8.5) es ahora el asistente guiado de `alta-wizard.tsx`.
 
 // ── 8.6 · Checkout (Mercado Pago · Plan-Pagos FASE-05) ───────────────────────
 export function CheckoutPage({ go, funnel, setFunnel }: Props) {

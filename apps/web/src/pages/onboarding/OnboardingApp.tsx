@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PerfilNegocio } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { Avatar, Badge, Button, Card, Icon, Logo, Spinner, Switch, useToast } from '../../ui';
+import { Avatar, Button, Card, Icon, Logo, Spinner, Switch, useToast } from '../../ui';
+import { ChoiceCard, GField, GInput, ONB_CSS, StepShell, Stepper, inputCss } from './onboarding-ui';
 
 interface ValorEfectivo {
   clave: string;
@@ -167,6 +168,7 @@ export function OnboardingApp() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--surface-page)' }}>
+      <style>{ONB_CSS}</style>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-card)', position: 'sticky', top: 0, zIndex: 10 }}>
         <Logo />
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -194,7 +196,7 @@ export function OnboardingApp() {
                 <div>
                   <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Perfil del negocio</div>
                   <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: '0 0 12px' }}>Define cómo llamamos a tu equipo y los valores por defecto.</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div className="onb-grid-2">
                     <ChoiceCard selected={perfil === PerfilNegocio.Salon} onClick={() => setPerfil(PerfilNegocio.Salon)} icon="scissors" title="Salón de belleza" desc="Especialistas, cabello, color, uñas y estética." tag="Equipo: especialistas" />
                     <ChoiceCard selected={perfil === PerfilNegocio.Barberia} onClick={() => setPerfil(PerfilNegocio.Barberia)} icon="scissors" title="Barbería" desc="Barberos, cortes, barba y arreglo." tag="Equipo: barberos" />
                   </div>
@@ -275,66 +277,6 @@ export function OnboardingApp() {
   );
 }
 
-// ── ChoiceCard ───────────────────────────────────────────────────────────────
-function ChoiceCard({ selected, onClick, icon, title, desc, tag }: { selected: boolean; onClick: () => void; icon: string; title: string; desc: string; tag?: string }) {
-  return (
-    <button type="button" onClick={onClick} style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', padding: 20, cursor: 'pointer', border: `1.5px solid ${selected ? 'var(--brand)' : 'var(--border-default)'}`, borderRadius: 'var(--radius-lg)', background: selected ? 'var(--brand-tint)' : 'var(--surface-card)', boxShadow: selected ? '0 0 0 1px var(--brand)' : 'var(--shadow-xs)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 46, height: 46, borderRadius: 'var(--radius-md)', background: selected ? 'var(--brand)' : 'var(--surface-sunken)' }}>
-          <Icon name={icon} size={23} color={selected ? '#fff' : 'var(--text-secondary)'} />
-        </span>
-        <span style={{ width: 22, height: 22, borderRadius: 999, border: `2px solid ${selected ? 'var(--brand)' : 'var(--border-strong)'}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-          {selected && <span style={{ width: 11, height: 11, borderRadius: 999, background: 'var(--brand)' }} />}
-        </span>
-      </div>
-      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--text-primary)' }}>{title}</span>
-      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.45 }}>{desc}</span>
-      {tag && <span style={{ marginTop: 12 }}><Badge tone="neutral" size="lg">{tag}</Badge></span>}
-    </button>
-  );
-}
-
-// ── StepShell ────────────────────────────────────────────────────────────────
-function StepShell({ n, title, desc, optional, children }: { n: number; title: string; desc?: string; optional?: boolean; children: ReactNode }) {
-  return (
-    <div>
-      <div style={{ marginBottom: 26 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <span className="eyebrow" style={{ whiteSpace: 'nowrap' }}>Paso {n} de 5</span>
-          {optional && <Badge tone="neutral" size="lg">Opcional</Badge>}
-        </div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-3xl)', letterSpacing: '-0.025em', margin: 0 }}>{title}</h1>
-        {desc && <p style={{ fontSize: 'var(--text-md)', color: 'var(--text-secondary)', margin: '10px 0 0', lineHeight: 1.5, maxWidth: 560 }}>{desc}</p>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// ── Stepper ──────────────────────────────────────────────────────────────────
-function Stepper({ steps, current, onJump }: { steps: typeof STEPS; current: number; onJump: (n: number) => void }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center' }}>
-      {steps.map((s, i) => {
-        const done = s.n < current;
-        const active = s.n === current;
-        const reachable = s.n < current;
-        return (
-          <span key={s.n} style={{ display: 'contents' }}>
-            <button type="button" onClick={() => reachable && onJump(s.n)} disabled={!reachable} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', cursor: reachable ? 'pointer' : 'default', padding: 0, flex: 'none' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 999, flex: 'none', background: done ? 'var(--brand)' : active ? 'var(--brand-tint)' : 'var(--surface-sunken)', border: `2px solid ${done || active ? 'var(--brand)' : 'var(--border-default)'}`, color: done ? '#fff' : active ? 'var(--brand)' : 'var(--text-tertiary)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
-                {done ? <Icon name="check" size={17} color="#fff" /> : s.n}
-              </span>
-              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{s.label}</span>
-            </button>
-            {i < steps.length - 1 && <span style={{ flex: 1, height: 2, margin: '0 8px 22px', background: s.n < current ? 'var(--brand)' : 'var(--border-default)' }} />}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── TeamStep ─────────────────────────────────────────────────────────────────
 function TeamStep({ equipo, espWord, sucursalNombre, onAdd, onRemove }: { equipo: Especialista[]; espWord: string; sucursalNombre: string; onAdd: (nombre: string) => void; onRemove: (id: string) => void }) {
   const [nombre, setNombre] = useState('');
@@ -405,7 +347,7 @@ function DoneStep({ bizName, publicUrl, perfil, sucursalNombre, modsActivos, equ
       <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 72, height: 72, borderRadius: 999, background: 'var(--success-tint)', marginBottom: 20 }}>
         <Icon name="check-circle" size={38} color="var(--success)" />
       </span>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-3xl)', letterSpacing: '-0.025em', margin: 0 }}>¡{bizName} está listo!</h1>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-3xl)', lineHeight: 1.12, letterSpacing: '-0.025em', margin: 0 }}>¡{bizName} está listo!</h1>
       <p style={{ fontSize: 'var(--text-md)', color: 'var(--text-secondary)', margin: '12px 0 0', lineHeight: 1.5 }}>Tu cuenta quedó configurada. Comparte tu enlace de reservas para empezar a recibir citas.</p>
 
       <div style={{ marginTop: 28, padding: 20, borderRadius: 'var(--radius-lg)', background: 'var(--navy)', color: '#fff', textAlign: 'left' }}>
@@ -448,19 +390,3 @@ function DoneStep({ bizName, publicUrl, perfil, sucursalNombre, modsActivos, equ
   );
 }
 
-// ── Campos ───────────────────────────────────────────────────────────────────
-function GField({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-      <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{label}{hint && <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> · {hint}</span>}</span>
-      {children}
-      {error && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--error)' }}>{error}</span>}
-    </div>
-  );
-}
-function GInput({ value, onChange, placeholder, invalid, onEnter }: { value: string; onChange: (v: string) => void; placeholder?: string; invalid?: boolean; onEnter?: () => void }) {
-  return <input value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onEnter?.()} placeholder={placeholder} style={inputCss(!!invalid)} />;
-}
-function inputCss(err: boolean): React.CSSProperties {
-  return { height: 48, padding: '0 14px', width: '100%', boxSizing: 'border-box', border: `1px solid ${err ? 'var(--error)' : 'var(--border-default)'}`, borderRadius: 'var(--radius-sm)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-md)', color: 'var(--text-primary)', outline: 'none', boxShadow: 'var(--shadow-xs)' };
-}
