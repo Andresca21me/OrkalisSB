@@ -95,9 +95,13 @@ float snoise(vec3 v){
   return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
 }
 
+// 3 octavas, no 4. Cada octava son 5 evaluaciones de snoise por píxel (una por
+// cada llamada a fbm de abajo), y la cuarta aporta un detalle de amplitud
+// 0.0625 y frecuencia 8x que a la resolución a la que se pinta esto ni siquiera
+// se puede representar: solo produce aliasing. Quitarla es 25% menos trabajo.
 float fbm(vec3 p){
   float v = 0.0, a = 0.5;
-  for (int i = 0; i < 4; i++) { v += a * snoise(p); p *= 2.0; a *= 0.5; }
+  for (int i = 0; i < 3; i++) { v += a * snoise(p); p *= 2.0; a *= 0.5; }
   return v;
 }
 
@@ -177,7 +181,38 @@ export function mountGradient(canvas: HTMLCanvasElement, initial: GradientOption
   let raf = 0;
   const start = performance.now();
 
-  function applyStatic() {
+  /**
+   * Se pinta a MENOS de un píxel de pantalla por píxel de shader y el canvas se
+   * estira por CSS. El coste va con el número de píxeles, y este shader es caro
+   * de verdad: 5 llamadas a `fbm` × 3 octavas = 15 evaluaciones de ruido símplex
+   * 3D por píxel. A DPR 2 en un hero a pantalla completa eso son millones de
+   * píxeles × 15, cada frame, y satura la GPU de un portátil sin gráfica
+   * dedicada — que es justo lo que hacía ir la página a tirones mientras el hero
+   * estaba a la vista.
+   *
+   * No se nota: lo que se pinta es un degradado de frecuencia muy baja (rasgos
+   * de cientos de píxeles), así que al estirarlo el navegador lo interpola y el
+   * resultado es indistinguible. El tope de ancho evita que un monitor grande
+   * vuelva a disparar el coste.
+   */
+  const ESCALA_RENDER = 0.5;
+  const ANCHO_MAX_PX = 1100;
+
+  /** ~30 fps. El degradado «respira» a 0.085 de velocidad: a 60 fps se gasta el
+   *  doble de GPU para un movimiento que el ojo no distingue, y esos frames son
+   *  los que necesita el compositor para que el scroll vaya suelto. */
+  const MS_POR_FRAME = 1000 / 30;
+  let ultimoFrame = 0;
+
+  // Medidas cacheadas. Leer `clientWidth` dentro del bucle de render obliga al
+  // navegador a recalcular layout en CADA frame (y durante el scroll eso es
+  // layout thrashing en el hilo principal); el ResizeObserver da lo mismo gratis.
+  let anchoCss = canvas.clientWidth;
+  let altoCss = canvas.clientHeight;
+  let redimensionar = true;
+  let uniformesSucios = true;
+
+  function aplicarUniformes() {
     gl!.uniform3fv(U.base, opts.base);
     gl!.uniform3fv(U.ca, opts.colorA);
     gl!.uniform3fv(U.cb, opts.colorB);
@@ -188,32 +223,39 @@ export function mountGradient(canvas: HTMLCanvasElement, initial: GradientOption
     gl!.uniform1f(U.swirl, opts.swirl);
   }
 
-  function resize() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1); // tope DPR = 2
-    const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
-    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+  function aplicarTamano() {
+    const escala = Math.min(ESCALA_RENDER, ANCHO_MAX_PX / Math.max(1, anchoCss));
+    const w = Math.max(1, Math.round(anchoCss * escala));
+    const h = Math.max(1, Math.round(altoCss * escala));
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
       gl!.viewport(0, 0, w, h);
+      gl!.uniform2f(U.res, w, h);
     }
-    gl!.uniform2f(U.res, w, h);
   }
 
   function draw(now: number) {
-    resize();
-    applyStatic();
+    if (redimensionar) { aplicarTamano(); redimensionar = false; }
+    if (uniformesSucios) { aplicarUniformes(); uniformesSucios = false; }
     gl!.uniform1f(U.time, ((now - start) / 1000) * opts.speed);
     gl!.drawArrays(gl!.TRIANGLES, 0, 3);
   }
 
   function loop(now: number) {
     if (!active) return;
-    draw(now);
     raf = requestAnimationFrame(loop);
+    if (now - ultimoFrame < MS_POR_FRAME) return;
+    ultimoFrame = now;
+    draw(now);
   }
 
-  const ro = new ResizeObserver(() => { if (!active) draw(performance.now()); });
+  const ro = new ResizeObserver((entries) => {
+    const caja = entries[0]?.contentRect;
+    if (caja) { anchoCss = caja.width; altoCss = caja.height; }
+    redimensionar = true;
+    if (!active) draw(performance.now());
+  });
   ro.observe(canvas);
 
   draw(performance.now()); // primer frame inmediato (evita parpadeo)
@@ -228,6 +270,7 @@ export function mountGradient(canvas: HTMLCanvasElement, initial: GradientOption
     },
     setOptions(next) {
       opts = { ...opts, ...next };
+      uniformesSucios = true;
       if (!active) draw(performance.now());
     },
     destroy() {
