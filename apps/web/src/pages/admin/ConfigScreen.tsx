@@ -418,8 +418,11 @@ interface HorarioSuc { base: Franja | null; dias: (Franja | null)[] }
 interface HorarioRow { id: string; nombre: string; dias: boolean[]; horario?: HorarioSuc }
 interface HorarioCfg { sucursales: (HorarioRow & { horario: HorarioSuc })[]; servicios: HorarioRow[] }
 
-/** Horas seleccionables, cada 30 min. Coincide con las del asistente de alta. */
-const HORAS_SEL = Array.from({ length: 44 }, (_, i) => {
+/**
+ * Horas seleccionables, cada 30 min de 05:00 a 23:30. Coincide con las del
+ * asistente de alta; más allá de 23:59 el backend lo rechaza (HH:MM).
+ */
+const HORAS_SEL = Array.from({ length: 38 }, (_, i) => {
   const min = 5 * 60 + i * 30;
   return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 });
@@ -460,7 +463,7 @@ function DiasRow({ dias, onToggle }: { dias: boolean[]; onToggle: (dia: number) 
   );
 }
 
-/** Selector de hora del horario (medias horas de 05:00 a 02:30 del día siguiente). */
+/** Selector de hora del horario (medias horas de 05:00 a 23:30). */
 function SelectHora({ value, onChange, testId }: { value: string; onChange: (v: string) => void; testId?: string }) {
   return (
     <Select value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} style={{ width: 104, height: 38 }}>

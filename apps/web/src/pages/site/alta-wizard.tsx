@@ -200,6 +200,12 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
           base: { apertura: sucursal.apertura, cierre: sucursal.cierre },
           dias: [null, null, null, null, null, null, null],
         });
+        // El paso 3 promete «Lun a Sáb»: sin esto, el horario base abriría los
+        // 7 días y el domingo quedaría reservable. El admin lo abre cuando
+        // quiera desde Configuración › Horario.
+        await api.put(`/agenda/horario/sucursal/${sucursalId}`, {
+          dias: [false, true, true, true, true, true, true],
+        });
       }
     } catch {
       fallos.push('No pudimos guardar tu sucursal ni su horario; revísalos en Configuración › Horario.');
