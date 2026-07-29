@@ -26,6 +26,7 @@ import { ConfigResolverService } from '../config-module/config-resolver.service'
 import { DisponibilidadService, type FranjaPublica } from './disponibilidad.service';
 import { OtpService } from './otp.service';
 import { HorarioService } from './horario.service';
+import { cubierta, ventanasEfectivas } from './ventanas-efectivas';
 import { capacidadesDe } from './validators/capacidades';
 import { ValidadorFactory } from './validators/validador.factory';
 import { bogotaParts } from './validators/validador-cita.port';
@@ -83,6 +84,8 @@ export class PublicAgendamientoService {
     perfil: PerfilNegocio;
     sucursales: { id: string; nombre: string }[];
     diasLaborables: boolean[];
+    /** Horario de atención por día (0=domingo). `null` = sin horario definido. */
+    horario: ({ apertura: string; cierre: string } | null)[];
     serviciosDia: Record<string, boolean[]>;
     negocioDescripcion: string | null;
     colorPrimario: string | null;
@@ -111,7 +114,8 @@ export class PublicAgendamientoService {
         .from(sucursal)
         .where(eq(sucursal.activa, true));
       const actual = sucs.find((s) => s.id === sucursalId);
-      const { diasLaborables, serviciosDia } = await this.horario.infoPublica(tx, sucursalId);
+      // `horarioDias` y no `horario`: `this.horario` es el servicio.
+      const { diasLaborables, horario: horarioDias, serviciosDia } = await this.horario.infoPublica(tx, sucursalId);
       return {
         negocioId: ctx.negocioId,
         sucursalId,
@@ -120,6 +124,7 @@ export class PublicAgendamientoService {
         perfil: (neg?.perfil ?? PerfilNegocio.Salon) as PerfilNegocio,
         sucursales: sucs,
         diasLaborables,
+        horario: horarioDias,
         serviciosDia,
         negocioDescripcion: neg?.descripcion ?? null,
         colorPrimario: neg?.colorPrimario ?? null,
@@ -311,6 +316,17 @@ export class PublicAgendamientoService {
     const expiraEn = new Date(Date.now() + ttlMin * 60_000);
 
     return runInTenantTx(ctx, async (tx) => {
+      // La franja debe caer dentro del horario de atención. La puerta dura sigue
+      // siendo `confirmar` (ValidadorPublico), pero retener es público y sin
+      // esto una petición hecha a mano bloquea 10 minutos una franja en la que
+      // el negocio ni siquiera abre.
+      const { weekday, minutes } = bogotaParts(inicio);
+      const fechaIso = new Date(inicio.getTime() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const ventanas = await ventanasEfectivas(tx, sucursalId, especialistaId, fechaIso, weekday);
+      if (!cubierta(ventanas, minutes, bogotaParts(fin).minutes)) {
+        throw new BadRequestException('Esa hora está fuera del horario de atención.');
+      }
+
       // Housekeeping: limpia retenciones expiradas de esa franja.
       await tx
         .delete(retencionFranja)

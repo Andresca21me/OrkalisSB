@@ -6,6 +6,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  time,
   timestamp,
   unique,
   uuid,
@@ -87,6 +88,14 @@ export const sucursal = pgTable('sucursal', {
     .references(() => negocio.id, { onDelete: 'cascade' }),
   nombre: text('nombre').notNull(),
   activa: boolean('activa').notNull().default(true),
+  /**
+   * Horario BASE de atención de la sede (el que rige los días sin excepción
+   * propia en `sucursal_dia_laborable`). NULL = sin horario definido: la sede
+   * se comporta como antes de FASE-Horario y manda la disponibilidad de cada
+   * especialista.
+   */
+  horaApertura: time('hora_apertura'),
+  horaCierre: time('hora_cierre'),
   creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
   actualizadoEn: timestamp('actualizado_en', { withTimezone: true }),
 });

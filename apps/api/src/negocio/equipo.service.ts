@@ -143,21 +143,31 @@ export class EquipoService {
         await tx
           .insert(especialistaSucursal)
           .values(sucursalIds.map((sid) => ({ especialistaId: e.id, sucursalId: sid })));
-        // Horario por defecto (Lun–Sáb 9:00–18:00) en cada sede asignada, para
-        // que el especialista sea reservable de inmediato. Sin esto quedaba sin
-        // ninguna franja en la reserva pública (no hay UI para editar ventanas).
-        await tx.insert(disponibilidad).values(
-          sucursalIds.flatMap((sid) =>
-            [1, 2, 3, 4, 5, 6].map((dia) => ({
-              negocioId: ctx.negocioId,
-              sucursalId: sid,
-              especialistaId: e.id,
-              diaSemana: dia,
-              horaInicio: '09:00',
-              horaFin: '18:00',
-            })),
-          ),
-        );
+        // Horario del especialista. Si la sede ya tiene horario propio no se
+        // inserta nada: sin ventanas, el especialista HEREDA el horario de la
+        // sucursal (`ventanasEfectivas`), y así ampliarlo mueve a todo el equipo
+        // en vez de dejar a cada uno anclado al horario del día en que entró.
+        // Las sedes sin horario definido (cuentas anteriores) conservan el
+        // Lun–Sáb 9:00–18:00 de siempre: sin esto quedarían sin ninguna franja.
+        const sedes = await tx
+          .select({ id: sucursal.id, apertura: sucursal.horaApertura })
+          .from(sucursal)
+          .where(inArray(sucursal.id, sucursalIds));
+        const sinHorario = sedes.filter((s) => !s.apertura).map((s) => s.id);
+        if (sinHorario.length) {
+          await tx.insert(disponibilidad).values(
+            sinHorario.flatMap((sid) =>
+              [1, 2, 3, 4, 5, 6].map((dia) => ({
+                negocioId: ctx.negocioId,
+                sucursalId: sid,
+                especialistaId: e.id,
+                diaSemana: dia,
+                horaInicio: '09:00',
+                horaFin: '18:00',
+              })),
+            ),
+          );
+        }
       }
       // Servicios que realiza (opcional). Sin esto queda sin restricción: los
       // realiza todos, que es el comportamiento por defecto.

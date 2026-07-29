@@ -287,6 +287,7 @@ export function BookingPage() {
           fecha={fecha}
           slot={slot}
           diasLaborables={info.data.diasLaborables}
+          horario={info.data.horario}
           serviciosDia={info.data.serviciosDia}
           onPickFecha={(f) => { setFecha(f); setSlot(null); }}
           onPickSlot={setSlot}
@@ -574,7 +575,7 @@ function RadioDot({ on }: { on: boolean }) {
 }
 
 // ════════════════════ Horario ════════════════════
-function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, diasLaborables, serviciosDia, onPickFecha, onPickSlot, onBack, onContinue }: { sucursalId: string; negocio: string; servicios: string[]; especialistaId: string; fecha: string | null; slot: FranjaPublica | null; diasLaborables: boolean[]; serviciosDia: Record<string, boolean[]>; onPickFecha: (f: string) => void; onPickSlot: (s: FranjaPublica) => void; onBack: () => void; onContinue: () => void }) {
+function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, diasLaborables, horario, serviciosDia, onPickFecha, onPickSlot, onBack, onContinue }: { sucursalId: string; negocio: string; servicios: string[]; especialistaId: string; fecha: string | null; slot: FranjaPublica | null; diasLaborables: boolean[]; horario: PublicInfo['horario']; serviciosDia: Record<string, boolean[]>; onPickFecha: (f: string) => void; onPickSlot: (s: FranjaPublica) => void; onBack: () => void; onContinue: () => void }) {
   const dias = useMemo(() => Array.from({ length: 14 }, (_, i) => diaParts(sumarDiasISO(hoyISO(), i))), []);
   // Un día es reservable si la sucursal abre ese día de la semana Y ningún
   // servicio elegido está desactivado ese día (0=domingo … 6=sábado).
@@ -596,6 +597,7 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
   const franjas = disp.data ?? [];
   const am = franjas.filter((f) => horaBogota(f.inicio) < 13);
   const pm = franjas.filter((f) => horaBogota(f.inicio) >= 13);
+  const franjaDelDia = horario?.[new Date(`${activo}T00:00:00Z`).getUTCDay()] ?? null;
 
   return (
     <>
@@ -619,6 +621,14 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
       </div>
 
       <ScrollArea>
+        {/* Horario del día elegido: evita que el cliente lea un día casi vacío
+            como «no hay cupo» cuando en realidad el negocio abre pocas horas. */}
+        {franjaDelDia && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 16px 0', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
+            <Icon name="clock" size={13} color="var(--text-tertiary)" />
+            Atendemos de <span className="data" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{franjaDelDia.apertura}</span> a <span className="data" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{franjaDelDia.cierre}</span>
+          </div>
+        )}
         {disp.cargando ? (
           <div style={{ padding: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))', gap: 8 }}>

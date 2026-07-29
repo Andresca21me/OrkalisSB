@@ -4,16 +4,15 @@ import { EstadoCita } from '@orkalis/shared';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
 import {
   cita,
-  disponibilidad,
   especialista,
   especialistaSucursal,
   retencionFranja,
   servicio,
 } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
-import { horaAMinutos } from './validators/validador-cita.port';
 import { filtrarPorServicios, realizaServicios } from './validators/capacidades';
 import { HorarioService } from './horario.service';
+import { ventanasEfectivas } from './ventanas-efectivas';
 
 export interface Franja {
   inicio: string; // ISO
@@ -120,19 +119,8 @@ export class DisponibilidadService {
     const diaInicio = instante(fechaIso, 0);
     const diaFin = instante(fechaIso, 24 * 60);
 
-    const ventanas = await tx
-      .select()
-      .from(disponibilidad)
-      .where(
-        and(
-          eq(disponibilidad.especialistaId, especialistaId),
-          eq(disponibilidad.sucursalId, sucursalId),
-          eq(disponibilidad.activo, true),
-        ),
-      );
-    const ventanasDelDia = ventanas.filter((v) =>
-      v.fecha ? v.fecha === fechaIso : v.diaSemana === weekday,
-    );
+    // Ventanas del especialista ya cruzadas con el horario de la sede.
+    const ventanasDelDia = await ventanasEfectivas(tx, sucursalId, especialistaId, fechaIso, weekday);
     if (ventanasDelDia.length === 0) return [];
 
     // Ocupado: citas activas (confirmada/en_progreso) del día.
@@ -172,8 +160,7 @@ export class DisponibilidadService {
     const libres: Franja[] = [];
     const ahora = Date.now();
     for (const v of ventanasDelDia) {
-      const desde = horaAMinutos(v.horaInicio);
-      const hasta = horaAMinutos(v.horaFin);
+      const { desde, hasta } = v;
       for (let t = desde; t + duracion <= hasta; t += GRANULARIDAD_MIN) {
         const ini = instante(fechaIso, t);
         const fin = instante(fechaIso, t + duracion);

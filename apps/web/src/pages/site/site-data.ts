@@ -38,6 +38,40 @@ export const PLANS: Plan[] = [
 export function planById(id: string): Plan {
   return PLANS.find((p) => p.id === id) ?? PLANS[1];
 }
+
+/**
+ * Módulos AVANZADOS y qué plan los desbloquea. **Espejo de `MODULOS_AVANZADOS`
+ * y `MODULOS_POR_PLAN` de `apps/api/src/plans/plan-registry.ts`.**
+ *
+ * Importa que no se desincronice: el backend cruza `plan ∧ config`
+ * (`ModuloGate`), y guardar la bandera de un módulo que el plan no incluye NO
+ * da error — simplemente el módulo nunca funciona. Si aquí sobrara una clave,
+ * la interfaz ofrecería algo que después no responde.
+ */
+export const MODULOS_AVANZADOS: readonly string[] = [
+  'modulo.inventario',
+  'modulo.particion_por_especialista',
+  'modulo.cierre_periodo',
+];
+
+/** Básico no trae módulos avanzados; se desbloquean desde Pro. */
+export const MODULOS_POR_PLAN: Record<string, readonly string[]> = {
+  basico: [],
+  pro: MODULOS_AVANZADOS,
+  premium: MODULOS_AVANZADOS,
+  empresarial: MODULOS_AVANZADOS,
+};
+
+/** ¿El plan permite activar esta clave de módulo? Las operativas, siempre. */
+export function planIncluyeModulo(planId: string, clave: string): boolean {
+  if (!MODULOS_AVANZADOS.includes(clave)) return true;
+  return (MODULOS_POR_PLAN[planId] ?? []).includes(clave);
+}
+
+/** Plan más barato que desbloquea la clave (para el aviso «Desde Pro»). */
+export function planMinimoParaModulo(clave: string): Plan | undefined {
+  return PLANS.find((p) => planIncluyeModulo(p.id, clave));
+}
 export function monthly(plan: Plan, specialists: number): number {
   return plan.base + Math.max(0, specialists - plan.included) * plan.perExtra;
 }

@@ -16,12 +16,14 @@ import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
 import { cita, cliente, disponibilidad, especialista, especialistaSucursal, negocio, servicio, sucursal } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
+import { runInTenantTx } from '../db/tx';
 import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
 import { ConfigWriteService } from '../config-module/config-write.service';
 import { DisponibilidadService } from './disponibilidad.service';
 import { HorarioService } from './horario.service';
 import { OtpService } from './otp.service';
 import { ValidadorFactory } from './validators/validador.factory';
+import { ValidadorPublico } from './validators/validador-publico';
 import { PublicAgendamientoService } from './public-agendamiento.service';
 import { AgendamientoService } from './agendamiento.service';
 import { AvisosEspecialistaService } from './avisos-especialista.service';
@@ -218,15 +220,25 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     ).rejects.toThrow();
   });
 
-  it('reserva pública con hora PASADA es rechazada (validador público)', async () => {
+  it('reserva pública con hora PASADA es rechazada', async () => {
     const ini = new Date(Date.now() - 2 * 3600_000);
     const fin = new Date(ini.getTime() + 30 * 60000);
-    const tel = '3001110004';
-    const { retencionId } = await pub.retener(sucursalId, espId, ini, fin);
-    const { devCode } = await pub.enviarOtp(sucursalId, tel);
+    // Desde que `retener` comprueba el horario de atención, una hora pasada ya
+    // no llega ni a apartarse: cae fuera de la ventana del día. El validador
+    // sigue siendo la puerta dura y la rechaza además por pasada.
+    await expect(pub.retener(sucursalId, espId, ini, fin)).rejects.toThrow();
     await expect(
-      pub.confirmar(sucursalId, { retencionId, telefono: tel, codigoOtp: devCode!, servicioIds: [servId] }),
-    ).rejects.toThrow();
+      runInTenantTx(ctxAdmin, (tx) =>
+        new ValidadorPublico().validar(tx, {
+          negocioId,
+          sucursalId,
+          especialistaId: espId,
+          inicio: ini,
+          fin,
+          validarServicios: false,
+        }),
+      ),
+    ).rejects.toThrow(/futuras/);
   });
 
   it('walk-in RETROACTIVO (pasado) entra como COMPLETADA', async () => {

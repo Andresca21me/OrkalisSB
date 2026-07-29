@@ -56,6 +56,12 @@ export interface PublicInfo {
   sucursales: { id: string; nombre: string }[];
   /** Días laborables de la sucursal, índice 0=domingo … 6=sábado (true=abre). */
   diasLaborables: boolean[];
+  /**
+   * Horario de atención por día (0=domingo … 6=sábado). `null` = ese día está
+   * cerrado o la sede no tiene horario definido (manda la disponibilidad de
+   * cada especialista).
+   */
+  horario: ({ apertura: string; cierre: string } | null)[];
   /** Por servicioId, actividad por día (índice 0=domingo … 6=sábado; true=disponible). */
   serviciosDia: Record<string, boolean[]>;
   /** Marca del negocio (branding dinámico); null = se usan los valores por defecto. */

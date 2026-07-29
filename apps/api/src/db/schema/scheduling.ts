@@ -65,6 +65,10 @@ export const retencionFranja = pgTable('retencion_franja', {
  * Ausencia de fila = día laborable → los negocios que no configuran nada siguen
  * trabajando todos los días (compatibilidad hacia atrás). Una fila con
  * `laborable=false` cierra ese día → el cliente no puede reservar.
+ *
+ * `hora_apertura`/`hora_cierre` son la EXCEPCIÓN horaria de ese día: casi
+ * siempre se usan para el fin de semana. NULL = ese día rige el horario base de
+ * la sucursal (`sucursal.hora_apertura`/`hora_cierre`).
  */
 export const sucursalDiaLaborable = pgTable(
   'sucursal_dia_laborable',
@@ -78,6 +82,8 @@ export const sucursalDiaLaborable = pgTable(
       .references(() => sucursal.id, { onDelete: 'cascade' }),
     diaSemana: integer('dia_semana').notNull(),
     laborable: boolean('laborable').notNull().default(true),
+    horaApertura: time('hora_apertura'),
+    horaCierre: time('hora_cierre'),
     actualizadoEn: timestamp('actualizado_en', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

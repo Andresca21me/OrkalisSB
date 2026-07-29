@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, type CSSProperties } from 'react';
 import { PerfilNegocio, type PlanSuscripcion } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -6,7 +6,19 @@ import { money } from '../../lib/format';
 import { prepararLogo } from '../../lib/imagen';
 import { subirLogo } from '../../lib/useMarca';
 import { Avatar, Badge, Button, Card, Icon, Logo, QtyStepper, Segmented, Switch } from '../../ui';
-import { VERTICAL, monthly, planById, PLANS, type Ciclo, type Vertical } from './site-data';
+import {
+  FEATURE_GROUPS,
+  PLANS,
+  VERTICAL,
+  annualTotal,
+  monthly,
+  planById,
+  planIncluyeModulo,
+  planMinimoParaModulo,
+  type Ciclo,
+  type Plan,
+  type Vertical,
+} from './site-data';
 import type { Funnel, Go } from './site-ui';
 import {
   ChoiceCard,
@@ -30,30 +42,40 @@ import {
  * porque no había backend: **Cuenta** (los datos con los que se inicia sesión)
  * y **Plan** (suscripción + prueba de 15 días o pago inmediato).
  *
- * NADA se escribe en el servidor hasta el paso 6: el usuario elige prueba o
- * pago y ahí se crea el negocio (`POST /auth/registro`); acto seguido se aplica
- * lo recogido en los pasos anteriores (sucursal, módulos, equipo, logo) con la
- * sesión recién emitida. La sesión queda preparada pero SIN activar
- * (`entrar: false`) para que el router no arranque al usuario del asistente
- * antes de ver su enlace de reservas.
+ * **El plan va ANTES que los módulos** a propósito: el backend cruza
+ * `plan ∧ config` (`ModuloGate`), así que preguntar primero qué módulos quieres
+ * y luego venderte un plan que no los incluye deja banderas encendidas que no
+ * hacen nada. Con el plan ya elegido, el paso de módulos solo ofrece lo que ese
+ * plan desbloquea.
+ *
+ * NADA se escribe en el servidor hasta el último paso de configuración: el
+ * usuario elige prueba o pago y ahí se crea el negocio (`POST /auth/registro`);
+ * acto seguido se aplica lo recogido en los pasos anteriores (sucursal,
+ * módulos, equipo, logo) con la sesión recién emitida. La sesión queda
+ * preparada pero SIN activar (`entrar: false`) para que el router no arranque
+ * al usuario del asistente antes de ver su enlace de reservas.
  */
 
 const PASOS: PasoOnb[] = [
   { n: 1, label: 'Negocio' },
   { n: 2, label: 'Cuenta' },
   { n: 3, label: 'Sucursal' },
-  { n: 4, label: 'Módulos' },
-  { n: 5, label: 'Equipo', opcional: true },
-  { n: 6, label: 'Plan' },
+  { n: 4, label: 'Plan' },
+  { n: 5, label: 'Módulos' },
+  { n: 6, label: 'Equipo', opcional: true },
   { n: 7, label: 'Listo' },
 ];
 const TOTAL = PASOS.length;
+const PASO_PLAN = 4;
+/** Último paso de configuración: aquí se crea la cuenta de verdad. */
+const PASO_FINAL = 6;
 const PASO_LISTO = 7;
 
 /**
  * Módulos que se ofrecen en el alta → claves reales del registry de config
  * (FASE-06). `recomendado` replica el default por perfil del backend: lo que
  * viene marcado aquí es exactamente lo que el negocio tendría sin tocar nada.
+ * Qué módulos desbloquea cada plan lo decide `planIncluyeModulo`.
  */
 const MODULOS: { clave: string; nombre: string; icon: string; desc: string; recomendado: Record<PerfilNegocio, boolean> }[] = [
   { clave: 'modulo.inventario', nombre: 'Inventario y productos', icon: 'package', desc: 'Control de stock, alertas de existencias bajas y descuento automático al vender.', recomendado: { [PerfilNegocio.Salon]: true, [PerfilNegocio.Barberia]: false } },
@@ -106,6 +128,14 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
     setMods(Object.fromEntries(MODULOS.map((m) => [m.clave, m.recomendado[perfil]])));
   }, [perfil]);
 
+  /**
+   * Valor EFECTIVO de un módulo: la intención del usuario solo cuenta si el
+   * plan lo incluye. Guardar la intención en vez de apagarla evita perderla
+   * cuando alguien sube de plan tras haber visto el módulo bloqueado.
+   */
+  const modActivo = (clave: string) => !!mods[clave] && planIncluyeModulo(planId, clave);
+  const modsActivos = MODULOS.filter((m) => modActivo(m.clave)).length;
+
   // El plan manda sobre el número de especialistas: el backend rechaza un cupo
   // por debajo de los incluidos.
   useEffect(() => {
@@ -124,6 +154,7 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
     if (p === 3) {
       if (sucursal.nombre.trim().length < 2) e.sucursal = 'Ponle un nombre a la sucursal.';
       if (!sucursal.direccion.trim()) e.direccion = 'Ingresa la dirección.';
+      if (sucursal.cierre <= sucursal.apertura) e.horario = 'La hora de cierre debe ser posterior a la de apertura.';
     }
     setErrores(e);
     return Object.keys(e).length === 0;
@@ -153,7 +184,9 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
     const fallos: string[] = [];
     let sucursalId: string | null = null;
 
-    // El alta crea una sucursal «Principal»: se renombra a la del asistente.
+    // El alta crea una sucursal «Principal»: se renombra a la del asistente y
+    // se le fija el horario elegido, que es lo que decide qué puede reservar el
+    // cliente desde el enlace público.
     try {
       setProgreso('Configurando tu sucursal…');
       const sucs = await api.get<Sucursal[]>('/sucursales');
@@ -162,13 +195,21 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
       if (sucursalId && nombre && nombre !== sucs[0].nombre) {
         await api.patch(`/sucursales/${sucursalId}`, { nombre });
       }
+      if (sucursalId) {
+        await api.put(`/agenda/horario/sucursal/${sucursalId}/horas`, {
+          base: { apertura: sucursal.apertura, cierre: sucursal.cierre },
+          dias: [null, null, null, null, null, null, null],
+        });
+      }
     } catch {
-      fallos.push('No pudimos renombrar tu sucursal; la encontrarás como «Principal».');
+      fallos.push('No pudimos guardar tu sucursal ni su horario; revísalos en Configuración › Horario.');
     }
 
     try {
       setProgreso('Activando los módulos elegidos…');
-      await Promise.all(MODULOS.map((m) => api.put(`/config/negocio/${negocioId}/${m.clave}`, { valor: !!mods[m.clave] })));
+      // Se manda el valor EFECTIVO: encender una bandera que el plan no incluye
+      // no da error, pero deja un módulo que nunca responde.
+      await Promise.all(MODULOS.map((m) => api.put(`/config/negocio/${negocioId}/${m.clave}`, { valor: modActivo(m.clave) })));
     } catch {
       fallos.push('No pudimos guardar los módulos; ajústalos en Configuración.');
     }
@@ -246,7 +287,6 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
   }
 
   const publicUrl = alta?.sucursalId ? `${window.location.origin}/reservar/${alta.sucursalId}` : '';
-  const modsActivos = Object.values(mods).filter(Boolean).length;
   const resumen: [string, string, string][] = [
     ['store', 'Perfil', perfil === PerfilNegocio.Salon ? 'Salón de belleza' : 'Barbería'],
     ['map-pin', 'Sucursal', sucursal.nombre.trim() || 'Sede principal'],
@@ -344,7 +384,8 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
                     <div className="onb-hora"><GSelect value={sucursal.cierre} onChange={(v) => setSucursal((s) => ({ ...s, cierre: v }))} options={HORAS} /></div>
                     <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Lun a Sáb</span>
                   </div>
-                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', margin: '8px 0 0' }}>Podrás definir horarios distintos por día y por especialista desde Configuración › Agenda.</p>
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', margin: '8px 0 0' }}>Es el horario que tus clientes podrán reservar. Los días sueltos —el fin de semana, por ejemplo— se ajustan luego en Configuración › Horario.</p>
+                  {errores.horario && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--error)', margin: '6px 0 0' }}>{errores.horario}</p>}
                 </div>
                 <OnbNota>
                   ¿Tienes más sedes? Termina esta primero; podrás agregar las demás desde <strong>Configuración › Sucursales</strong>. Cada sucursal activa se suma a tu suscripción.
@@ -353,119 +394,111 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
             </StepShell>
           )}
 
-          {/* ── 4 · Módulos ────────────────────────────────────────────── */}
-          {paso === 4 && (
-            <StepShell n={4} total={TOTAL} title="Activa lo que necesitas" desc={`Preparamos los módulos recomendados para tu ${perfil === PerfilNegocio.Salon ? 'salón' : 'barbería'}. Los esenciales vienen activos; ajústalos a tu gusto.`}>
-              <Card padding={4}>
-                {MODULOS.map((m, i) => (
-                  <div key={m.clave} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 14px', borderTop: i ? '1px solid var(--border-subtle)' : 'none' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', flex: 'none', marginTop: 1 }}>
-                      <Icon name={m.icon} size={19} color="var(--text-secondary)" />
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', rowGap: 4 }}>
-                        <span style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>{m.nombre}</span>
-                        {m.recomendado[perfil] && <Badge tone="brand" size="md">Recomendado</Badge>}
-                      </div>
-                      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: '3px 0 0', maxWidth: 460, lineHeight: '20px' }}>{m.desc}</p>
-                    </div>
-                    <div style={{ flex: 'none', paddingTop: 4 }}>
-                      <Switch testId={`alta-modulo-${m.clave}`} checked={!!mods[m.clave]} onChange={(v) => setMods((o) => ({ ...o, [m.clave]: v }))} />
-                    </div>
-                  </div>
-                ))}
-              </Card>
+          {/* ── 4 · Plan (antes que los módulos: los desbloquea) ────────── */}
+          {paso === PASO_PLAN && (
+            <StepShell n={PASO_PLAN} total={TOTAL} title="Elige tu plan" desc="El plan decide qué módulos puedes activar y cuántas sedes manejas. Empieza con 15 días de prueba o paga desde hoy; puedes cambiarlo cuando quieras.">
+              <PasoPlan
+                planId={planId}
+                setPlanId={setPlanId}
+                especialistas={numEspecialistas}
+                setEspecialistas={setEspecialistas}
+                ciclo={ciclo}
+                setCiclo={setCiclo}
+                onVentas={() => go('contacto')}
+              />
             </StepShell>
           )}
 
-          {/* ── 5 · Equipo ─────────────────────────────────────────────── */}
+          {/* ── 5 · Módulos (solo los que el plan incluye) ──────────────── */}
           {paso === 5 && (
-            <StepShell n={5} total={TOTAL} optional title="Agrega tu equipo" desc={`Suma a tus ${espWord}s y asígnalos a la sucursal. Este paso es opcional: puedes hacerlo después.`}>
-              <PasoEquipo equipo={equipo} setEquipo={setEquipo} espWord={espWord} sucursalNombre={sucursal.nombre || 'Tu sucursal'} />
-            </StepShell>
-          )}
-
-          {/* ── 6 · Plan ───────────────────────────────────────────────── */}
-          {paso === 6 && (
-            <StepShell n={6} total={TOTAL} title="Elige tu plan" desc="Empieza con 15 días de prueba (no pedimos tarjeta) o activa tu suscripción hoy mismo. Puedes cambiar de plan cuando quieras.">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <div className="onb-grid-3">
-                  {PLANES_ALTA.map((p) => (
-                    <ChoiceCard
-                      key={p.id}
-                      selected={planId === p.id}
-                      onClick={() => setPlanId(p.id)}
-                      icon={p.highlight ? 'zap' : 'wallet'}
-                      title={p.name}
-                      desc={p.blurb}
-                      tag={`Incluye ${p.included} especialistas`}
-                    >
-                      <span className="data" style={{ marginTop: 12, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-primary)' }}>
-                        {money(monthly(p, Math.max(especialistas, p.included)))}
-                        <span style={{ fontFamily: 'var(--font-body)', fontWeight: 500, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}> /mes</span>
-                      </span>
-                    </ChoiceCard>
-                  ))}
-                </div>
-
-                <Card padding={18}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', rowGap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Especialistas</div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{plan.name} incluye {plan.included}; cada uno extra suma {money(plan.perExtra)}.</div>
+            <StepShell n={5} total={TOTAL} title="Activa lo que necesitas" desc={`Preparamos los módulos recomendados para tu ${perfil === PerfilNegocio.Salon ? 'salón' : 'barbería'} dentro de tu plan ${plan.name}. Los esenciales vienen activos; ajústalos a tu gusto.`}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {MODULOS.some((m) => !planIncluyeModulo(planId, m.clave)) && (
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: 13, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)' }}>
+                    <Icon name="lock" size={17} color="var(--text-tertiary)" style={{ flex: 'none', marginTop: 1 }} />
+                    <div style={{ flex: 1, minWidth: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '20px' }}>
+                      El plan <strong>{plan.name}</strong> trae la agenda, las reservas y los clientes. Inventario, repartición y cierres se desbloquean desde <strong>Pro</strong>.
                     </div>
-                    <QtyStepper value={numEspecialistas} onChange={setEspecialistas} min={plan.included} max={30} />
-                  </div>
-                  <div style={{ height: 1, background: 'var(--border-subtle)', margin: '16px 0' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', rowGap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Facturación</div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Anual = 2 meses gratis.</div>
-                    </div>
-                    {/* Ancho fijo: los botones de `Segmented` son `flex:1` con
-                        `min-width:0`, así que sin él la tira se encoge y trunca
-                        las etiquetas («Mens…»). */}
-                    <div style={{ flex: 'none', width: 210 }}>
-                      <Segmented value={ciclo} onChange={(v) => setCiclo(v as Ciclo)} options={[{ value: 'mensual', label: 'Mensual' }, { value: 'anual', label: 'Anual' }]} />
-                    </div>
-                  </div>
-                  <div style={{ height: 1, background: 'var(--border-subtle)', margin: '16px 0' }} />
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--text-primary)' }}>Total {ciclo === 'anual' ? 'equivalente mensual' : 'mensual'}</span>
-                    <span className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-xl)', color: 'var(--text-primary)' }}>{money(precioMostrado)}</span>
-                  </div>
-                </Card>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
-                  <Icon name="building-2" size={16} color="var(--text-tertiary)" />
-                  ¿Cadena con varias sedes?
-                  <button type="button" onClick={() => go('contacto')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--brand)', fontWeight: 600, fontSize: 'var(--text-sm)', padding: 0 }}>Habla con ventas</button>
-                </div>
-
-                {errorServidor && (
-                  <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '12px 13px', borderRadius: 'var(--radius-sm)', background: 'var(--error-tint)', border: '1px solid var(--error)', fontSize: 'var(--text-sm)', color: 'var(--error)' }}>
-                    <Icon name="alert-circle" size={16} color="var(--error)" style={{ flex: 'none', marginTop: 2 }} />
-                    <div>
-                      {errorServidor}
-                      <button type="button" onClick={() => saltarA(2)} style={{ display: 'block', marginTop: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--error)', fontWeight: 700, fontSize: 'var(--text-sm)', padding: 0, textDecoration: 'underline' }}>Revisar mis datos de acceso</button>
-                    </div>
+                    <Button variant="secondary" size="sm" onClick={() => saltarA(PASO_PLAN)}>Cambiar plan</Button>
                   </div>
                 )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <Button variant="primary" size="lg" fullWidth iconRight={creando ? undefined : 'arrow-right'} loading={creando === 'prueba'} disabled={!!creando} onClick={() => void crearCuenta('prueba')}>
-                    Empezar prueba gratis (15 días)
-                  </Button>
-                  <Button variant="secondary" size="lg" fullWidth iconLeft={creando ? undefined : 'credit-card'} loading={creando === 'pago'} disabled={!!creando} onClick={() => void crearCuenta('pago')}>
-                    Pagar y empezar ya
-                  </Button>
-                </div>
-                <p style={{ textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', margin: 0 }}>
-                  {progreso || 'La prueba no pide tarjeta. Puedes cancelar cuando quieras.'}
-                </p>
+                <Card padding={4}>
+                  {MODULOS.map((m, i) => {
+                    const disponible = planIncluyeModulo(planId, m.clave);
+                    const minimo = disponible ? undefined : planMinimoParaModulo(m.clave);
+                    return (
+                      <div key={m.clave} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 14px', borderTop: i ? '1px solid var(--border-subtle)' : 'none', opacity: disponible ? 1 : 0.6 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', flex: 'none', marginTop: 1 }}>
+                          <Icon name={disponible ? m.icon : 'lock'} size={19} color="var(--text-secondary)" />
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', rowGap: 4 }}>
+                            <span style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>{m.nombre}</span>
+                            {!disponible && minimo ? <Badge tone="neutral" size="md">Desde {minimo.name}</Badge>
+                              : m.recomendado[perfil] && <Badge tone="brand" size="md">Recomendado</Badge>}
+                          </div>
+                          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: '3px 0 0', maxWidth: 460, lineHeight: '20px' }}>{m.desc}</p>
+                        </div>
+                        <div style={{ flex: 'none', paddingTop: 4 }}>
+                          <Switch testId={`alta-modulo-${m.clave}`} checked={modActivo(m.clave)} disabled={!disponible} onChange={(v) => setMods((o) => ({ ...o, [m.clave]: v }))} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </Card>
               </div>
             </StepShell>
           )}
+
+          {/* ── 6 · Equipo + alta (último paso de configuración) ────────── */}
+          {paso === PASO_FINAL && (
+            <StepShell n={PASO_FINAL} total={TOTAL} optional title="Agrega tu equipo" desc={`Suma a tus ${espWord}s y asígnalos a la sucursal. Este paso es opcional: si prefieres, crea tu cuenta y hazlo después.`}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+                <PasoEquipo equipo={equipo} setEquipo={setEquipo} espWord={espWord} sucursalNombre={sucursal.nombre || 'Tu sucursal'} />
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 22, borderTop: '1px solid var(--border-subtle)' }}>
+                  <div className="eyebrow">Ya está: crea tu cuenta</div>
+                  <Card padding={18}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', rowGap: 10 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--text-primary)' }}>{plan.name} · {numEspecialistas} especialistas</div>
+                        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+                          {ciclo === 'anual' ? `Facturación anual · ${money(annualTotal(plan, numEspecialistas))}/año` : 'Facturación mensual'} · {modsActivos} módulos activos
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-primary)' }}>{money(precioMostrado)}<span style={{ fontFamily: 'var(--font-body)', fontWeight: 500, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>/mes</span></span>
+                        <Button variant="ghost" size="sm" onClick={() => saltarA(PASO_PLAN)}>Cambiar</Button>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {errorServidor && (
+                    <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '12px 13px', borderRadius: 'var(--radius-sm)', background: 'var(--error-tint)', border: '1px solid var(--error)', fontSize: 'var(--text-sm)', color: 'var(--error)' }}>
+                      <Icon name="alert-circle" size={16} color="var(--error)" style={{ flex: 'none', marginTop: 2 }} />
+                      <div>
+                        {errorServidor}
+                        <button type="button" onClick={() => saltarA(2)} style={{ display: 'block', marginTop: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--error)', fontWeight: 700, fontSize: 'var(--text-sm)', padding: 0, textDecoration: 'underline' }}>Revisar mis datos de acceso</button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <Button variant="primary" size="lg" fullWidth iconRight={creando ? undefined : 'arrow-right'} loading={creando === 'prueba'} disabled={!!creando} onClick={() => void crearCuenta('prueba')}>
+                      Empezar prueba gratis (15 días)
+                    </Button>
+                    <Button variant="secondary" size="lg" fullWidth iconLeft={creando ? undefined : 'credit-card'} loading={creando === 'pago'} disabled={!!creando} onClick={() => void crearCuenta('pago')}>
+                      Pagar y empezar ya
+                    </Button>
+                  </div>
+                  <p style={{ textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', margin: 0 }}>
+                    {progreso || 'La prueba no pide tarjeta. Puedes cancelar cuando quieras.'}
+                  </p>
+                </div>
+              </div>
+            </StepShell>
+          )}
+
 
           {/* ── 7 · Listo ──────────────────────────────────────────────── */}
           {paso === PASO_LISTO && (
@@ -478,23 +511,183 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
             />
           )}
 
-          {/* Navegación (el paso 6 tiene sus propios CTA de alta). */}
-          {paso < 6 && (
+          {/* Navegación. El último paso de configuración lleva sus propios CTA
+              de alta, así que allí solo queda «Atrás». */}
+          {paso < PASO_FINAL && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 28, gap: 12 }}>
               <div>{paso > 1 && <Button variant="ghost" size="lg" iconLeft="arrow-left" onClick={atras}>Atrás</Button>}</div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                {PASOS[paso - 1].opcional && <Button variant="secondary" size="lg" onClick={() => saltarA(6)}>Omitir por ahora</Button>}
-                <Button variant="primary" size="lg" iconRight="arrow-right" onClick={continuar}>Continuar</Button>
-              </div>
+              <Button variant="primary" size="lg" iconRight="arrow-right" onClick={continuar}>Continuar</Button>
             </div>
           )}
-          {paso === 6 && (
+          {paso === PASO_FINAL && (
             <div style={{ marginTop: 22 }}>
               <Button variant="ghost" size="lg" iconLeft="arrow-left" disabled={!!creando} onClick={atras}>Atrás</Button>
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Plan (paso 4) ────────────────────────────────────────────────────────────
+/**
+ * Elección de plan. Los controles que mueven el precio (nº de especialistas y
+ * ciclo) van ARRIBA: así las tres tarjetas muestran ya el precio real de cada
+ * plan para ese negocio y la comparación es directa, en vez de un «desde».
+ */
+function PasoPlan({ planId, setPlanId, especialistas, setEspecialistas, ciclo, setCiclo, onVentas }: {
+  planId: string;
+  setPlanId: (v: string) => void;
+  especialistas: number;
+  setEspecialistas: (v: number) => void;
+  ciclo: Ciclo;
+  setCiclo: (v: Ciclo) => void;
+  onVentas: () => void;
+}) {
+  const [comparar, setComparar] = useState(false);
+  const plan = planById(planId);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <Card padding={16}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', rowGap: 14 }}>
+          <div>
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>¿Cuántos especialistas atienden?</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Cada plan incluye {plan.included}; los precios de abajo ya cuentan los extra.</div>
+          </div>
+          {/* El mínimo es lo que incluye el plan: el backend rechaza un cupo menor. */}
+          <QtyStepper value={especialistas} onChange={setEspecialistas} min={plan.included} max={30} />
+        </div>
+        <div style={{ height: 1, background: 'var(--border-subtle)', margin: '14px 0' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', rowGap: 14 }}>
+          <div>
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Facturación</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>La anual te deja 2 meses gratis.</div>
+          </div>
+          {/* Ancho fijo: los botones de `Segmented` son `flex:1` con
+              `min-width:0`, así que sin él la tira se encoge y trunca las
+              etiquetas («Mens…»). */}
+          <div style={{ flex: 'none', width: 210 }}>
+            <Segmented value={ciclo} onChange={(v) => setCiclo(v as Ciclo)} options={[{ value: 'mensual', label: 'Mensual' }, { value: 'anual', label: 'Anual' }]} />
+          </div>
+        </div>
+      </Card>
+
+      <div className="onb-grid-3">
+        {PLANES_ALTA.map((p) => (
+          <TarjetaPlan key={p.id} plan={p} selected={planId === p.id} especialistas={especialistas} ciclo={ciclo} onClick={() => setPlanId(p.id)} />
+        ))}
+      </div>
+
+      <div>
+        <Button variant="ghost" size="md" iconRight={comparar ? 'chevron-up' : 'chevron-down'} onClick={() => setComparar((v) => !v)}>
+          {comparar ? 'Ocultar la comparación' : 'Comparar los tres planes en detalle'}
+        </Button>
+        {comparar && <TablaPlanes planId={planId} />}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+        <Icon name="building-2" size={16} color="var(--text-tertiary)" />
+        ¿Cadena con varias sedes? El plan Empresarial es a la medida.
+        <button type="button" onClick={onVentas} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--brand)', fontWeight: 600, fontSize: 'var(--text-sm)', padding: 0 }}>Habla con ventas</button>
+      </div>
+    </div>
+  );
+}
+
+/** Tarjeta de plan: precio ya calculado para este negocio + qué incluye. */
+function TarjetaPlan({ plan, selected, especialistas, ciclo, onClick }: { plan: Plan; selected: boolean; especialistas: number; ciclo: Ciclo; onClick: () => void }) {
+  const esp = Math.max(especialistas, plan.included);
+  const mes = monthly(plan, esp);
+  const mostrado = ciclo === 'anual' ? Math.round((mes * 10) / 12) : mes;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      style={{
+        position: 'relative', display: 'flex', flexDirection: 'column', textAlign: 'left', padding: 20, cursor: 'pointer', height: '100%',
+        border: `1.5px solid ${selected ? 'var(--brand)' : 'var(--border-default)'}`, borderRadius: 'var(--radius-lg)',
+        background: selected ? 'var(--brand-tint)' : 'var(--surface-card)', boxShadow: selected ? '0 0 0 1px var(--brand)' : 'var(--shadow-xs)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-lg)', color: 'var(--text-primary)' }}>{plan.name}</span>
+          {plan.highlight && <Badge tone="brand" size="md">Recomendado</Badge>}
+        </span>
+        <span style={{ width: 22, height: 22, borderRadius: 999, flex: 'none', border: `2px solid ${selected ? 'var(--brand)' : 'var(--border-strong)'}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          {selected && <span style={{ width: 11, height: 11, borderRadius: 999, background: 'var(--brand)' }} />}
+        </span>
+      </div>
+
+      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.45, minHeight: 40 }}>{plan.blurb}</span>
+
+      <div style={{ margin: '14px 0 4px' }}>
+        <span className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 28, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>{money(mostrado)}</span>
+        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>/mes</span>
+      </div>
+      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+        {ciclo === 'anual'
+          ? `Facturado anual · ${money(annualTotal(plan, esp))}/año`
+          : esp > plan.included
+            ? `Base ${money(plan.base)} + ${esp - plan.included} extra × ${money(plan.perExtra)}`
+            : `Incluye ${plan.included} especialistas`}
+      </span>
+
+      <div style={{ height: 1, background: selected ? 'var(--brand-tint-border)' : 'var(--border-subtle)', margin: '16px 0 14px' }} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {plan.perks.map((perk) => (
+          <span key={perk} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+            <Icon name="check" size={15} color="var(--success)" style={{ flex: 'none', marginTop: 2 }} />
+            {perk}
+          </span>
+        ))}
+      </div>
+    </button>
+  );
+}
+
+/** Matriz de funciones de los tres planes contratables (misma de /comparativa). */
+function TablaPlanes({ planId }: { planId: string }) {
+  const celda = (v: boolean | string) => {
+    if (v === true) return <Icon name="check" size={16} color="var(--success)" />;
+    if (v === false || v === '—') return <span style={{ color: 'var(--text-tertiary)' }}>—</span>;
+    return <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{v}</span>;
+  };
+  const th: CSSProperties = { padding: '10px 12px', fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-tertiary)', textAlign: 'center' };
+  const td: CSSProperties = { padding: '10px 12px', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', borderTop: '1px solid var(--border-subtle)' };
+  return (
+    <div style={{ marginTop: 12, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-card)', overflowX: 'auto' }}>
+      <table style={{ width: '100%', minWidth: 520, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, textAlign: 'left' }}>Función</th>
+            {PLANES_ALTA.map((p) => (
+              <th key={p.id} style={{ ...th, color: p.id === planId ? 'var(--brand)' : 'var(--text-tertiary)', background: p.id === planId ? 'var(--brand-tint)' : 'transparent' }}>{p.name}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {FEATURE_GROUPS.map((g) => (
+            <Fragment key={g.group}>
+              <tr>
+                <td colSpan={1 + PLANES_ALTA.length} style={{ ...td, fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-primary)', background: 'var(--surface-sunken)' }}>{g.group}</td>
+              </tr>
+              {g.rows.map((r) => (
+                <tr key={r.label}>
+                  <td style={td}>{r.label}</td>
+                  {PLANES_ALTA.map((p, i) => (
+                    <td key={p.id} style={{ ...td, textAlign: 'center', background: p.id === planId ? 'var(--brand-tint)' : 'transparent' }}>{celda(r.vals[i])}</td>
+                  ))}
+                </tr>
+              ))}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

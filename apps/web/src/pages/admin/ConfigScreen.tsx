@@ -12,7 +12,7 @@ import {
   type ConfigEfectivo,
   type Procedencia,
 } from '../../lib/useConfig';
-import { Button, Card, ErrorState, Icon, Segmented, Spinner, Switch, useToast } from '../../ui/ui';
+import { Button, Card, ErrorState, Icon, Segmented, Select, Spinner, Switch, useToast } from '../../ui/ui';
 import { GNumber } from './gestion-ui';
 import { ConfigBanner, ConfigCard, ProvControl, ProvField, SettingRow, type Scope } from './config-ui';
 import { ConfigSucursales, ConfigUsuarios } from './config-org';
@@ -27,7 +27,7 @@ const SECCIONES = [
   { id: 'modulos', label: 'Módulos', icon: 'layout-grid', scoped: true },
   { id: 'financieros', label: 'Financieros', icon: 'percent', scoped: true },
   { id: 'agenda', label: 'Agenda', icon: 'calendar', scoped: true },
-  { id: 'horario', label: 'Días laborables', icon: 'calendar', scoped: false },
+  { id: 'horario', label: 'Horario', icon: 'clock', scoped: false },
   { id: 'marca', label: 'Marca', icon: 'sparkles', scoped: false },
   { id: 'notif', label: 'Notificaciones', icon: 'bell', scoped: false },
   { id: 'mensajes', label: 'Registro de mensajes', icon: 'message-circle', scoped: false },
@@ -42,7 +42,7 @@ const META: Record<string, { title: string; desc: string }> = {
   modulos: { title: 'Módulos', desc: 'Enciende o apaga funcionalidades por negocio o por sucursal.' },
   financieros: { title: 'Parámetros financieros', desc: 'Reparto, comisiones y deducciones. El reparto profesional y del negocio debe sumar 100%.' },
   agenda: { title: 'Reglas de agendamiento', desc: 'Cómo se confirman, recuerdan y cancelan las citas.' },
-  horario: { title: 'Días laborables y servicios', desc: 'Marca los días que abre cada sucursal y activa o desactiva servicios por día. En los días cerrados el cliente no puede reservar.' },
+  horario: { title: 'Horario de atención', desc: 'Define a qué hora abre y cierra cada sede, los días que no atiende y los servicios que no ofreces ciertos días. Es lo que el cliente puede reservar desde tu enlace.' },
   reservas: { title: 'Enlaces y QR de reserva', desc: 'Comparte el enlace o imprime el código QR de cada sucursal para que tus clientes reserven.' },
 };
 
@@ -413,11 +413,22 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
 
 // ── Días laborables y servicios por día ──────────────────────────────────────
 
-interface HorarioRow { id: string; nombre: string; dias: boolean[] }
-interface HorarioCfg { sucursales: HorarioRow[]; servicios: HorarioRow[] }
+interface Franja { apertura: string; cierre: string }
+interface HorarioSuc { base: Franja | null; dias: (Franja | null)[] }
+interface HorarioRow { id: string; nombre: string; dias: boolean[]; horario?: HorarioSuc }
+interface HorarioCfg { sucursales: (HorarioRow & { horario: HorarioSuc })[]; servicios: HorarioRow[] }
+
+/** Horas seleccionables, cada 30 min. Coincide con las del asistente de alta. */
+const HORAS_SEL = Array.from({ length: 44 }, (_, i) => {
+  const min = 5 * 60 + i * 30;
+  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+});
+
+const HORARIO_POR_DEFECTO: Franja = { apertura: '09:00', cierre: '18:00' };
 
 /** Etiquetas de día, índice 0=domingo … 6=sábado (convención del backend). */
 const DIAS_LBL = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const DIAS_LARGO = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 /** Fila de 7 píldoras (un día cada una); on = trabaja/activo. */
 function DiasRow({ dias, onToggle }: { dias: boolean[]; onToggle: (dia: number) => void }) {
@@ -449,10 +460,102 @@ function DiasRow({ dias, onToggle }: { dias: boolean[]; onToggle: (dia: number) 
   );
 }
 
+/** Selector de hora del horario (medias horas de 05:00 a 02:30 del día siguiente). */
+function SelectHora({ value, onChange, testId }: { value: string; onChange: (v: string) => void; testId?: string }) {
+  return (
+    <Select value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} style={{ width: 104, height: 38 }}>
+      {HORAS_SEL.map((h) => <option key={h} value={h}>{h}</option>)}
+    </Select>
+  );
+}
+
+/**
+ * Horario de una sede: el base y, debajo, los días que se salen de él (el caso
+ * típico es el fin de semana). Los días cerrados no aparecen en la lista de
+ * horas: primero se abre el día, después se le pone hora.
+ */
+function HorarioSucursal({ row, onDia, onHorario }: {
+  row: HorarioRow & { horario: HorarioSuc };
+  onDia: (dia: number) => void;
+  onHorario: (h: HorarioSuc) => void;
+}) {
+  const { base, dias } = row.horario;
+
+  /** Cambiar la apertura por encima del cierre dejaría un horario imposible. */
+  const coherente = (f: Franja, campo: 'apertura' | 'cierre', v: string): Franja => {
+    const next = { ...f, [campo]: v };
+    if (next.cierre <= next.apertura) {
+      if (campo === 'apertura') next.cierre = HORAS_SEL[Math.min(HORAS_SEL.indexOf(v) + 1, HORAS_SEL.length - 1)];
+      else next.apertura = HORAS_SEL[Math.max(HORAS_SEL.indexOf(v) - 1, 0)];
+    }
+    return next;
+  };
+
+  const setBase = (f: Franja | null) => onHorario({ base: f, dias: f ? dias : dias.map(() => null) });
+  const setDia = (d: number, f: Franja | null) => onHorario({ base, dias: dias.map((x, i) => (i === d ? f : x)) });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', minWidth: 96 }}>Horario base</span>
+        {base ? (
+          <>
+            <SelectHora value={base.apertura} onChange={(v) => setBase(coherente(base, 'apertura', v))} testId="horario-base-apertura" />
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>a</span>
+            <SelectHora value={base.cierre} onChange={(v) => setBase(coherente(base, 'cierre', v))} testId="horario-base-cierre" />
+            <button type="button" onClick={() => setBase(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>Quitar</button>
+          </>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Button variant="secondary" size="sm" iconLeft="clock" onClick={() => setBase(HORARIO_POR_DEFECTO)}>Definir horario</Button>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Sin horario, manda la disponibilidad de cada especialista.</span>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Días que abre</div>
+        <DiasRow dias={row.dias} onToggle={onDia} />
+      </div>
+
+      {base && (
+        <div>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Horarios distintos por día</div>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', margin: '0 0 10px' }}>Para los días que no siguen el horario base, como el fin de semana.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {DIAS_LARGO.map((_, d) => {
+              if (!row.dias[d]) return null;
+              const propio = dias[d];
+              return (
+                <div key={d} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', minWidth: 96 }}>{DIAS_LARGO[d]}</span>
+                  {propio ? (
+                    <>
+                      <SelectHora value={propio.apertura} onChange={(v) => setDia(d, coherente(propio, 'apertura', v))} testId={`horario-dia-${d}-apertura`} />
+                      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>a</span>
+                      <SelectHora value={propio.cierre} onChange={(v) => setDia(d, coherente(propio, 'cierre', v))} testId={`horario-dia-${d}-cierre`} />
+                      <button type="button" onClick={() => setDia(d, null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>Usar el base</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="data" style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>{base.apertura} a {base.cierre}</span>
+                      <button type="button" onClick={() => setDia(d, { ...base })} data-testid={`horario-dia-${d}-propio`} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--brand)', fontSize: 'var(--text-xs)', fontWeight: 700 }}>Poner otro horario</button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConfigHorario() {
   const toast = useToast();
   const { data, cargando, error, recargar } = useApi<HorarioCfg>(() => api.get('/agenda/horario'));
-  const [sucs, setSucs] = useState<HorarioRow[]>([]);
+  const [sucs, setSucs] = useState<(HorarioRow & { horario: HorarioSuc })[]>([]);
   const [servs, setServs] = useState<HorarioRow[]>([]);
 
   useEffect(() => {
@@ -468,13 +571,39 @@ function ConfigHorario() {
     }
   }
 
-  function toggle(tipo: 'sucursal' | 'servicio', idx: number, dia: number) {
-    const setter = tipo === 'sucursal' ? setSucs : setServs;
-    setter((rows) => {
-      const next = rows.map((r, i) =>
-        i === idx ? { ...r, dias: r.dias.map((d, j) => (j === dia ? !d : d)) } : r,
-      );
-      void guardar(tipo, next[idx].id, next[idx].dias);
+  async function guardarHorario(id: string, horario: HorarioSuc) {
+    try {
+      await api.put(`/agenda/horario/sucursal/${id}/horas`, horario);
+    } catch (e) {
+      toast((e as Error).message, 'error');
+      void recargar();
+    }
+  }
+
+  /** Abre/cierra un día. `dias` es la misma forma en sucursales y servicios. */
+  const conDiaVolteado = <T extends HorarioRow>(rows: T[], idx: number, dia: number): T[] =>
+    rows.map((r, i) => (i === idx ? { ...r, dias: r.dias.map((d, j) => (j === dia ? !d : d)) } : r));
+
+  function toggleSucursal(idx: number, dia: number) {
+    setSucs((rows) => {
+      const next = conDiaVolteado(rows, idx, dia);
+      void guardar('sucursal', next[idx].id, next[idx].dias);
+      return next;
+    });
+  }
+
+  function toggleServicio(idx: number, dia: number) {
+    setServs((rows) => {
+      const next = conDiaVolteado(rows, idx, dia);
+      void guardar('servicio', next[idx].id, next[idx].dias);
+      return next;
+    });
+  }
+
+  function cambiarHorario(idx: number, horario: HorarioSuc) {
+    setSucs((rows) => {
+      const next = rows.map((r, i) => (i === idx ? { ...r, horario } : r));
+      void guardarHorario(next[idx].id, horario);
       return next;
     });
   }
@@ -482,27 +611,31 @@ function ConfigHorario() {
   if (error) return <ErrorState onRetry={recargar} />;
   if (cargando || !data) return <div style={{ display: 'grid', placeItems: 'center', padding: 40 }}><Spinner /></div>;
 
-  const Lista = ({ rows, tipo, vacio }: { rows: HorarioRow[]; tipo: 'sucursal' | 'servicio'; vacio: string }) =>
-    rows.length === 0 ? (
-      <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>{vacio}</p>
-    ) : (
-      <>
-        {rows.map((r, i) => (
-          <div key={r.id} style={{ padding: '14px 0', borderTop: i ? '1px solid var(--border-subtle)' : 'none' }}>
-            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{r.nombre}</div>
-            <DiasRow dias={r.dias} onToggle={(dia) => toggle(tipo, i, dia)} />
-          </div>
-        ))}
-      </>
-    );
-
   return (
     <>
-      <ConfigCard title="Días laborables por sucursal" desc="Marca los días que abre cada sede. Los cambios se guardan al instante; en los días cerrados el cliente no puede reservar." pad={22}>
-        <Lista rows={sucs} tipo="sucursal" vacio="No hay sucursales activas." />
+      <ConfigCard title="Horario por sucursal" desc="La hora de apertura y de cierre de cada sede, con excepciones por día. Se guarda al instante y es lo que el cliente ve disponible en tu enlace de reservas." pad={22}>
+        {sucs.length === 0 ? (
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>No hay sucursales activas.</p>
+        ) : (
+          sucs.map((r, i) => (
+            <div key={r.id} style={{ padding: '18px 0', borderTop: i ? '1px solid var(--border-subtle)' : 'none' }}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 'var(--text-base)', color: 'var(--text-primary)' }}>{r.nombre}</div>
+              <HorarioSucursal row={r} onDia={(dia) => toggleSucursal(i, dia)} onHorario={(h) => cambiarHorario(i, h)} />
+            </div>
+          ))
+        )}
       </ConfigCard>
       <ConfigCard title="Servicios por día" desc="Desactiva un servicio los días que no lo ofreces. Aplica a todas las sedes." pad={22}>
-        <Lista rows={servs} tipo="servicio" vacio="No hay servicios activos." />
+        {servs.length === 0 ? (
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>No hay servicios activos.</p>
+        ) : (
+          servs.map((r, i) => (
+            <div key={r.id} style={{ padding: '14px 0', borderTop: i ? '1px solid var(--border-subtle)' : 'none' }}>
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{r.nombre}</div>
+              <DiasRow dias={r.dias} onToggle={(dia) => toggleServicio(i, dia)} />
+            </div>
+          ))
+        )}
       </ConfigCard>
     </>
   );
