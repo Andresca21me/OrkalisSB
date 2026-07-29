@@ -60,6 +60,20 @@ Orkalis2026!
 
 **Plataforma Orkalis** (negocio técnico): solo el operador transversal, plan `empresarial`.
 
+## Operador de plataforma en PRODUCCIÓN
+
+El seed no corre en producción. Para crear (o restablecer) el operador transversal allá,
+existe un bootstrap aparte que lee las credenciales de variables de entorno:
+
+```bash
+# Dentro del contenedor de la API (p. ej. `railway ssh`):
+OPERADOR_EMAIL="ops@tudominio.com" OPERADOR_PASSWORD="una-larga-y-unica" node dist/db/operador.js
+# En local: pnpm --filter api db:operador (mismas variables)
+```
+
+Es idempotente: si el email ya es operador, solo restablece la contraseña; si pertenece a
+una cuenta de negocio, aborta. Exige contraseña de 12+ caracteres.
+
 ## Para probar flujos
 
 - **Reserva pública** (sin sesión): `GET /sucursales` no aplica; usa el `sucursalId` de *Sede Centro*

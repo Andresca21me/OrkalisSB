@@ -15,6 +15,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:prod": "node dist/db/migrate.js",
     "db:seed": "ts-node -r tsconfig-paths/register src/db/seed.ts",
+    "db:operador": "ts-node -r tsconfig-paths/register src/db/operador.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
