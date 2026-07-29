@@ -805,7 +805,7 @@ function PasoListo({ bizName, publicUrl, resumen, avisos, onIrPanel }: { bizName
       {publicUrl && (
         <div style={{ marginTop: 28, padding: 20, borderRadius: 'var(--radius-lg)', background: 'var(--navy)', color: '#fff', textAlign: 'left' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <Icon name="link" size={16} color="var(--accent)" />
+            <Icon name="link" size={16} color="var(--accent-on-inverse)" />
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)' }}>Tu enlace de reservas</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

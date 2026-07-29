@@ -494,7 +494,7 @@ export function ConfigMarca() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <input
             type="color"
-            value={color || '#1a73e8'}
+            value={color || '#1E3A8A'}
             onChange={(e) => setColor(e.target.value)}
             aria-label="Color principal"
             style={{ width: 56, height: 40, padding: 2, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-card)', cursor: 'pointer' }}

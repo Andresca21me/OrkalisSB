@@ -25,7 +25,7 @@ export function luminancia(hex: string): number {
  */
 export function textoSobre(fondo: string | null | undefined): string {
   if (!fondo) return '#fff';
-  return luminancia(fondo) > 0.45 ? '#0F1923' : '#fff';
+  return luminancia(fondo) > 0.45 ? '#0F172A' : '#fff';
 }
 
 /** `true` si sobre ese color hay que usar texto oscuro (se avisa en la UI). */

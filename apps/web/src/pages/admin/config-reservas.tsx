@@ -54,7 +54,7 @@ function ReservaSucursalCard({ sucursal }: { sucursal: Sucursal }) {
 
   useEffect(() => {
     let vivo = true;
-    QRCode.toDataURL(link, { width: 640, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#0A0F14', light: '#FFFFFF' } })
+    QRCode.toDataURL(link, { width: 640, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#0F172A', light: '#FFFFFF' } })
       .then((url) => { if (vivo) setQr(url); })
       .catch(() => { if (vivo) setQr(''); });
     return () => { vivo = false; };

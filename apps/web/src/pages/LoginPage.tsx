@@ -66,7 +66,7 @@ export function LoginPage() {
         <div style={{ position: 'absolute', inset: 0, opacity: 0.5, backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.07) 1px, transparent 0)', backgroundSize: '26px 26px' }} />
         {/* Lluvia inversa sobre el navy: da vida al panel sin robar atención al
             formulario. Toma el color de marca, así cambia con el vertical. */}
-        <RisingSquares color="var(--accent)" />
+        <RisingSquares color="var(--accent-on-inverse)" />
         <div
           style={{ position: 'absolute', right: -120, bottom: -120, width: 380, height: 380, pointerEvents: 'none', opacity: 0.16 }}
           dangerouslySetInnerHTML={{ __html: '<svg width="380" height="380" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="2.5" width="19" height="19" rx="6.5" stroke="#fff" stroke-width="1"/><circle cx="14.5" cy="14.5" r="4.2" stroke="#fff" stroke-width="1"/></svg>' }}
@@ -78,7 +78,7 @@ export function LoginPage() {
         </div>
         <div style={{ position: 'relative' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 11px', borderRadius: 'var(--radius-pill)', background: 'rgba(255,255,255,0.10)', marginBottom: 20 }}>
-            <Icon name="store" size={14} color="var(--accent)" />
+            <Icon name="store" size={14} color="var(--accent-on-inverse)" />
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.82)' }}>Panel de administración</span>
           </div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 40, letterSpacing: '-0.03em', lineHeight: 1.06, margin: 0, color: '#fff' }}>Tu negocio, bajo control</h1>

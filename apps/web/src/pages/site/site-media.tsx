@@ -90,12 +90,14 @@ export function FloatingChip({
   icon: string;
   title: string;
   sub?: string;
-  tone?: 'brand' | 'accent';
+  tone?: 'brand' | 'accent' | 'success';
   style?: CSSProperties;
   float?: 'slow' | 'fast' | 'none';
 }) {
-  const c = tone === 'accent' ? 'var(--accent)' : 'var(--brand)';
-  const bg = tone === 'accent' ? 'var(--teal-tint)' : 'var(--brand-tint)';
+  // 'success' existe porque una CONFIRMACIÓN debe ser verde (semántica de
+  // industria); el acento de la vertical es cobre/rosa y leería como otra cosa.
+  const c = tone === 'success' ? 'var(--success)' : tone === 'accent' ? 'var(--accent)' : 'var(--brand)';
+  const bg = tone === 'success' ? 'var(--success-tint)' : tone === 'accent' ? 'var(--teal-tint)' : 'var(--brand-tint)';
   const cls = float === 'fast' ? 'mkt-float' : float === 'slow' ? 'mkt-float-slow' : undefined;
   return (
     <div

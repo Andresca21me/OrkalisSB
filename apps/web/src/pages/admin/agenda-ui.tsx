@@ -7,7 +7,7 @@ import { hoyISO, money } from '../../lib/format';
 import { PagoSplit, pagoInicial, sumaPagos } from '../../ui/PagoSplit';
 import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, ProductosVenta, Select, StatTile, type LineaProducto } from '../../ui';
 
-const PALETA = ['#1A73E8', '#00A88A', '#7C3AED', '#F59E0B', '#EF4444', '#0EA5E9', '#475569', '#DB2777'];
+const PALETA = ['#2563EB', '#059669', '#7C3AED', '#EA580C', '#0EA5E9', '#E11D48', '#64748B', '#D97706'];
 export function colorDe(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = id.charCodeAt(i) + ((h << 5) - h);

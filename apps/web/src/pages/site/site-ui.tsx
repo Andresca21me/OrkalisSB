@@ -80,7 +80,7 @@ export const SITE_CSS = `
 }
 `;
 
-export function SiteLogo({ color = 'var(--navy)', onClick }: { color?: string; onClick?: () => void }) {
+export function SiteLogo({ color = 'var(--text-primary)', onClick }: { color?: string; onClick?: () => void }) {
   return (
     <button type="button" onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}>
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="2.5" width="19" height="19" rx="6.5" stroke={color} strokeWidth="2.4" /><circle cx="14.5" cy="14.5" r="4.2" fill={color} /></svg>
@@ -90,7 +90,7 @@ export function SiteLogo({ color = 'var(--navy)', onClick }: { color?: string; o
 }
 
 export function Pill({ children, tone = 'teal', icon }: { children: ReactNode; tone?: 'teal' | 'brand'; icon?: string }) {
-  const m = tone === 'brand' ? { c: 'var(--brand)', bg: 'var(--brand-tint)', dot: 'var(--brand)' } : { c: '#0A8F76', bg: 'var(--teal-tint)', dot: 'var(--accent)' };
+  const m = tone === 'brand' ? { c: 'var(--brand)', bg: 'var(--brand-tint)', dot: 'var(--brand)' } : { c: 'var(--accent-text)', bg: 'var(--teal-tint)', dot: 'var(--accent)' };
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 13px', borderRadius: 'var(--radius-pill)', background: m.bg, color: m.c, fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
       {icon ? <Icon name={icon} size={13} color={m.c} /> : <span style={{ width: 6, height: 6, borderRadius: 99, background: m.dot }} />}
@@ -230,7 +230,7 @@ export function PlanCard({ plan, cycle, specialists, onChoose }: { plan: Plan; c
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {plan.perks.map((p) => (
           <div key={p} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 'var(--text-sm)', color: hi ? 'rgba(255,255,255,0.86)' : 'var(--text-secondary)' }}>
-            <Icon name="check" size={16} color={hi ? 'var(--accent)' : 'var(--success)'} style={{ flex: 'none', marginTop: 1 }} />{p}
+            <Icon name="check" size={16} color={hi ? 'var(--accent-on-inverse)' : 'var(--success)'} style={{ flex: 'none', marginTop: 1 }} />{p}
           </div>
         ))}
       </div>
@@ -364,7 +364,7 @@ export function PlanSummary({ funnel, setFunnel, editable }: { funnel: Funnel; s
         <span className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 30, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>{money(shown)}</span>
         <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>/mes</span>
       </div>
-      {funnel.cycle === 'anual' && <div style={{ fontSize: 'var(--text-xs)', color: '#0A8F76', marginTop: 2 }}>Facturado anual · 2 meses gratis</div>}
+      {funnel.cycle === 'anual' && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--accent-text)', marginTop: 2 }}>Facturado anual · 2 meses gratis</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '18px 0', padding: '16px 0', borderTop: '1px solid var(--border-subtle)', borderBottom: '1px solid var(--border-subtle)' }}>
         {editable && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

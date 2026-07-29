@@ -24,8 +24,9 @@ import { readCssVar } from '../lib/theme';
 
 /** Color de marca actual (sigue el tema por vertical). Se resuelve en cada
  *  render porque recharts no entiende `var(--brand)` en SVG/canvas. */
-const brandColor = (): string => readCssVar('--brand') || '#1A73E8';
-const TEAL = '#00D4AA';
+const brandColor = (): string => readCssVar('--brand') || '#1E3A8A';
+/** Acento actual (cobre/rosa según vertical); recharts no entiende var(). */
+const accentColor = (): string => readCssVar('--accent') || '#C2410C';
 const AXIS = '#94A3B8';
 const GRID = '#E2E8F0';
 
@@ -93,7 +94,7 @@ export interface DonutDato {
   color?: string;
 }
 
-const donutPalette = (): string[] => [brandColor(), TEAL, '#334155', '#64748B', '#3B82F6', '#94A3B8'];
+const donutPalette = (): string[] => [brandColor(), accentColor(), '#334155', '#64748B', '#3B82F6', '#94A3B8'];
 
 /** Donut (composición). Leyenda opcional a la derecha. */
 export function Donut({ data, height = 220, thickness = 28 }: { data: DonutDato[]; height?: number; thickness?: number }) {

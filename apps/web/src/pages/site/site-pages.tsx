@@ -126,7 +126,7 @@ export function LandingPage({ vertical, go, setFunnel }: PageProps) {
                   <div className="mkt-float-slow" style={{ position: 'relative' }}><BrowserMock vertical={vertical} /></div>
                 </Parallax>
                 <Parallax velocidad={0.16} maximo={64}>
-                  <FloatingChip icon="check-circle" tone="accent" title="Nueva reserva confirmada" sub="Hoy · 3:30 p. m." float="slow" style={{ top: -18, left: -22 }} />
+                  <FloatingChip icon="check-circle" tone="success" title="Nueva reserva confirmada" sub="Hoy · 3:30 p. m." float="slow" style={{ top: -18, left: -22 }} />
                   <FloatingChip icon="bell" tone="brand" title="Recordatorio enviado" sub="WhatsApp · −40% ausencias" float="fast" style={{ bottom: 34, right: -26 }} />
                 </Parallax>
               </div>
@@ -407,7 +407,7 @@ export function CalculatorPage({ go, funnel, setFunnel }: PageProps) {
         <div style={{ padding: 24, borderRadius: 'var(--radius-lg)', background: 'var(--navy)', color: '#fff' }}>
           <div style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255,255,255,0.6)' }}>Tu cobro estimado</div>
           <div className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 40, letterSpacing: '-0.02em', margin: '6px 0 2px' }}>{money(mostrado)}<span style={{ fontSize: 'var(--text-md)', fontWeight: 500, color: 'rgba(255,255,255,0.6)' }}>/mes</span></div>
-          {cycle === 'anual' && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)' }}>Facturado anual · 2 meses gratis</div>}
+          {cycle === 'anual' && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--accent-on-inverse)' }}>Facturado anual · 2 meses gratis</div>}
           <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.14)', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 'var(--text-sm)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.8)' }}><span>Base ({plan.name})</span><span className="data">{money(plan.base)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.8)' }}><span>{extra} adicionales × {money(plan.perExtra)}</span><span className="data">{money(extra * plan.perExtra)}</span></div>
@@ -456,7 +456,7 @@ export function ContactPage() {
       <div style={{ maxWidth: 560, margin: '0 auto' }}>
         <SectionHead eyebrow="Contacto" title="Hablemos de tu negocio" sub="Cuéntanos qué necesitas y te contactamos. Para cadenas, agendamos una demo." eyebrowTone="brand" />
         {enviado ? (
-          <div style={{ display: 'flex', gap: 12, padding: 18, borderRadius: 'var(--radius-md)', background: 'var(--teal-tint)', border: '1px solid rgba(0,212,170,0.28)' }}>
+          <div style={{ display: 'flex', gap: 12, padding: 18, borderRadius: 'var(--radius-md)', background: 'var(--teal-tint)', border: '1px solid var(--accent-tint-border)' }}>
             <Icon name="check-circle" size={20} color="var(--success)" style={{ flex: 'none' }} />
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>Gracias. Te contactaremos pronto a <strong style={{ color: 'var(--text-primary)' }}>{form.email || 'tu correo'}</strong>. <span style={{ color: 'var(--text-tertiary)' }}>(maqueta · sin envío real)</span></div>
           </div>

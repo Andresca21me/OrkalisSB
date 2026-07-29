@@ -194,7 +194,7 @@ export function Badge({
     warning: { fg: '#B45309', bg: 'var(--warning-tint)', solidBg: 'var(--warning)' },
     error: { fg: 'var(--error)', bg: 'var(--error-tint)', solidBg: 'var(--error)' },
     info: { fg: 'var(--info)', bg: 'var(--info-tint)', solidBg: 'var(--info)' },
-    accent: { fg: '#0A8F76', bg: 'var(--teal-tint)', solidBg: 'var(--accent)' },
+    accent: { fg: 'var(--accent-text)', bg: 'var(--teal-tint)', solidBg: 'var(--accent)' },
   };
   const t = tones[tone];
   return (
@@ -225,7 +225,7 @@ export function Badge({
 /** Pill / etiqueta redondeada (radius-pill). Para chips de estado del sitio y filtros estáticos. */
 export function Tag({ children, tone = 'accent', icon, style }: { children: ReactNode; tone?: 'accent' | 'brand'; icon?: string; style?: CSSProperties }) {
   const map = {
-    accent: { c: '#0A8F76', bg: 'var(--teal-tint)', dot: 'var(--accent)' },
+    accent: { c: 'var(--accent-text)', bg: 'var(--teal-tint)', dot: 'var(--accent)' },
     brand: { c: 'var(--brand)', bg: 'var(--brand-tint)', dot: 'var(--brand)' },
   } as const;
   const m = map[tone];
@@ -312,7 +312,7 @@ export function Avatar({ name = '', size = 40, src }: { name?: string; size?: nu
 
 function AvatarInicial({ name = '', size = 40 }: { name?: string; size?: number }) {
   const initials = name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-  const palette = ['#1A73E8', '#0F1923', '#475569', '#00A88A', '#3B82F6', '#334155'];
+  const palette = ['#1E3A8A', '#0F172A', '#475569', '#047857', '#C2410C', '#334155'];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   const bg = palette[Math.abs(hash) % palette.length];
@@ -611,7 +611,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 // ── Logo (marca "O" geométrica) ──────────────────────────────────────────────
-export function Logo({ size = 26, color = 'var(--navy)', word = true }: { size?: number; color?: string; word?: boolean }) {
+export function Logo({ size = 26, color = 'var(--text-primary)', word = true }: { size?: number; color?: string; word?: boolean }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
       <span
@@ -918,7 +918,7 @@ export function KpiCard({
     ? trend.tone === 'neutral'
       ? 'var(--text-tertiary)'
       : up
-        ? 'var(--accent)'
+        ? '#0A8F5B' /* verde éxito AA: subir es bueno; el acento ya no es verde */
         : down
           ? 'var(--error)'
           : 'var(--text-secondary)'

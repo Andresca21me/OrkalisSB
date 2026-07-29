@@ -28,7 +28,7 @@ export function CheckoutPage({ go, funnel, setFunnel }: Props) {
         <div>
           <SectionHead eyebrow="Pago" eyebrowTone="brand" title="Activa tu suscripción" sub="Pago seguro con Mercado Pago. Los datos de tu tarjeta no pasan por nuestros servidores." />
           {ok ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 18, borderRadius: 'var(--radius-md)', background: 'var(--teal-tint)', border: '1px solid rgba(0,212,170,0.28)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 18, borderRadius: 'var(--radius-md)', background: 'var(--teal-tint)', border: '1px solid var(--accent-tint-border)' }}>
               <Icon name="check-circle" size={22} color="var(--success)" />
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}><strong>¡Pago aprobado!</strong> Entrando a tu panel…</div>
             </div>

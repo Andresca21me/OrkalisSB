@@ -352,7 +352,7 @@ function Inicio({ info, servicios, onReservar, onElegirServicio, onGestionar }: 
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
               {/* Decorativo: sigue la marca, pero con la variante legible sobre
                   el navy de la cabecera (un color oscuro se perdería ahí). */}
-              <Icon name="calendar" size={16} color="var(--brand-sobre-oscuro, var(--accent))" />
+              <Icon name="calendar" size={16} color="var(--brand-sobre-oscuro, var(--accent-on-inverse))" />
               <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: 'var(--text-xs)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Reserva en línea</span>
             </div>
             {logoNegocio && (

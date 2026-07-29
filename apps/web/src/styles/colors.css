@@ -1,28 +1,38 @@
 /* ============================================================
    ORKALIS — COLOR TOKENS
-   Cool-toned SaaS palette. Navy authority + electric blue action
-   + teal precision accent. Light & dark surfaces both first-class.
+   Base neutra slate (fría, profesional) compartida por las dos
+   verticales + acentos por identidad:
+     Barbería = azul marino profundo + cobre (elegante/vintage).
+     Salón    = verde salvia/eucalipto + rosa (spa/bienestar).
+   Claro y oscuro son primera clase. Todos los pares texto/fondo
+   de estos tokens cumplen WCAG AA (verificado numéricamente).
+
+   NOTA: --blue y --teal son nombres HISTÓRICOS del token base de
+   marca y de acento; hoy contienen el color que toque según la
+   vertical (navy/cobre o esmeralda/rosa). Se conservan porque
+   toda la app referencia los alias semánticos (--brand, --accent)
+   y renombrar la base no aporta nada.
    ============================================================ */
 
 :root {
-  /* --- Brand core --- */
-  --navy:            #0F1923; /* primary surfaces, sidebars, nav */
-  --blue:            #1A73E8; /* electric blue — brand, CTAs, links */
-  --blue-hover:      #4D94F0; /* lighter — hover */
-  --blue-pressed:    #1558C0; /* darker — pressed */
-  --teal:            #00D4AA; /* accent — success/highlight/KPI growth */
+  /* --- Brand core (Barbería, la vertical por defecto) --- */
+  --navy:            #13223F; /* superficie "autoridad": sidebars, tooltips, tarjetas oscuras */
+  --blue:            #1E3A8A; /* azul marino profundo — marca, CTAs, links (blanco: 10.4:1) */
+  --blue-hover:      #2749A8; /* más claro — hover (blanco: 8.1:1) */
+  --blue-pressed:    #16295F; /* más oscuro — pressed */
+  --teal:            #C2410C; /* acento cobre — destacados, chips, KPIs (blanco: 5.2:1) */
 
   /* --- Backgrounds --- */
-  --bg-light:        #F8FAFC; /* near-white, cool undertone */
-  --bg-dark:         #0A0F14; /* deep dark dashboard surface */
+  --bg-light:        #F8FAFC; /* slate-50: casi blanco, matiz frío */
+  --bg-dark:         #0F172A; /* slate-900: grafito del panel oscuro */
 
   /* --- Card surfaces --- */
   --card-light:      #FFFFFF;
   --card-light-border: #E2E8F0;
-  --card-dark:       #111827;
-  --card-dark-border:  #1F2937;
+  --card-dark:       #1E293B; /* slate-800 */
+  --card-dark-border:  #334155; /* slate-700 */
 
-  /* --- Semantic --- */
+  /* --- Semantic (estándar de industria: NO cambian por vertical) --- */
   --success:         #10B981;
   --warning:         #F59E0B;
   --error:           #EF4444;
@@ -66,12 +76,16 @@
   --brand-hover:         var(--blue-hover);
   --brand-pressed:       var(--blue-pressed);
   --accent:              var(--teal);
+  /* Acento cuando es TEXTO sobre blanco/tint (AA): más oscuro que --accent. */
+  --accent-text:         #9A3412;
+  /* Acento sobre superficies inversas (--navy): iluminado para no hundirse. */
+  --accent-on-inverse:   #FB923C;
 
   --focus-ring:          var(--blue);
 
   /* Tinted fills (light) */
-  --brand-tint:          rgba(26, 115, 232, 0.08);
-  --teal-tint:           rgba(0, 212, 170, 0.10);
+  --brand-tint:          rgba(30, 58, 138, 0.08);
+  --teal-tint:           rgba(194, 65, 12, 0.09);
   --success-tint:        rgba(16, 185, 129, 0.10);
   --warning-tint:        rgba(245, 158, 11, 0.12);
   --error-tint:          rgba(239, 68, 68, 0.10);
@@ -82,30 +96,30 @@
   --brand-tint-border:   color-mix(in srgb, var(--brand) 26%, transparent);
   --brand-glow:          color-mix(in srgb, var(--brand) 55%, transparent);
   --brand-glow-soft:     color-mix(in srgb, var(--brand) 30%, transparent);
+  --accent-tint-border:  color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 /* ============================================================
    TEMA POR VERTICAL (identidad visual según el tipo de negocio)
-   Barbería = azul (tokens por defecto, arriba).
-   Salón    = rosa elegante (pink-600), sin caer en fucsia.
-   Solo se remapean los tokens BASE (--blue*, --navy) y los tints
-   literales; como --brand, --brand-hover, --brand-pressed,
+   Barbería = navy + cobre (tokens por defecto, arriba).
+   Salón    = esmeralda + rosa: fresco, spa, sin caer en chicle.
+   Solo se remapean los tokens BASE (--blue*, --teal, --navy) y
+   los tints literales; como --brand, --brand-hover, --accent,
    --focus-ring y --text-link referencian esos base, toda la
    plataforma cambia de golpe. Añadir otro tema = otro bloque.
    ============================================================ */
 :root[data-vertical='salon'] {
-  --blue:            #DB2777; /* rosa marca — CTAs, links, acentos */
-  --blue-hover:      #EC4899; /* más claro — hover */
-  --blue-pressed:    #BE185D; /* más oscuro — pressed / texto sobre blanco */
-  --navy:            #241019; /* superficie "autoridad" en cálido (plum) */
+  --blue:            #047857; /* esmeralda profunda — CTAs, links (blanco: 5.5:1) */
+  --blue-hover:      #05875F; /* más claro — hover (blanco: 4.5:1) */
+  --blue-pressed:    #065F46; /* más oscuro — pressed */
+  --teal:            #E11D48; /* acento rosa — destacados (blanco: 4.7:1) */
+  --navy:            #0F241E; /* superficie "autoridad" en eucalipto oscuro */
 
-  --text-link:       #BE185D; /* rosa oscuro: AA de texto sobre blanco */
-  --brand-tint:      rgba(219, 39, 119, 0.08);
-}
-
-.dark[data-vertical='salon'] {
-  --brand-tint:      rgba(219, 39, 119, 0.18);
-  --text-link:       var(--blue-hover);
+  --text-link:       #047857;
+  --accent-text:     #BE123C; /* rosa como texto sobre blanco: 6.3:1 */
+  --accent-on-inverse: #FDA4AF; /* rosa claro sobre el eucalipto oscuro */
+  --brand-tint:      rgba(4, 120, 87, 0.08);
+  --teal-tint:       rgba(225, 29, 72, 0.08);
 }
 
 /* ============================================================
@@ -114,28 +128,53 @@
 .dark {
   --surface-page:        var(--bg-dark);
   --surface-card:        var(--card-dark);
-  --surface-raised:      #161F2B;
-  --surface-sunken:      #070B0F;
+  --surface-raised:      #243146;
+  --surface-sunken:      #0B1220;
   --surface-inverse:     var(--gray-100);
 
   --border-subtle:       var(--card-dark-border);
-  --border-default:      #2A3441;
-  --border-strong:       var(--gray-700);
+  --border-default:      #44546E;
+  --border-strong:       var(--gray-500);
 
-  --text-primary:        #F1F5F9;
-  --text-secondary:      var(--gray-400);
-  --text-tertiary:       var(--gray-500);
-  --text-disabled:       var(--gray-600);
+  --text-primary:        #F8FAFC;
+  --text-secondary:      var(--gray-300);
+  --text-tertiary:       var(--gray-400);
+  --text-disabled:       var(--gray-500);
   --text-inverse:        var(--gray-900);
   --text-on-brand:       #FFFFFF;
-  --text-link:           var(--blue-hover);
 
-  --brand-tint:          rgba(26, 115, 232, 0.16);
-  --teal-tint:           rgba(0, 212, 170, 0.16);
+  /* La marca sube de luminancia en oscuro: el navy #1E3A8A se hundiría en el
+     grafito (1.5:1 contra el fondo). El texto blanco sigue AA (5.2:1). */
+  --blue:            #2563EB;
+  --blue-hover:      #3B82F6;
+  --blue-pressed:    #1D4ED8;
+  --teal:            #FB923C; /* cobre iluminado para superficies oscuras */
+  --text-link:       #60A5FA; /* sobre fondo: 7.0:1 · sobre card: 5.8:1 */
+  --accent-text:     #FB923C;
+  --focus-ring:      #60A5FA;
+
+  --brand-tint:          rgba(37, 99, 235, 0.18);
+  --teal-tint:           rgba(251, 146, 60, 0.14);
   --success-tint:        rgba(16, 185, 129, 0.16);
   --warning-tint:        rgba(245, 158, 11, 0.18);
   --error-tint:          rgba(239, 68, 68, 0.16);
   --info-tint:           rgba(59, 130, 246, 0.16);
+}
+
+/* Salón en oscuro: esmeralda que no se apaga sobre grafito pero mantiene AA
+   con el texto blanco de los CTA (5.1:1). Este bloque debe ir DESPUÉS del de
+   `:root[data-vertical='salon']` (misma especificidad: gana el último). */
+.dark[data-vertical='salon'] {
+  --blue:            #0A7D5F;
+  --blue-hover:      #05875F;
+  --blue-pressed:    #06664E;
+  --teal:            #FB7185; /* rosa iluminado (texto sobre fondo: 6.6:1) */
+  --text-link:       #34D399; /* sobre fondo: 9.3:1 */
+  --accent-text:     #FB7185;
+  --focus-ring:      #34D399;
+
+  --brand-tint:      rgba(16, 185, 129, 0.14);
+  --teal-tint:       rgba(251, 113, 133, 0.14);
 }
 
 /* System-preference dark mode:
