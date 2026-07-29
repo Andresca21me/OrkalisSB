@@ -31,7 +31,6 @@ export class EnviarOtpDto {
 
 export class BuscarCitaDto {
   @IsString() @MinLength(7) telefono!: string;
-  @IsString() @MinLength(6) codigo!: string;
 }
 
 export class ConfirmarDto {

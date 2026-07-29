@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { BookingPage } from '../../pages/booking.page';
 import { USERS } from '../../fixtures/roles';
-import { sucursalesDe, serviciosPublicos, franjaLibre, sembrarReserva, codigoDeCita } from '../../fixtures/api';
+import { sucursalesDe, serviciosPublicos, franjaLibre, sembrarReserva } from '../../fixtures/api';
 import { nombreUnico, telefonoUnico, fechaMasDias } from '../../fixtures/data';
 
 /**
@@ -33,7 +33,7 @@ test.describe('Reserva del cliente por la UI', () => {
     await booking.verificar();
 
     await expect(booking.confirmacionHeading).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('Código de reserva')).toBeVisible();
+    await expect(page.getByText('Total')).toBeVisible();
   });
 
   test('OTP incorrecto → mensaje de error y permanece en el paso', async ({ page, request }) => {
@@ -63,17 +63,16 @@ test.describe('Reserva del cliente por la UI', () => {
     await expect(page.getByText('No pudimos abrir la reserva')).toBeVisible({ timeout: 15_000 });
   });
 
-  test('gestionar: buscar mi cita por código + celular', async ({ page, request }) => {
+  test('gestionar: buscar mi cita por celular', async ({ page, request }) => {
     const { sucursalId, servicioId } = await contexto(request);
     const reserva = await sembrarReserva(request, sucursalId, servicioId);
-    const codigo = await codigoDeCita(request, sucursalId, reserva.citaId);
 
     const booking = new BookingPage(page);
     await booking.ir(sucursalId);
     await booking.abrirGestionDesdeInicio();
-    await booking.buscarCita(codigo, reserva.telefono);
-    // La ficha de la cita muestra su código.
-    await expect(page.getByText(`Código ${codigo}`)).toBeVisible({ timeout: 15_000 });
+    await booking.buscarCita(reserva.telefono);
+    // La ficha de la cita cargó: se pueden reagendar/cancelar.
+    await expect(page.getByRole('button', { name: 'Reagendar' })).toBeVisible({ timeout: 15_000 });
   });
 
   test('cancelar una cita (con antelación suficiente) la deja cancelada', async ({ page, request }) => {

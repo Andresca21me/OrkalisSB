@@ -832,10 +832,6 @@ function Resultado({ info, appointment, onGestionar }: { info: PublicInfo; appoi
           <div style={{ marginTop: 16 }}><EstadoBadge estado={appointment.estado} /></div>
         </div>
         <div style={{ padding: '8px 16px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16, padding: '10px 14px', border: '1px dashed var(--border-default)', borderRadius: 'var(--radius-sm)' }}>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Código de reserva</span>
-            <span className="data" style={{ fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.04em' }}>{appointment.codigo}</span>
-          </div>
           <CitaCard appointment={appointment} />
         </div>
       </ScrollArea>
@@ -886,14 +882,13 @@ function DetalleRow({ icon, label, value }: { icon: string; label: string; value
 function Gestion({ sucursalId, info, appointment, setAppointment, onBack, onReagendar, onCancelar, onNueva }: { sucursalId: string; info: PublicInfo; appointment: CitaPublica | null; setAppointment: (c: CitaPublica) => void; onBack: () => void; onReagendar: () => void; onCancelar: () => void; onNueva: () => void }) {
   const toast = useToast();
   const [telefono, setTelefono] = useState('');
-  const [codigo, setCodigo] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   async function buscar() {
     setBuscando(true);
     try {
-      const c = await api.post<CitaPublica>(`/public/${sucursalId}/cita/buscar`, { telefono: telefono.replace(/\D/g, ''), codigo }, false);
+      const c = await api.post<CitaPublica>(`/public/${sucursalId}/cita/buscar`, { telefono: telefono.replace(/\D/g, '') }, false);
       setAppointment(c);
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -909,12 +904,9 @@ function Gestion({ sucursalId, info, appointment, setAppointment, onBack, onReag
         <ScrollArea>
           <div style={{ padding: 20 }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 0, marginBottom: 20 }}>
-              Ingresa el código de tu reserva y tu celular para verla.
+              Ingresa el celular con el que reservaste para ver tu cita.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              <Campo label="Código de reserva">
-                <input value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase().slice(0, 8))} placeholder="Ej. EB440454" className="data" style={inputCss(false)} />
-              </Campo>
               <Campo label="Celular">
                 <input value={telefono} onChange={(e) => setTelefono(e.target.value.replace(/[^\d ]/g, '').slice(0, 12))} inputMode="numeric" placeholder="311 845 2210" className="data" style={inputCss(false)} />
               </Campo>
@@ -922,7 +914,7 @@ function Gestion({ sucursalId, info, appointment, setAppointment, onBack, onReag
           </div>
         </ScrollArea>
         <FooterBar>
-          <Button fullWidth disabled={buscando || codigo.length < 6 || telefono.replace(/\D/g, '').length < 7} onClick={() => void buscar()}>
+          <Button fullWidth disabled={buscando || telefono.replace(/\D/g, '').length < 7} onClick={() => void buscar()}>
             {buscando ? 'Buscando…' : 'Ver mi cita'}
           </Button>
         </FooterBar>
@@ -954,7 +946,7 @@ function Gestion({ sucursalId, info, appointment, setAppointment, onBack, onReag
             <DetalleRow icon="store" label="Lugar" value={appointment.sucursalNombre} />
             <div style={{ height: 1, background: 'var(--border-subtle)' }} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px' }}>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Código {appointment.codigo}</span>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Total</span>
               <span className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-md)', color: 'var(--text-primary)' }}>{money(appointment.total)}</span>
             </div>
           </Card>

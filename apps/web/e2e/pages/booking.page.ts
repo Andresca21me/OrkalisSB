@@ -110,8 +110,7 @@ export class BookingPage {
     await this.page.getByRole('button', { name: 'Ya tengo una cita' }).click();
   }
 
-  async buscarCita(codigo: string, telefono: string) {
-    await this.page.getByPlaceholder('Ej. EB440454').fill(codigo);
+  async buscarCita(telefono: string) {
     await this.page.getByPlaceholder('311 845 2210').fill(telefono);
     await this.page.getByRole('button', { name: 'Ver mi cita' }).click();
   }

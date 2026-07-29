@@ -64,7 +64,7 @@ export class PublicAgendamientoController {
   @Post('cita/buscar')
   @HttpCode(200)
   buscar(@Param('sucursalId') sucursalId: string, @Body() dto: BuscarCitaDto) {
-    return this.service.buscarCita(sucursalId, dto.telefono, dto.codigo);
+    return this.service.buscarCita(sucursalId, dto.telefono);
   }
 
   @Get('cita/:id')

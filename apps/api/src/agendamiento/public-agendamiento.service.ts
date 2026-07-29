@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { BadRequestException } from '@nestjs/common';
 import { EstadoCita, OrigenCita, PerfilNegocio, type CitaPublica, type PublicServicio } from '@orkalis/shared';
 import { adminDb } from '../db/admin-client';
@@ -141,28 +141,28 @@ export class PublicAgendamientoService {
     return detalle;
   }
 
-  /** Recupera una cita por código (prefijo del id) + teléfono del cliente. */
-  async buscarCita(sucursalId: string, telefono: string, codigo: string): Promise<CitaPublica> {
+  /** Recupera la cita de un cliente por su teléfono: la próxima vigente o, si ya no tiene ninguna por venir, la más reciente. */
+  async buscarCita(sucursalId: string, telefono: string): Promise<CitaPublica> {
     const ctx = await this.ctxDeSucursal(sucursalId);
-    const code = codigo.trim().toLowerCase().replace(/[^0-9a-f]/g, '');
-    if (code.length < 6) throw new BadRequestException('Código inválido.');
     const found = await runInTenantTx(ctx, async (tx) => {
-      const [row] = await tx
-        .select({ id: cita.id })
+      const filas = await tx
+        .select({ id: cita.id, inicio: cita.inicio, estado: cita.estado })
         .from(cita)
         .innerJoin(cliente, eq(cliente.id, cita.clienteId))
-        .where(
-          and(
-            eq(cita.sucursalId, sucursalId),
-            eq(cliente.telefono, telefono),
-            sql`${cita.id}::text like ${code + '%'}`,
-          ),
-        )
-        .limit(1);
-      if (!row) return null;
-      return this.cargarDetalle(tx, sucursalId, row.id);
+        .where(and(eq(cita.sucursalId, sucursalId), eq(cliente.telefono, telefono.trim())))
+        .orderBy(desc(cita.inicio))
+        .limit(50);
+      if (filas.length === 0) return null;
+      const ahora = Date.now();
+      // `filas` viene de más reciente a más antigua: la última "por venir" no
+      // cancelada es la más próxima en el tiempo.
+      const porVenir = filas.filter(
+        (f) => f.estado !== EstadoCita.Cancelada && f.inicio.getTime() >= ahora,
+      );
+      const elegida = porVenir.length > 0 ? porVenir[porVenir.length - 1] : filas[0];
+      return this.cargarDetalle(tx, sucursalId, elegida.id);
     });
-    if (!found) throw new NotFoundException('No encontramos una cita con ese código y teléfono.');
+    if (!found) throw new NotFoundException('No encontramos una cita con ese celular.');
     return found;
   }
 
@@ -197,7 +197,6 @@ export class PublicAgendamientoService {
 
     return {
       id: c.id,
-      codigo: c.id.slice(0, 8).toUpperCase(),
       estado: c.estado as EstadoCita,
       inicio: c.inicio.toISOString(),
       fin: c.fin.toISOString(),
@@ -389,7 +388,7 @@ export class PublicAgendamientoService {
   async confirmar(
     sucursalId: string,
     input: { retencionId: string; telefono: string; nombre?: string; codigoOtp?: string; servicioIds: string[] },
-  ): Promise<{ citaId: string; codigo: string; estado: EstadoCita }> {
+  ): Promise<{ citaId: string; estado: EstadoCita }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
 
     const resultado = await runInTenantTx(ctx, async (tx) => {
@@ -545,7 +544,6 @@ export class PublicAgendamientoService {
     this.metrics.inc(METRICAS.reservasCreadas);
     return {
       citaId: resultado.citaId,
-      codigo: resultado.citaId.slice(0, 8).toUpperCase(),
       estado: resultado.estado,
     };
   }

@@ -378,14 +378,3 @@ export async function setModuloApi(
 ): Promise<void> {
   return setConfigApi(request, email, negocioId, clave, valor);
 }
-
-/** Código de reserva de una cita pública (para la búsqueda en "Mi cita"). */
-export async function codigoDeCita(
-  request: APIRequestContext,
-  sucursalId: string,
-  citaId: string,
-): Promise<string> {
-  const res = await request.get(`/api/public/${sucursalId}/cita/${citaId}`);
-  expect(res.ok(), 'GET /public/cita/:id').toBeTruthy();
-  return (await res.json()).codigo as string;
-}

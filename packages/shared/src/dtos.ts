@@ -132,7 +132,6 @@ export interface OtpResp {
 /** Respuesta de `confirmar`. */
 export interface ConfirmarResp {
   citaId: string;
-  codigo: string;
   estado: EstadoCita;
 }
 
@@ -219,7 +218,6 @@ export interface ClienteHistorial {
 /** Detalle de una cita pública (gestión). */
 export interface CitaPublica {
   id: string;
-  codigo: string;
   estado: EstadoCita;
   inicio: string; // ISO
   fin: string; // ISO
