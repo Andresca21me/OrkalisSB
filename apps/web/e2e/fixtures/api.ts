@@ -247,6 +247,13 @@ export async function equipoDe(request: APIRequestContext, email: string): Promi
   return res.json();
 }
 
+/** Baja lógica de un especialista; sus citas futuras pendientes se cancelan. */
+export async function darDeBajaEspecialista(request: APIRequestContext, email: string, id: string): Promise<void> {
+  const token = await loginAPI(request, email);
+  const res = await request.delete(`/api/especialistas/${id}?accion=cancelar`, { headers: authHeaders(token) });
+  expect(res.ok(), `DELETE /especialistas/${id}`).toBeTruthy();
+}
+
 /** Crea un servicio (admin). `splitType`: 'porcentaje' | 'valor_fijo'. Devuelve su id. */
 export async function crearServicioApi(
   request: APIRequestContext,

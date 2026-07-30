@@ -35,10 +35,10 @@ test.describe('Admin · ciclo del turno desde la agenda', () => {
     try {
       const admin = new AdminAgendaPage(s.adminBarberia.page);
       await admin.abrir();
-      await admin.crearTurno({ sucursal: 'Sede Centro', especialista: 'Carlos Barbero', servicio: servicioNombre, hora: '16:30' });
+      const hora = await admin.crearTurno({ sucursal: 'Sede Centro', especialista: 'Carlos Barbero', servicio: servicioNombre });
 
       const id = (await citasDelDia(api, USERS.adminBarberia, centro.id, hoyISO()))
-        .find((c) => /carlos/i.test(c.especialistaNombre) && horaBogota(c.inicio) === '16:30' && c.estado === 'confirmada')!.id;
+        .find((c) => /carlos/i.test(c.especialistaNombre) && horaBogota(c.inicio) === hora && c.estado === 'confirmada')!.id;
       expect(id, 'el turno creado existe').toBeTruthy();
 
       // Iniciar → En progreso.

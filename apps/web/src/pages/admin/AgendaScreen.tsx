@@ -9,7 +9,7 @@ import { Button, Card, EmptyState, ErrorState, EstadoBadge, Icon, PageHead, Spin
 import { AppointmentRow, CobroModal, DayCounters, MiniCalendar, NuevaCitaModal, colorDe, horaCorta } from './agenda-ui';
 import { useToast } from '../../ui';
 
-interface Especialista { id: string; nombre: string; especialidad: string | null }
+interface Especialista { id: string; nombre: string; especialidad: string | null; activo: boolean }
 
 export function AgendaScreen() {
   const { consolidado, sucursalActivaId, sucursalActiva } = useSucursal();
@@ -19,6 +19,7 @@ export function AgendaScreen() {
   const [cobro, setCobro] = useState<CitaAgenda | null>(null);
   const [nueva, setNueva] = useState(false);
   const [espFiltro, setEspFiltro] = useState<string | null>(null);
+  const [verAntiguos, setVerAntiguos] = useState(false);
 
   const { desde, hasta } = rangoDiaBogota(dia);
   const citas = useCitas({ desde, hasta, sucursalId: sucursalActivaId });
@@ -31,6 +32,11 @@ export function AgendaScreen() {
   const scope = consolidado ? 'Todo el negocio' : (sucursalActiva?.nombre ?? 'Sucursal');
   const lista = (citas.data ?? []).filter((c) => !espFiltro || c.especialistaId === espFiltro);
   const espFiltrado = espFiltro ? (equipo.data ?? []).find((s) => s.id === espFiltro) : null;
+  // `/especialistas` trae también los dados de baja: el listado principal solo
+  // muestra vigentes; los antiguos quedan en un desplegable discreto para poder
+  // consultar sus citas históricas sin estorbar en el día a día.
+  const vigentes = (equipo.data ?? []).filter((s) => s.activo);
+  const antiguos = (equipo.data ?? []).filter((s) => !s.activo);
 
   function refrescar() {
     void citas.recargar();
@@ -73,24 +79,28 @@ export function AgendaScreen() {
               {equipo.cargando ? (
                 <Spinner size={18} />
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {(equipo.data ?? []).map((s) => {
-                    const activo = espFiltro === s.id;
-                    return (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {vigentes.map((s) => <FilaEspecialista key={s.id} esp={s} activo={espFiltro === s.id} onToggle={() => setEspFiltro((cur) => (cur === s.id ? null : s.id))} />)}
+                  </div>
+                  {antiguos.length > 0 && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
                       <button
-                        key={s.id}
                         type="button"
-                        title={activo ? 'Quitar filtro' : `Ver solo las citas de ${s.nombre}`}
-                        onClick={() => setEspFiltro((cur) => (cur === s.id ? null : s.id))}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 8px', margin: '0 -8px', boxSizing: 'content-box', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', textAlign: 'left', background: activo ? 'var(--brand-tint)' : 'transparent', fontFamily: 'var(--font-body)' }}
+                        onClick={() => setVerAntiguos((v) => !v)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'none', cursor: 'pointer', padding: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-tertiary)' }}
                       >
-                        <span style={{ width: 10, height: 10, borderRadius: 3, background: colorDe(s.id), flex: 'none' }} />
-                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: activo ? 600 : 400, color: activo ? 'var(--brand)' : 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.nombre}</span>
-                        {activo ? <Icon name="check" size={14} color="var(--brand)" /> : s.especialidad && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{s.especialidad}</span>}
+                        <Icon name={verAntiguos ? 'chevron-down' : 'chevron-right'} size={13} />
+                        Antiguos ({antiguos.length})
                       </button>
-                    );
-                  })}
-                </div>
+                      {verAntiguos && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, opacity: 0.75 }}>
+                          {antiguos.map((s) => <FilaEspecialista key={s.id} esp={s} activo={espFiltro === s.id} onToggle={() => setEspFiltro((cur) => (cur === s.id ? null : s.id))} />)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </Card>
           </div>
@@ -153,6 +163,21 @@ export function AgendaScreen() {
       {cobro && <CobroModal cita={cobro} onClose={() => setCobro(null)} onDone={() => { setCobro(null); toast('Turno completado · ganancias calculadas', 'success'); refrescar(); }} />}
       {nueva && <NuevaCitaModal sucursalId={sucursalActivaId} fechaIso={dia} onClose={() => setNueva(false)} onDone={() => { setNueva(false); toast('Cita creada', 'success'); refrescar(); }} />}
     </div>
+  );
+}
+
+function FilaEspecialista({ esp, activo, onToggle }: { esp: Especialista; activo: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      title={activo ? 'Quitar filtro' : `Ver solo las citas de ${esp.nombre}`}
+      onClick={onToggle}
+      style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 8px', margin: '0 -8px', boxSizing: 'content-box', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', textAlign: 'left', background: activo ? 'var(--brand-tint)' : 'transparent', fontFamily: 'var(--font-body)' }}
+    >
+      <span style={{ width: 10, height: 10, borderRadius: 3, background: colorDe(esp.id), flex: 'none' }} />
+      <span style={{ fontSize: 'var(--text-sm)', fontWeight: activo ? 600 : 400, color: activo ? 'var(--brand)' : 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{esp.nombre}</span>
+      {activo ? <Icon name="check" size={14} color="var(--brand)" /> : esp.especialidad && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{esp.especialidad}</span>}
+    </button>
   );
 }
 

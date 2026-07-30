@@ -5,7 +5,7 @@ import { useApi } from '../../lib/useApi';
 import { completarCita, crearCita, revertirCita, type EventoCita, type PagoLinea } from '../../lib/useCitas';
 import { hoyISO, money } from '../../lib/format';
 import { PagoSplit, pagoInicial, sumaPagos } from '../../ui/PagoSplit';
-import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, ProductosVenta, Select, StatTile, type LineaProducto } from '../../ui';
+import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, ProductosVenta, Select, Spinner, StatTile, type LineaProducto } from '../../ui';
 
 const PALETA = ['#2563EB', '#059669', '#7C3AED', '#EA580C', '#0EA5E9', '#E11D48', '#64748B', '#D97706'];
 export function colorDe(id: string): string {
@@ -275,7 +275,7 @@ const soloDigitos = (s: string) => s.replace(/\D/g, '');
 
 export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucursalId: string | null; fechaIso: string; onClose: () => void; onDone: () => void }) {
   const sucursales = useApi<(Opcion & { activa: boolean })[]>(() => api.get('/sucursales'), []);
-  const especialistas = useApi<(Opcion & { sucursalIds?: string[]; servicioIds?: string[] })[]>(() => api.get('/especialistas'), []);
+  const especialistas = useApi<(Opcion & { activo?: boolean; sucursalIds?: string[]; servicioIds?: string[] })[]>(() => api.get('/especialistas'), []);
   const clientes = useApi<ClienteOpt[]>(() => api.get('/clientes'), []);
   const servicios = useApi<ServicioOpt[]>(() => api.get('/servicios'), []);
 
@@ -287,28 +287,31 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
   const [cliFoco, setCliFoco] = useState(false);
   const [servSel, setServSel] = useState<string[]>([]);
   const [fecha, setFecha] = useState(fechaIso);
-  const [hora, setHora] = useState('10:00');
+  const [franja, setFranja] = useState(''); // ISO de inicio de la franja elegida
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const sucEfectiva = suc || sucursales.data?.[0]?.id || '';
+  // `/especialistas` incluye los dados de baja (historial); aquí solo se agenda
+  // con los vigentes.
+  const espVigentes = useMemo(() => (especialistas.data ?? []).filter((e) => e.activo !== false), [especialistas.data]);
   // Solo especialistas asignados a la sede elegida (HU-ADM-012): no ofrecer
   // opciones que el backend rechazaría por no pertenecer a la sucursal.
   // Y que además realicen TODOS los servicios elegidos (sin lista declarada, los
   // realiza todos). El backend valida lo mismo; esto evita ofrecer lo imposible.
   const espOpciones = useMemo(
     () =>
-      (especialistas.data ?? [])
+      espVigentes
         .filter((e) => !e.sucursalIds || !sucEfectiva || e.sucursalIds.includes(sucEfectiva))
         .filter((e) => servSel.length === 0 || !e.servicioIds?.length || servSel.every((sid) => e.servicioIds!.includes(sid))),
-    [especialistas.data, sucEfectiva, servSel],
+    [espVigentes, sucEfectiva, servSel],
   );
 
   /** ¿Se puede sumar este servicio sin dejar la selección sin nadie que la atienda? */
   const servicioPosible = (id: string): boolean => {
     if (servSel.includes(id)) return true;
     const combo = [...servSel, id];
-    return (especialistas.data ?? []).some(
+    return espVigentes.some(
       (e) =>
         (!e.sucursalIds || !sucEfectiva || e.sucursalIds.includes(sucEfectiva)) &&
         (!e.servicioIds?.length || combo.every((sid) => e.servicioIds!.includes(sid))),
@@ -319,6 +322,22 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
     if (esp && !espOpciones.some((e) => e.id === esp)) setEsp('');
   }, [espOpciones, esp]);
   const total = useMemo(() => (servicios.data ?? []).filter((s) => servSel.includes(s.id)).reduce((a, s) => a + Number(s.precio), 0), [servicios.data, servSel]);
+
+  // Franjas libres reales del especialista (mismo cálculo que la reserva pública).
+  const listoParaFranjas = Boolean(sucEfectiva && esp && servSel.length > 0 && fecha);
+  const servKey = [...servSel].sort().join(',');
+  const disp = useApi<{ inicio: string; fin: string }[]>(
+    () =>
+      listoParaFranjas
+        ? api.get(`/citas/disponibilidad?sucursalId=${sucEfectiva}&especialistaId=${esp}&servicios=${servKey}&fecha=${fecha}`)
+        : Promise.resolve([]),
+    [sucEfectiva, esp, servKey, fecha, listoParaFranjas],
+  );
+  const franjas = disp.data ?? [];
+  // Si cambian los datos y la franja elegida ya no está libre, deselecciónala.
+  useEffect(() => {
+    if (franja && !franjas.some((f) => f.inicio === franja)) setFranja('');
+  }, [franjas, franja]);
 
   // El mismo campo de nombre sugiere clientes existentes por nombre o celular.
   const sugerencias = useMemo(() => {
@@ -335,7 +354,7 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
   // Cliente nuevo: nombre escrito sin elegir sugerencia → exige celular para registrarlo.
   const clienteNuevo = !cli && nombreCli.length >= 2;
   const clienteOk = !nombreCli || Boolean(cli) || (nombreCli.length >= 2 && telDigitos.length >= 7);
-  const valido = sucEfectiva && esp && servSel.length > 0 && fecha && hora && clienteOk;
+  const valido = sucEfectiva && esp && servSel.length > 0 && fecha && franja && clienteOk;
 
   function toggle(id: string) {
     setServSel((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
@@ -353,8 +372,7 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
         if (porTel) clienteId = porTel.id;
         else clienteId = (await api.post<ClienteOpt>('/clientes', { nombre: nombreCli, telefono: telDigitos })).id;
       }
-      const inicio = new Date(`${fecha}T${hora}:00-05:00`).toISOString();
-      await crearCita({ sucursalId: sucEfectiva, especialistaId: esp, clienteId, servicioIds: servSel, inicio });
+      await crearCita({ sucursalId: sucEfectiva, especialistaId: esp, clienteId, servicioIds: servSel, inicio: franja });
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -449,13 +467,33 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
             })}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <Field label="Fecha" style={{ flex: 1 }}>
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={inputCss} />
-          </Field>
-          <Field label="Hora" style={{ flex: 1 }}>
-            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} style={inputCss} />
-          </Field>
+        <Field label="Fecha">
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={inputCss} />
+        </Field>
+        <div>
+          <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600, display: 'block', marginBottom: 8 }}>
+            Hora <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>· disponibilidad real del especialista</span>
+          </label>
+          {!listoParaFranjas ? (
+            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Elige especialista y servicios para ver las horas libres.</p>
+          ) : disp.cargando ? (
+            <div style={{ display: 'grid', placeItems: 'center', padding: 16 }}><Spinner size={20} /></div>
+          ) : disp.error ? (
+            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--error)' }}>No pudimos cargar la disponibilidad. Cambia la fecha o vuelve a intentar.</p>
+          ) : franjas.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>El especialista no tiene horas libres ese día. Prueba otra fecha u otro especialista.</p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))', gap: 8, maxHeight: 176, overflowY: 'auto', paddingRight: 2 }}>
+              {franjas.map((f) => {
+                const on = franja === f.inicio;
+                return (
+                  <button key={f.inicio} type="button" data-testid={`franja-${horaCorta(f.inicio)}`} onClick={() => setFranja(f.inicio)} className="data" style={{ height: 42, borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', color: on ? '#fff' : 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                    {horaCorta(f.inicio)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         {error && <p style={{ color: 'var(--error)', fontSize: 'var(--text-sm)', margin: 0 }}>{error}</p>}
       </div>

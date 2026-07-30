@@ -46,10 +46,25 @@ export class AdminAgendaPage {
   }
 
   /**
-   * Llena y envía "Nueva cita". No espera el cierre: el caller decide si verifica
-   * éxito (diálogo oculto) o un error (anti-solape / validación). Devuelve el diálogo.
+   * Elige una franja del selector dinámico de horas (disponibilidad real): la
+   * pedida en `hora` ('HH:mm') o, si se omite, la última libre del día (la menos
+   * propensa a quedar en el pasado durante la corrida). Devuelve la hora elegida.
    */
-  async llenarNuevaCita(opts: { sucursal?: string; especialista: string; servicio: string; hora: string; fecha?: string; cliente?: { nombre: string; celular?: string } }): Promise<Locator> {
+  async elegirFranja(dlg: Locator, hora?: string): Promise<string> {
+    const chips = dlg.locator('[data-testid^="franja-"]');
+    await expect(chips.first()).toBeVisible({ timeout: 15_000 });
+    const chip = hora ? dlg.getByTestId(`franja-${hora}`) : chips.last();
+    const elegida = (await chip.innerText()).trim();
+    await chip.click();
+    return elegida;
+  }
+
+  /**
+   * Llena y envía "Nueva cita". No espera el cierre: el caller decide si verifica
+   * éxito (diálogo oculto) o un error (anti-solape / validación). Devuelve el
+   * diálogo y la hora efectivamente elegida en el selector de franjas.
+   */
+  async llenarNuevaCita(opts: { sucursal?: string; especialista: string; servicio: string; hora?: string; fecha?: string; cliente?: { nombre: string; celular?: string } }): Promise<{ dlg: Locator; hora: string }> {
     const dlg = await this.abrirNuevaCita();
     if (opts.sucursal) await dlg.getByLabel('Sucursal').selectOption({ label: opts.sucursal });
     await dlg.getByLabel('Especialista').selectOption({ label: opts.especialista });
@@ -59,15 +74,16 @@ export class AdminAgendaPage {
     }
     await dlg.getByRole('button', { name: new RegExp(opts.servicio) }).first().click();
     if (opts.fecha) await dlg.locator('input[type="date"]').fill(opts.fecha);
-    await dlg.locator('input[type="time"]').fill(opts.hora);
+    const hora = await this.elegirFranja(dlg, opts.hora);
     await dlg.getByRole('button', { name: /Crear cita/ }).click();
-    return dlg;
+    return { dlg, hora };
   }
 
-  /** Crea un turno y espera que el modal cierre (camino feliz). */
-  async crearTurno(opts: { sucursal?: string; especialista: string; servicio: string; hora: string; fecha?: string; cliente?: { nombre: string; celular?: string } }) {
-    const dlg = await this.llenarNuevaCita(opts);
+  /** Crea un turno y espera que el modal cierre (camino feliz). Devuelve la hora. */
+  async crearTurno(opts: { sucursal?: string; especialista: string; servicio: string; hora?: string; fecha?: string; cliente?: { nombre: string; celular?: string } }): Promise<string> {
+    const { dlg, hora } = await this.llenarNuevaCita(opts);
     await expect(dlg).toBeHidden({ timeout: 15_000 });
+    return hora;
   }
 
   // ── Transiciones desde el menú de acciones de una fila ──
@@ -75,9 +91,10 @@ export class AdminAgendaPage {
     await fila.getByRole('button', { name: 'Acciones' }).click();
     await this.page.getByRole('menuitem', { name: estadoLabel, exact: true }).click();
   }
-  /** Completa una cita cobrando desde el menú (item "Completada" → CobroModal). */
+  /** Completa una cita En progreso cobrándola desde el menú ("Completar y cobrar" → CobroModal). */
   async cobrar(fila: Locator, metodo = 'Efectivo') {
-    await this.transicionar(fila, 'Completada');
+    await fila.getByRole('button', { name: 'Acciones' }).click();
+    await this.page.getByRole('menuitem', { name: 'Completar y cobrar' }).click();
     const dlg = this.page.getByRole('dialog');
     await dlg.getByRole('combobox').selectOption({ label: metodo });
     await dlg.getByRole('button', { name: /Cobrar/ }).click();
@@ -126,15 +143,21 @@ export class RecepcionPage {
   }
 
   // ── Crear cita (HU-REC-001) ──
-  async crearCita(opts: { especialista: string; servicio: string; hora: string; fecha?: string }) {
+  /** Crea una cita eligiendo la hora en el selector de franjas; devuelve la hora elegida. */
+  async crearCita(opts: { especialista: string; servicio: string; hora?: string; fecha?: string }): Promise<string> {
     await this.page.getByRole('button', { name: 'Nueva cita' }).click();
     const dlg = this.page.getByRole('dialog');
     await dlg.getByLabel('Especialista').selectOption({ label: opts.especialista });
     await dlg.getByRole('button', { name: new RegExp(opts.servicio) }).first().click();
     if (opts.fecha) await dlg.locator('input[type="date"]').fill(opts.fecha);
-    await dlg.locator('input[type="time"]').fill(opts.hora);
+    const chips = dlg.locator('[data-testid^="franja-"]');
+    await expect(chips.first()).toBeVisible({ timeout: 15_000 });
+    const chip = opts.hora ? dlg.getByTestId(`franja-${opts.hora}`) : chips.last();
+    const hora = (await chip.innerText()).trim();
+    await chip.click();
     await dlg.getByRole('button', { name: /Crear cita/ }).click();
     await expect(dlg).toBeHidden({ timeout: 15_000 });
+    return hora;
   }
 
   // ── Reasignar especialista (HU-REC-001, cruzado) ──
@@ -160,7 +183,7 @@ export class RecepcionPage {
   /** Cobra (completa) una fila en progreso desde su menú de acciones. */
   async cobrar(fila: Locator, metodo = 'Efectivo') {
     await fila.getByRole('button', { name: 'Acciones' }).click();
-    await this.page.getByRole('menuitem', { name: 'Completada' }).click();
+    await this.page.getByRole('menuitem', { name: 'Completar y cobrar' }).click();
     const dlg = this.page.getByRole('dialog');
     await dlg.getByRole('combobox').selectOption({ label: metodo });
     await dlg.getByRole('button', { name: /Cobrar/ }).click();

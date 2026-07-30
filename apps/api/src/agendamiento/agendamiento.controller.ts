@@ -5,6 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import type { TenantContext } from '../db/tenant-context';
 import { AgendamientoService } from './agendamiento.service';
 import { AtencionService } from '../finanzas/atencion.service';
+import { DisponibilidadService } from './disponibilidad.service';
 import { CompletarDto, CrearCitaDto, ReasignarDto, RevertirDto, WalkInRetroactivoDto, WalkInVivoDto } from './dto/agendamiento.dto';
 
 /** Agenda interna y operación del turno (FASE-08/09). Roles internos. */
@@ -14,7 +15,24 @@ export class AgendamientoController {
   constructor(
     private readonly service: AgendamientoService,
     private readonly atencion: AtencionService,
+    private readonly disponibilidad: DisponibilidadService,
   ) {}
+
+  /**
+   * Franjas libres para agendar desde la agenda interna: mismo cálculo que la
+   * reserva pública (horario de sede × ventanas del especialista − ocupado).
+   */
+  @Get('disponibilidad')
+  franjas(
+    @CurrentTenant() ctx: TenantContext,
+    @Query('sucursalId') sucursalId: string,
+    @Query('especialistaId') especialistaId: string,
+    @Query('servicios') servicios: string,
+    @Query('fecha') fecha: string,
+  ) {
+    const servicioIds = (servicios ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    return this.disponibilidad.franjasPublicas(ctx, sucursalId, especialistaId, servicioIds, fecha);
+  }
 
   @Get()
   listar(

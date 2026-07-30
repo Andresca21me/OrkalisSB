@@ -1,6 +1,6 @@
 import { test, expect, request as apiRequest, type APIRequestContext } from '@playwright/test';
 import { abrirRoles, cerrarRoles, USERS } from '../../fixtures/roles';
-import { sucursalesDe, serviciosPublicos, especialistasPublicos, crearCitaInterna, type Sucursal } from '../../fixtures/api';
+import { sucursalesDe, serviciosPublicos, especialistasPublicos, crearCitaInterna, darDeBajaEspecialista, equipoDe, type Sucursal } from '../../fixtures/api';
 import { AdminAgendaPage } from '../../pages/agenda.page';
 import { reseed } from '../../fixtures/seed';
 import { fechaMasDias, hoyISO } from '../../fixtures/data';
@@ -71,6 +71,37 @@ test.describe('Admin · agenda (filtro y calendario)', () => {
 
       await page.getByRole('button', { name: 'Ver todos' }).click();
       await expect(filas.filter({ hasText: 'Carlos Barbero' }).first()).toBeVisible();
+    } finally {
+      await cerrarRoles(s);
+    }
+  });
+
+  test('un especialista dado de baja sale del filtro y queda en «Antiguos»', async ({ browser }) => {
+    // Baja lógica de Diana (tiene una cita hoy en el seed): no debe seguir
+    // ofreciéndose como filtro normal, pero sí bajo el desplegable "Antiguos".
+    const dianaId = (await equipoDe(api, USERS.adminBarberia)).find((e) => /diana/i.test(e.nombre))!.id;
+    await darDeBajaEspecialista(api, USERS.adminBarberia, dianaId);
+
+    const s = await abrirRoles(browser, ['adminBarberia']);
+    try {
+      const page = s.adminBarberia.page;
+      const admin = new AdminAgendaPage(page);
+      await admin.abrir();
+
+      // En la lista principal ya no está; Carlos sí.
+      await expect(page.getByRole('button', { name: /Carlos Barbero/ })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('button', { name: /Diana Estilista/ })).toHaveCount(0);
+
+      // El desplegable discreto la revela y permite filtrar sus citas históricas.
+      await page.getByRole('button', { name: /Antiguos \(1\)/ }).click();
+      await page.getByRole('button', { name: /Diana Estilista/ }).click();
+      const filas = page.locator('[data-testid^="appt-row-"]');
+      await expect(filas).toHaveCount(1);
+      await expect(filas.first()).toContainText('Diana Estilista');
+
+      // Y en "Nueva cita" ya no se ofrece como especialista.
+      const dlg = await admin.abrirNuevaCita();
+      await expect(dlg.getByLabel('Especialista').locator('option', { hasText: 'Diana' })).toHaveCount(0);
     } finally {
       await cerrarRoles(s);
     }

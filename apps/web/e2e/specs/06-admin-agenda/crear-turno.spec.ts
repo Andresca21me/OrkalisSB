@@ -38,10 +38,11 @@ test.describe('Admin · crear turno en cualquier sucursal', () => {
     try {
       const admin = new AdminAgendaPage(s.adminBarberia.page);
       await admin.abrir();
-      await admin.crearTurno({ sucursal: 'Sede Norte', especialista: 'Carlos Barbero', servicio: servicio.nombre, hora: '16:00' });
+      // La hora sale del selector de franjas (disponibilidad real), no de un valor fijo.
+      const hora = await admin.crearTurno({ sucursal: 'Sede Norte', especialista: 'Carlos Barbero', servicio: servicio.nombre });
 
       const id = (await citasDelDia(api, USERS.adminBarberia, norte.id, hoyISO()))
-        .find((c) => /carlos/i.test(c.especialistaNombre) && horaBogota(c.inicio) === '16:00')!.id;
+        .find((c) => /carlos/i.test(c.especialistaNombre) && horaBogota(c.inicio) === hora)!.id;
       expect(id, 'el turno creado existe en Norte').toBeTruthy();
       await expect(admin.fila(id)).toBeVisible({ timeout: 15_000 });
 
@@ -77,7 +78,7 @@ test.describe('Admin · crear turno en cualquier sucursal', () => {
     try {
       const admin = new AdminAgendaPage(s.adminBarberia.page);
       await admin.abrir();
-      await admin.crearTurno({ sucursal: 'Sede Centro', especialista: 'Carlos Barbero', servicio: servicio.nombre, hora: '18:00', cliente: { nombre, celular } });
+      await admin.crearTurno({ sucursal: 'Sede Centro', especialista: 'Carlos Barbero', servicio: servicio.nombre, cliente: { nombre, celular } });
 
       // La fila del turno muestra al cliente recién registrado…
       await expect(s.adminBarberia.page.locator('[data-testid^="appt-row-"]').filter({ hasText: nombre })).toBeVisible({ timeout: 15_000 });
@@ -108,15 +109,23 @@ test.describe('Admin · crear turno en cualquier sucursal', () => {
   });
 
   test('rechaza un turno que se solapa con otro del mismo especialista (anti-solape)', async ({ browser }) => {
-    // Turno existente para Carlos en Centro a las 17:00.
-    const inicio = new Date(`${hoyISO()}T17:00:00-05:00`).toISOString();
-    await crearCitaInterna(api, USERS.adminBarberia, { sucursalId: centro.id, especialistaId: carlosId, servicioIds: [servicio.id], inicio });
-
+    // El selector solo ofrece franjas libres, así que el solape se provoca por
+    // CARRERA: otro actor ocupa la franja después de cargado el selector y antes
+    // de confirmar. El backend debe rechazarla igual.
     const s = await abrirRoles(browser, ['adminBarberia']);
     try {
       const admin = new AdminAgendaPage(s.adminBarberia.page);
       await admin.abrir();
-      const dlg = await admin.llenarNuevaCita({ sucursal: 'Sede Centro', especialista: 'Carlos Barbero', servicio: servicio.nombre, hora: '17:00' });
+      const dlg = await admin.abrirNuevaCita();
+      await dlg.getByLabel('Sucursal').selectOption({ label: 'Sede Centro' });
+      await dlg.getByLabel('Especialista').selectOption({ label: 'Carlos Barbero' });
+      await dlg.getByRole('button', { name: new RegExp(servicio.nombre) }).first().click();
+      const hora = await admin.elegirFranja(dlg);
+
+      const inicio = new Date(`${hoyISO()}T${hora}:00-05:00`).toISOString();
+      await crearCitaInterna(api, USERS.adminBarberia, { sucursalId: centro.id, especialistaId: carlosId, servicioIds: [servicio.id], inicio });
+
+      await dlg.getByRole('button', { name: /Crear cita/ }).click();
       await expect(dlg.getByText(/solapa|turno activo en esa franja/i)).toBeVisible({ timeout: 15_000 });
     } finally {
       await cerrarRoles(s);
