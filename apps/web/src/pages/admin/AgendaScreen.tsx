@@ -18,6 +18,7 @@ export function AgendaScreen() {
   const [dia, setDia] = useState(hoyISO());
   const [cobro, setCobro] = useState<CitaAgenda | null>(null);
   const [nueva, setNueva] = useState(false);
+  const [espFiltro, setEspFiltro] = useState<string | null>(null);
 
   const { desde, hasta } = rangoDiaBogota(dia);
   const citas = useCitas({ desde, hasta, sucursalId: sucursalActivaId });
@@ -28,7 +29,8 @@ export function AgendaScreen() {
   const historial = useCitas({ desde: histRango.desde, hasta: histRango.hasta, sucursalId: sucursalActivaId });
 
   const scope = consolidado ? 'Todo el negocio' : (sucursalActiva?.nombre ?? 'Sucursal');
-  const lista = citas.data ?? [];
+  const lista = (citas.data ?? []).filter((c) => !espFiltro || c.especialistaId === espFiltro);
+  const espFiltrado = espFiltro ? (equipo.data ?? []).find((s) => s.id === espFiltro) : null;
 
   function refrescar() {
     void citas.recargar();
@@ -60,25 +62,44 @@ export function AgendaScreen() {
           <div className="ork-aside" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <MiniCalendar selectedIso={dia} onPick={setDia} />
             <Card padding={16}>
-              <span className="eyebrow" style={{ display: 'block', marginBottom: 12 }}>Especialistas</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span className="eyebrow">Especialistas</span>
+                {espFiltro && (
+                  <button type="button" onClick={() => setEspFiltro(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--brand)' }}>
+                    Ver todos
+                  </button>
+                )}
+              </div>
               {equipo.cargando ? (
                 <Spinner size={18} />
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {(equipo.data ?? []).map((s) => (
-                    <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 3, background: colorDe(s.id), flex: 'none' }} />
-                      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.nombre}</span>
-                      {s.especialidad && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{s.especialidad}</span>}
-                    </div>
-                  ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {(equipo.data ?? []).map((s) => {
+                    const activo = espFiltro === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        title={activo ? 'Quitar filtro' : `Ver solo las citas de ${s.nombre}`}
+                        onClick={() => setEspFiltro((cur) => (cur === s.id ? null : s.id))}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 8px', margin: '0 -8px', boxSizing: 'content-box', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', textAlign: 'left', background: activo ? 'var(--brand-tint)' : 'transparent', fontFamily: 'var(--font-body)' }}
+                      >
+                        <span style={{ width: 10, height: 10, borderRadius: 3, background: colorDe(s.id), flex: 'none' }} />
+                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: activo ? 600 : 400, color: activo ? 'var(--brand)' : 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.nombre}</span>
+                        {activo ? <Icon name="check" size={14} color="var(--brand)" /> : s.especialidad && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{s.especialidad}</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </Card>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <h2 style={{ fontSize: 'var(--text-lg)', letterSpacing: '-0.02em', textTransform: 'capitalize' }}>{fechaDesdeISO(dia)}</h2>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: 'var(--text-lg)', letterSpacing: '-0.02em', textTransform: 'capitalize', margin: 0 }}>{fechaDesdeISO(dia)}</h2>
+              {espFiltrado && <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>· solo {espFiltrado.nombre}</span>}
+            </div>
 
             {citas.error ? (
               <ErrorState onRetry={citas.recargar} />
@@ -89,7 +110,11 @@ export function AgendaScreen() {
                   <div style={{ display: 'grid', placeItems: 'center', padding: 40 }}><Spinner /></div>
                 ) : lista.length === 0 ? (
                   <Card padding={0}>
-                    <EmptyState icon="calendar-x" title="No hay citas para este día" desc="Cuando agendes una cita aparecerá aquí, ordenada por hora." action={<Button iconLeft="plus" onClick={() => setNueva(true)}>Nueva cita</Button>} />
+                    {espFiltrado ? (
+                      <EmptyState icon="calendar-x" title={`${espFiltrado.nombre} no tiene citas este día`} desc="Prueba con otro día o quita el filtro para ver toda la agenda." action={<Button variant="secondary" onClick={() => setEspFiltro(null)}>Ver todos los especialistas</Button>} />
+                    ) : (
+                      <EmptyState icon="calendar-x" title="No hay citas para este día" desc="Cuando agendes una cita aparecerá aquí, ordenada por hora." action={<Button iconLeft="plus" onClick={() => setNueva(true)}>Nueva cita</Button>} />
+                    )}
                   </Card>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -268,17 +268,23 @@ export function CobroModal({ cita, onClose, onDone }: { cita: CitaAgenda; onClos
 
 // ── Modal de nueva cita ──────────────────────────────────────────────────────
 interface Opcion { id: string; nombre: string }
+interface ClienteOpt { id: string; nombre: string; telefono: string | null }
 interface ServicioOpt { id: string; nombre: string; precio: string; duracionMin: number }
+
+const soloDigitos = (s: string) => s.replace(/\D/g, '');
 
 export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucursalId: string | null; fechaIso: string; onClose: () => void; onDone: () => void }) {
   const sucursales = useApi<(Opcion & { activa: boolean })[]>(() => api.get('/sucursales'), []);
   const especialistas = useApi<(Opcion & { sucursalIds?: string[]; servicioIds?: string[] })[]>(() => api.get('/especialistas'), []);
-  const clientes = useApi<Opcion[]>(() => api.get('/clientes'), []);
+  const clientes = useApi<ClienteOpt[]>(() => api.get('/clientes'), []);
   const servicios = useApi<ServicioOpt[]>(() => api.get('/servicios'), []);
 
   const [suc, setSuc] = useState<string>(sucursalId ?? '');
   const [esp, setEsp] = useState('');
-  const [cli, setCli] = useState('');
+  const [cli, setCli] = useState(''); // id de cliente existente elegido de las sugerencias
+  const [cliNombre, setCliNombre] = useState('');
+  const [cliTel, setCliTel] = useState('');
+  const [cliFoco, setCliFoco] = useState(false);
   const [servSel, setServSel] = useState<string[]>([]);
   const [fecha, setFecha] = useState(fechaIso);
   const [hora, setHora] = useState('10:00');
@@ -313,7 +319,23 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
     if (esp && !espOpciones.some((e) => e.id === esp)) setEsp('');
   }, [espOpciones, esp]);
   const total = useMemo(() => (servicios.data ?? []).filter((s) => servSel.includes(s.id)).reduce((a, s) => a + Number(s.precio), 0), [servicios.data, servSel]);
-  const valido = sucEfectiva && esp && servSel.length > 0 && fecha && hora;
+
+  // El mismo campo de nombre sugiere clientes existentes por nombre o celular.
+  const sugerencias = useMemo(() => {
+    const q = cliNombre.trim().toLowerCase();
+    const qTel = soloDigitos(cliNombre);
+    if (q.length < 2) return [];
+    return (clientes.data ?? [])
+      .filter((c) => c.nombre.toLowerCase().includes(q) || (qTel.length >= 3 && soloDigitos(c.telefono ?? '').includes(qTel)))
+      .slice(0, 6);
+  }, [clientes.data, cliNombre]);
+
+  const nombreCli = cliNombre.trim();
+  const telDigitos = soloDigitos(cliTel);
+  // Cliente nuevo: nombre escrito sin elegir sugerencia → exige celular para registrarlo.
+  const clienteNuevo = !cli && nombreCli.length >= 2;
+  const clienteOk = !nombreCli || Boolean(cli) || (nombreCli.length >= 2 && telDigitos.length >= 7);
+  const valido = sucEfectiva && esp && servSel.length > 0 && fecha && hora && clienteOk;
 
   function toggle(id: string) {
     setServSel((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
@@ -324,8 +346,15 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
     setGuardando(true);
     setError(null);
     try {
+      let clienteId = cli || undefined;
+      if (!clienteId && clienteNuevo) {
+        // Dedupe por celular: si ya existe un cliente con ese número, se enlaza en vez de duplicar.
+        const porTel = (clientes.data ?? []).find((c) => soloDigitos(c.telefono ?? '') === telDigitos);
+        if (porTel) clienteId = porTel.id;
+        else clienteId = (await api.post<ClienteOpt>('/clientes', { nombre: nombreCli, telefono: telDigitos })).id;
+      }
       const inicio = new Date(`${fecha}T${hora}:00-05:00`).toISOString();
-      await crearCita({ sucursalId: sucEfectiva, especialistaId: esp, clienteId: cli || undefined, servicioIds: servSel, inicio });
+      await crearCita({ sucursalId: sucEfectiva, especialistaId: esp, clienteId, servicioIds: servSel, inicio });
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -350,12 +379,61 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
             {espOpciones.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
           </Select>
         </Field>
-        <Field label="Cliente (opcional)">
-          <Select value={cli} onChange={(e) => setCli(e.target.value)}>
-            <option value="">Sin cliente</option>
-            {(clientes.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          </Select>
-        </Field>
+        <div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Field label="Cliente (opcional)" style={{ flex: 1.5, minWidth: 0 }}>
+              <div style={{ position: 'relative' }}>
+                <input
+                  value={cliNombre}
+                  onChange={(e) => {
+                    // Al editar tras elegir una sugerencia se desenlaza (y se limpia su celular).
+                    if (cli) { setCli(''); setCliTel(''); }
+                    setCliNombre(e.target.value);
+                  }}
+                  onFocus={() => setCliFoco(true)}
+                  onBlur={() => setTimeout(() => setCliFoco(false), 150)}
+                  placeholder="Nombre del cliente"
+                  style={inputCss}
+                />
+                {cli && <Icon name="check" size={16} color="var(--success, #059669)" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }} />}
+                {cliFoco && !cli && sugerencias.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, maxHeight: 236, overflowY: 'auto', background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
+                    {sugerencias.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); setCli(c.id); setCliNombre(c.nombre); setCliTel(c.telefono ?? ''); setCliFoco(false); }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', padding: '10px 12px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
+                      >
+                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</span>
+                        <span className="data" style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', flex: 'none' }}>{c.telefono ?? 'sin celular'}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Field>
+            <Field label="Celular" style={{ flex: 1, minWidth: 0 }}>
+              <input
+                value={cliTel}
+                onChange={(e) => setCliTel(e.target.value)}
+                disabled={Boolean(cli)}
+                placeholder="311 845 2210"
+                inputMode="tel"
+                style={{ ...inputCss, ...(cli ? { background: 'var(--gray-50)', color: 'var(--text-tertiary)' } : {}) }}
+              />
+            </Field>
+          </div>
+          {cli ? (
+            <p style={{ margin: '6px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Cliente existente · la cita quedará en su historial.</p>
+          ) : clienteNuevo ? (
+            telDigitos.length >= 7 ? (
+              <p style={{ margin: '6px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Se registrará automáticamente como cliente nuevo.</p>
+            ) : (
+              <p style={{ margin: '6px 0 0', fontSize: 'var(--text-xs)', color: 'var(--warning, #D97706)' }}>Escribe su celular (mín. 7 dígitos) para registrarlo como cliente nuevo.</p>
+            )
+          ) : null}
+        </div>
         <div>
           <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600, display: 'block', marginBottom: 8 }}>Servicios</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

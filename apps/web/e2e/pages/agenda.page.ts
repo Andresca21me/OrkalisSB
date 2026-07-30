@@ -49,10 +49,14 @@ export class AdminAgendaPage {
    * Llena y envía "Nueva cita". No espera el cierre: el caller decide si verifica
    * éxito (diálogo oculto) o un error (anti-solape / validación). Devuelve el diálogo.
    */
-  async llenarNuevaCita(opts: { sucursal?: string; especialista: string; servicio: string; hora: string; fecha?: string }): Promise<Locator> {
+  async llenarNuevaCita(opts: { sucursal?: string; especialista: string; servicio: string; hora: string; fecha?: string; cliente?: { nombre: string; celular?: string } }): Promise<Locator> {
     const dlg = await this.abrirNuevaCita();
     if (opts.sucursal) await dlg.getByLabel('Sucursal').selectOption({ label: opts.sucursal });
     await dlg.getByLabel('Especialista').selectOption({ label: opts.especialista });
+    if (opts.cliente) {
+      await dlg.getByPlaceholder('Nombre del cliente').fill(opts.cliente.nombre);
+      if (opts.cliente.celular) await dlg.getByPlaceholder('311 845 2210').fill(opts.cliente.celular);
+    }
     await dlg.getByRole('button', { name: new RegExp(opts.servicio) }).first().click();
     if (opts.fecha) await dlg.locator('input[type="date"]').fill(opts.fecha);
     await dlg.locator('input[type="time"]').fill(opts.hora);
@@ -61,7 +65,7 @@ export class AdminAgendaPage {
   }
 
   /** Crea un turno y espera que el modal cierre (camino feliz). */
-  async crearTurno(opts: { sucursal?: string; especialista: string; servicio: string; hora: string; fecha?: string }) {
+  async crearTurno(opts: { sucursal?: string; especialista: string; servicio: string; hora: string; fecha?: string; cliente?: { nombre: string; celular?: string } }) {
     const dlg = await this.llenarNuevaCita(opts);
     await expect(dlg).toBeHidden({ timeout: 15_000 });
   }

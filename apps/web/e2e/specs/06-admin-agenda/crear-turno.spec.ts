@@ -1,9 +1,9 @@
 import { test, expect, request as apiRequest, type APIRequestContext } from '@playwright/test';
 import { abrirRoles, cerrarRoles, USERS } from '../../fixtures/roles';
-import { sucursalesDe, serviciosPublicos, especialistasPublicos, citasDelDia, crearCitaInterna, type Sucursal } from '../../fixtures/api';
+import { sucursalesDe, serviciosPublicos, especialistasPublicos, citasDelDia, clientesDe, crearCitaInterna, type Sucursal } from '../../fixtures/api';
 import { AdminAgendaPage, SpecAgendaPage } from '../../pages/agenda.page';
 import { reseed } from '../../fixtures/seed';
-import { hoyISO, horaBogota } from '../../fixtures/data';
+import { hoyISO, horaBogota, nombreUnico, telefonoUnico } from '../../fixtures/data';
 
 /**
  * FASE-06 v3 · Admin · Crear turnos en cualquier sucursal (HU-ADM-012): el admin
@@ -65,6 +65,43 @@ test.describe('Admin · crear turno en cualquier sucursal', () => {
       const opciones = dlg.getByLabel('Especialista').locator('option');
       await expect(opciones.filter({ hasText: 'Carlos' })).toHaveCount(1);
       await expect(opciones.filter({ hasText: 'Diana' })).toHaveCount(0); // Diana solo en Centro
+    } finally {
+      await cerrarRoles(s);
+    }
+  });
+
+  test('crea un turno registrando al vuelo un cliente nuevo (nombre + celular)', async ({ browser }) => {
+    const nombre = nombreUnico('Cliente');
+    const celular = telefonoUnico();
+    const s = await abrirRoles(browser, ['adminBarberia']);
+    try {
+      const admin = new AdminAgendaPage(s.adminBarberia.page);
+      await admin.abrir();
+      await admin.crearTurno({ sucursal: 'Sede Centro', especialista: 'Carlos Barbero', servicio: servicio.nombre, hora: '18:00', cliente: { nombre, celular } });
+
+      // La fila del turno muestra al cliente recién registrado…
+      await expect(s.adminBarberia.page.locator('[data-testid^="appt-row-"]').filter({ hasText: nombre })).toBeVisible({ timeout: 15_000 });
+      // …y quedó en el directorio del CRM con su celular (oráculo de API).
+      const cli = (await clientesDe(api, USERS.adminBarberia, nombre))[0];
+      expect(cli, 'el cliente existe en /clientes').toBeTruthy();
+      expect(cli.telefono).toBe(celular);
+    } finally {
+      await cerrarRoles(s);
+    }
+  });
+
+  test('sugiere clientes existentes por nombre y autocompleta su celular', async ({ browser }) => {
+    const s = await abrirRoles(browser, ['adminBarberia']);
+    try {
+      const admin = new AdminAgendaPage(s.adminBarberia.page);
+      await admin.abrir();
+      const dlg = await admin.abrirNuevaCita();
+      await dlg.getByPlaceholder('Nombre del cliente').fill('Juan');
+      // La sugerencia muestra nombre y celular del cliente sembrado.
+      await dlg.getByRole('button', { name: /Juan Pérez/ }).click();
+      await expect(dlg.getByPlaceholder('Nombre del cliente')).toHaveValue('Juan Pérez');
+      await expect(dlg.getByPlaceholder('311 845 2210')).toHaveValue('3001112233');
+      await expect(dlg.getByText('Cliente existente')).toBeVisible();
     } finally {
       await cerrarRoles(s);
     }

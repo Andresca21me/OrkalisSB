@@ -54,6 +54,28 @@ test.describe('Admin · agenda (filtro y calendario)', () => {
     }
   });
 
+  test('el filtro por especialista acota la agenda del día', async ({ browser }) => {
+    // Seed de hoy: Diana Estilista tiene exactamente 1 cita; Carlos varias.
+    const s = await abrirRoles(browser, ['adminBarberia']);
+    try {
+      const page = s.adminBarberia.page;
+      const admin = new AdminAgendaPage(page);
+      await admin.abrir();
+      const filas = page.locator('[data-testid^="appt-row-"]');
+      await expect(filas.filter({ hasText: 'Carlos Barbero' }).first()).toBeVisible({ timeout: 15_000 });
+
+      await page.getByRole('button', { name: /Diana Estilista/ }).click();
+      await expect(filas.filter({ hasText: 'Carlos Barbero' })).toHaveCount(0);
+      await expect(filas).toHaveCount(1);
+      await expect(filas.first()).toContainText('Diana Estilista');
+
+      await page.getByRole('button', { name: 'Ver todos' }).click();
+      await expect(filas.filter({ hasText: 'Carlos Barbero' }).first()).toBeVisible();
+    } finally {
+      await cerrarRoles(s);
+    }
+  });
+
   test('el mini-calendario cambia el día (futuro sin citas → vacío)', async ({ browser }) => {
     const s = await abrirRoles(browser, ['adminBarberia']);
     try {
