@@ -58,27 +58,41 @@ export class CrearEspecialistaDto {
 }
 
 /**
- * Paso 1 del alta verificada (FASE-06): datos + celular. El especialista NO se
- * crea aquí; solo se guarda el borrador y se envía el código.
+ * Invitación de un especialista por correo (Plan-Correo E5, D4): el admin
+ * captura los datos básicos + el correo; contraseña y celular los pone el
+ * propio especialista desde el enlace que le llega.
  */
-export class IniciarVerificacionDto {
+export class InvitarEspecialistaDto {
   @IsString() @MinLength(2) nombre!: string;
   @IsOptional() @IsString() apellidos?: string;
+  @IsOptional() @IsString() especialidad?: string;
+  @IsEmail({}, { message: 'Email inválido.' }) email!: string;
+  @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) sucursalIds!: string[];
+  @IsOptional() @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) servicioIds?: string[];
+  @IsOptional() @IsBoolean() disponible?: boolean;
+}
+
+/** Invitar (o re-invitar con otro correo) a un especialista ya existente sin acceso. */
+export class InvitarExistenteDto {
+  @IsEmail({}, { message: 'Email inválido.' }) email!: string;
+}
+
+/** El especialista activa su cuenta desde el enlace de la invitación. */
+export class ActivarInvitacionDto {
+  @IsString() @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres.' })
+  password!: string;
+}
+
+/** El propio especialista registra su celular (paso 2 de la invitación). */
+export class MiTelefonoIniciarDto {
   /** Móvil colombiano; se normaliza a E.164 en el servicio. */
   @IsString() @Matches(/^(\+?57)?\s?3\d{2}[\s-]?\d{3}[\s-]?\d{4}$/, {
     message: 'El celular debe ser un móvil colombiano de 10 dígitos (empieza por 3).',
   })
   celular!: string;
-  @IsOptional() @IsString() especialidad?: string;
-  @IsOptional() @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) sucursalIds?: string[];
-  @IsOptional() @IsEmail() email?: string;
-  @IsOptional() @IsString() @MinLength(8) password?: string;
-  @IsOptional() @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) servicioIds?: string[];
 }
 
-/** Paso 2: el código recibido por SMS. */
-export class ConfirmarVerificacionDto {
-  @IsUUID('4') verificacionId!: string;
+export class MiTelefonoConfirmarDto {
   @IsString() @Matches(/^\d{4,8}$/, { message: 'El código son solo dígitos.' }) codigo!: string;
 }
 
@@ -114,10 +128,6 @@ export class FotoEspecialistaDto {
   @MaxLength(600_000)
   @Matches(/^data:image\/(jpeg|png|webp);base64,/, { message: 'La foto debe ser JPEG, PNG o WebP.' })
   dataUrl!: string;
-}
-
-export class ReenviarVerificacionDto {
-  @IsUUID('4') verificacionId!: string;
 }
 
 export class EditarEspecialistaDto {

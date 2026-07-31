@@ -112,9 +112,13 @@ export const mensaje = pgTable(
   'mensaje',
   {
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-    negocioId: uuid('negocio_id')
-      .notNull()
-      .references(() => negocio.id, { onDelete: 'cascade' }),
+    /**
+     * NULL = correo de PLATAFORMA (Plan-Correo): la verificación del alta ocurre
+     * antes de que exista el negocio. La política RLS por tenant no matchea NULL,
+     * así que esas filas solo las ve el rol dueño (adminDb), que es quien las
+     * inserta y quien las despacha (el worker ya corre con adminDb).
+     */
+    negocioId: uuid('negocio_id').references(() => negocio.id, { onDelete: 'cascade' }),
     sucursalId: uuid('sucursal_id').references(() => sucursal.id, { onDelete: 'set null' }),
     canal: canalEnvioEnum('canal').notNull(),
     /** Canal que se quería usar, si hubo que degradar (FASE-05). */
@@ -130,6 +134,8 @@ export const mensaje = pgTable(
     /** Clave de plantilla (WhatsApp/Meta, FASE-04/05). */
     plantillaClave: text('plantilla_clave'),
     cuerpo: text('cuerpo'),
+    /** Email: versión HTML del cuerpo (Plan-Correo). `cuerpo` queda de fallback plano. */
+    cuerpoHtml: text('cuerpo_html'),
     variables: jsonb('variables').$type<Record<string, string>>(),
     asunto: text('asunto'),
     estado: estadoMensajeEnum('estado').notNull().default('pendiente'),

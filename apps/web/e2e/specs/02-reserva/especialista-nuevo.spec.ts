@@ -35,8 +35,9 @@ test.describe('Especialista nuevo es reservable (bug reportado)', () => {
     await expect(booking.especialistaEnLista(nombre)).toBeVisible({ timeout: 15_000 });
     await booking.elegirEspecialista(nombre);
     await booking.elegirDiaYPrimeraFranja(fecha);
-    // Llegar al paso de identificación (botón "Enviar código") prueba que SÍ
-    // pudo elegir una franja con el especialista nuevo.
-    await expect(page.getByRole('button', { name: 'Enviar código' })).toBeVisible({ timeout: 15_000 });
+    // Llegar al paso de identificación (campo del celular) prueba que SÍ pudo
+    // elegir una franja con el especialista nuevo. (El botón ya no dice
+    // «Enviar código»: el OTP solo se pide la primera vez.)
+    await expect(page.getByPlaceholder('311 845 2210')).toBeVisible({ timeout: 15_000 });
   });
 });

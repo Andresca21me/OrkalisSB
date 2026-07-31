@@ -7,17 +7,19 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import type { TenantContext } from '../db/tenant-context';
 import { EquipoService, type AccionBaja } from './equipo.service';
 import { Throttle } from '@nestjs/throttler';
-import { VerificacionEspecialistaService } from './verificacion-especialista.service';
+import { InvitacionEspecialistaService } from './invitacion-especialista.service';
 import {
+  ActivarInvitacionDto,
   AsignarServiciosDto,
   AsignarSucursalesDto,
-  ConfirmarVerificacionDto,
   CrearEspecialistaDto,
   DisponibilidadDto,
   EditarEspecialistaDto,
   FotoEspecialistaDto,
-  IniciarVerificacionDto,
-  ReenviarVerificacionDto,
+  InvitarEspecialistaDto,
+  InvitarExistenteDto,
+  MiTelefonoConfirmarDto,
+  MiTelefonoIniciarDto,
 } from './dto/negocio.dto';
 
 @Controller('especialistas')
@@ -25,28 +27,60 @@ import {
 export class EquipoController {
   constructor(
     private readonly equipoService: EquipoService,
-    private readonly verificacion: VerificacionEspecialistaService,
+    private readonly invitacion: InvitacionEspecialistaService,
   ) {}
 
-  // ── Alta con verificación de celular (FASE-06, D3) ──────────────────────────
-  // Throttle estricto: cada intento cuesta un SMS de Twilio Verify.
+  // ── Alta por invitación (Plan-Correo E5, D4) ────────────────────────────────
+  // El admin captura los datos básicos + correo; la contraseña y el celular los
+  // pone el propio especialista desde el enlace que recibe (7 días).
 
-  @Post('verificacion/iniciar')
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  iniciarVerificacion(@CurrentTenant() ctx: TenantContext, @Body() dto: IniciarVerificacionDto) {
-    return this.verificacion.iniciar(ctx, dto);
-  }
-
-  @Post('verificacion/confirmar')
+  @Post('invitar')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  confirmarVerificacion(@CurrentTenant() ctx: TenantContext, @Body() dto: ConfirmarVerificacionDto) {
-    return this.verificacion.confirmar(ctx, dto.verificacionId, dto.codigo);
+  invitar(@CurrentTenant() ctx: TenantContext, @Body() dto: InvitarEspecialistaDto) {
+    return this.invitacion.invitar(ctx, dto);
   }
 
-  @Post('verificacion/reenviar')
+  /** Invitaciones vigentes del negocio (badges de la pantalla de equipo). */
+  @Get('invitaciones')
+  invitaciones(@CurrentTenant() ctx: TenantContext) {
+    return this.invitacion.pendientes(ctx);
+  }
+
+  /** Invita (o re-invita con otro correo) a un especialista existente sin acceso. */
+  @Post(':id/invitar')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(204)
+  async invitarExistente(
+    @CurrentTenant() ctx: TenantContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: InvitarExistenteDto,
+  ): Promise<void> {
+    await this.invitacion.invitarExistente(ctx, id, dto.email);
+  }
+
+  @Post(':id/invitacion/reenviar')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  reenviarVerificacion(@CurrentTenant() ctx: TenantContext, @Body() dto: ReenviarVerificacionDto) {
-    return this.verificacion.reenviar(ctx, dto.verificacionId);
+  @HttpCode(204)
+  async reenviarInvitacion(@CurrentTenant() ctx: TenantContext, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.invitacion.reenviar(ctx, id);
+  }
+
+  // ── El propio especialista verifica su celular ──────────────────────────────
+  // (Paso 2 de la invitación, o después desde su panel si la mensajería estaba
+  // pausada.) Throttle estricto: cada intento cuesta un SMS de Twilio Verify.
+
+  @Post('mi/telefono/iniciar')
+  @Roles(RolUsuario.Especialista)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  miTelefonoIniciar(@CurrentTenant() ctx: TenantContext, @Body() dto: MiTelefonoIniciarDto) {
+    return this.invitacion.miTelefonoIniciar(ctx, dto.celular);
+  }
+
+  @Post('mi/telefono/confirmar')
+  @Roles(RolUsuario.Especialista)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  miTelefonoConfirmar(@CurrentTenant() ctx: TenantContext, @Body() dto: MiTelefonoConfirmarDto) {
+    return this.invitacion.miTelefonoConfirmar(ctx, dto.codigo);
   }
 
   @Get()
@@ -187,6 +221,32 @@ export class EquipoController {
   }
 }
 
+
+/**
+ * Invitación del especialista, **pública**: la abre alguien que aún no tiene
+ * cuenta (el enlace llegó a su correo). Vive en su propia clase por el mismo
+ * motivo que la foto: `RolesGuard` no consulta `@Public()` y el `@Roles(Admin)`
+ * de la clase de arriba devolvería 403.
+ */
+@Public()
+@Controller('public/invitacion')
+export class InvitacionPublicaController {
+  constructor(private readonly invitacion: InvitacionEspecialistaService) {}
+
+  /** Qué pintar en la página /invitacion: válida (nombre/negocio), usada o inválida. */
+  @Get(':token')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  info(@Param('token') token: string) {
+    return this.invitacion.info(token);
+  }
+
+  /** El especialista crea su contraseña y su cuenta queda activa. */
+  @Post(':token/activar')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  activar(@Param('token') token: string, @Body() dto: ActivarInvitacionDto) {
+    return this.invitacion.activar(token, dto.password);
+  }
+}
 
 /**
  * Foto del especialista, **pública**: el enlace de reserva no tiene sesión y es

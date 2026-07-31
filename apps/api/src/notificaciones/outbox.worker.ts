@@ -6,20 +6,22 @@ import { adminDb } from '../db/admin-client';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 import { AlertasService } from './alertas.service';
 import { CuposService, type CanalCupo } from './cupos.service';
-import { esErrorDeSaldo, MensajeriaEstadoService } from './mensajeria-estado.service';
+import { canalDePago, esErrorDeSaldo, MensajeriaEstadoService } from './mensajeria-estado.service';
 import { NOTIFICATION_ADAPTERS, type Canal, type MensajeSalida, type NotificationSender } from './notification-sender.port';
 import { RemitenteResolver } from './remitente/remitente.resolver';
 
 /** Fila reclamada del outbox (columnas en snake_case: viene de SQL crudo). */
 type FilaMensaje = {
   id: string;
-  negocio_id: string;
+  /** NULL = correo de plataforma (Plan-Correo): sin cupos ni alertas de negocio. */
+  negocio_id: string | null;
   canal: Canal;
   cupo_canal: CanalCupo;
   tipo: string;
   transaccional: boolean;
   destino: string;
   cuerpo: string | null;
+  cuerpo_html: string | null;
   plantilla_clave: string | null;
   variables: Record<string, string> | null;
   asunto: string | null;
@@ -133,7 +135,7 @@ export class OutboxWorker {
         FOR UPDATE SKIP LOCKED
       )
       RETURNING "id", "negocio_id", "canal", "cupo_canal", "tipo", "transaccional",
-                "destino", "cuerpo", "plantilla_clave", "variables", "asunto", "intento", "cita_id"
+                "destino", "cuerpo", "cuerpo_html", "plantilla_clave", "variables", "asunto", "intento", "cita_id"
     `);
     return [...filas];
   }
@@ -169,7 +171,9 @@ export class OutboxWorker {
 
       // Política de cupo (ADR-009): el marketing se DETIENE al agotarse; lo
       // transaccional (OTP, confirmaciones, recordatorios) se envía igual.
-      const cupo = await this.cupos.verificar(fila.negocio_id, fila.cupo_canal);
+      // Los correos de plataforma (negocio_id NULL, Plan-Correo) no tienen plan
+      // al que cargarles cupo: pasan de largo por toda la contabilidad.
+      const cupo = fila.negocio_id ? await this.cupos.verificar(fila.negocio_id, fila.cupo_canal) : { dentroDeCupo: true };
       if (!cupo.dentroDeCupo && !fila.transaccional) {
         // Segunda barrera: el cupo pudo agotarse entre el encolado y el envío.
         await this.marcarSinCupo(fila, `Cupo '${fila.cupo_canal}' agotado: marketing detenido.`);
@@ -186,7 +190,8 @@ export class OutboxWorker {
         return;
       }
 
-      const perfil = this.remitente.resolver(fila.negocio_id);
+      // Sin negocio, el remitente es el de plataforma con una clave fija de caché.
+      const perfil = this.remitente.resolver(fila.negocio_id ?? 'plataforma');
       const { proveedorId } = await adapter.enviar(this.aMensajeSalida(fila), perfil);
 
       await adminDb.execute(sql`
@@ -198,14 +203,16 @@ export class OutboxWorker {
       `);
       // El consumo se suma SOLO tras el envío definitivo (nunca por intento
       // fallido), con el canal de cupo real del mensaje.
-      const trasEnviar = await this.cupos.registrar(fila.negocio_id, fila.cupo_canal);
       // Saldo de PLATAFORMA (distinto del cupo del plan, que es por negocio):
       // se descuentan segmentos, que es la unidad que factura el proveedor. El
       // `MockAdapter` no cuesta nada, así que no descuenta.
       if (adapter.proveedor !== 'mock') await this.estado.registrarEnvio(segmentosDe(fila));
       this.metrics.incPor(METRICAS.mensajesEnviados, fila.canal);
       this.metrics.inc(METRICAS.notificacionesEnviadas); // compatibilidad
-      await this.alertas.avisarCupo(fila.negocio_id, trasEnviar);
+      if (fila.negocio_id) {
+        const trasEnviar = await this.cupos.registrar(fila.negocio_id, fila.cupo_canal);
+        await this.alertas.avisarCupo(fila.negocio_id, trasEnviar);
+      }
     } catch (e) {
       await this.tratarError(fila, e as Error);
     }
@@ -220,6 +227,7 @@ export class OutboxWorker {
       plantillaContentSid: fila.plantilla_clave ?? undefined,
       variables: fila.variables ?? undefined,
       asunto: fila.asunto ?? undefined,
+      html: fila.cuerpo_html ?? undefined,
     };
   }
 
@@ -228,8 +236,10 @@ export class OutboxWorker {
     const motivo = e.message ?? String(e);
     // Sin crédito no hay reintento que valga: se apaga el interruptor para que
     // el resto de la cola no siga estrellándose contra el mismo muro, y la
-    // plataforma pasa a mostrar los códigos en pantalla.
-    if (esErrorDeSaldo(e)) {
+    // plataforma pasa a mostrar los códigos en pantalla. Solo aplica a los
+    // canales que gastan el crédito Twilio: un fallo de SendGrid (email) no
+    // debe apagar los SMS de todo el mundo.
+    if (canalDePago(fila.canal) && esErrorDeSaldo(e)) {
       await this.estado.pausar(`El proveedor rechazó el envío por saldo: ${motivo}`);
       await this.marcarFallido(fila, motivo);
       return;

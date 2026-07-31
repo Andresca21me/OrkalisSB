@@ -638,7 +638,7 @@ export class EquipoService {
    * escribir sobre la ficha de un compañero con solo cambiar el id. Al deducirlo
    * de la sesión sencillamente no hay nada que manipular.
    */
-  private async miEspecialistaId(ctx: TenantContext): Promise<string> {
+  async miEspecialistaId(ctx: TenantContext): Promise<string> {
     if (!ctx.usuarioId) throw new ForbiddenException('La sesión no identifica a un usuario.');
     const [e] = await runInTenantTx(ctx, (tx) =>
       tx

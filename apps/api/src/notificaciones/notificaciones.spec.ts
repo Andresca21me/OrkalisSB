@@ -32,12 +32,18 @@ import { MensajeriaEstadoService } from './mensajeria-estado.service';
 class FallaAdapter implements NotificationSender {
   readonly proveedor = 'falso';
   intentos = 0;
-  constructor(private readonly error: Error) {}
+  /**
+   * `soloDestino` acota el CONTEO a la fila propia de la prueba: el drain de
+   * estos workers ad-hoc reclama globalmente y, con otras suites corriendo en
+   * paralelo contra la misma base, puede tragarse una fila ajena (p. ej. un
+   * correo pendiente del e2e de auth) e inflar el contador.
+   */
+  constructor(private readonly error: Error, private readonly soloDestino?: string) {}
   soporta(_canal: Canal): boolean {
     return true;
   }
-  async enviar(_m: MensajeSalida, _p: PerfilRemitente): Promise<ResultadoEnvio> {
-    this.intentos++;
+  async enviar(m: MensajeSalida, _p: PerfilRemitente): Promise<ResultadoEnvio> {
+    if (!this.soloDestino || m.to === this.soloDestino) this.intentos++;
     throw this.error;
   }
 }
@@ -312,7 +318,7 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
   });
 
   it('fallo transitorio reprograma con backoff; permanente marca fallido sin reintentar', async () => {
-    const transitorio = new FallaAdapter(Object.assign(new Error('rate limited'), { status: 429 }));
+    const transitorio = new FallaAdapter(Object.assign(new Error('rate limited'), { status: 429 }), '3001112222');
     const wTrans = new OutboxWorker([transitorio], new RemitenteResolver({ get: () => undefined } as never), cupos, alertas, new MetricsService(), estadoMensajeria);
     const [t] = await adminDb
       .insert(mensaje)
@@ -325,7 +331,7 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
     expect(mt.intento).toBe(1);
     expect(mt.proximoIntentoEn.getTime()).toBeGreaterThan(Date.now());
 
-    const permanente = new FallaAdapter(Object.assign(new Error('The To number is not valid'), { status: 400 }));
+    const permanente = new FallaAdapter(Object.assign(new Error('The To number is not valid'), { status: 400 }), 'no-valido');
     const wPerm = new OutboxWorker([permanente], new RemitenteResolver({ get: () => undefined } as never), cupos, alertas, new MetricsService(), estadoMensajeria);
     const [p] = await adminDb
       .insert(mensaje)
@@ -384,15 +390,16 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       .where(and(eq(mensaje.negocioId, negocioId), eq(mensaje.tipo, 'marketing')));
     expect(mk.estado).toBe('sin_cupo');
 
-    // Transaccional: se envía igual y queda marcado (bloqueo blando).
-    const antes = mock.enviados.length;
+    // Transaccional: se envía igual y queda marcado (bloqueo blando). El conteo
+    // se acota al destino propio: el drain puede tragarse filas de otra suite.
+    const antes = mock.enviados.filter((e) => e.to === '3001234567').length;
     await notificaciones.encolarConfirmacion(negocioId, '3001234567', {
       sucursalNombre: 'Sede',
       especialistaNombre: 'Carlos',
       inicio: new Date('2030-03-11T19:00:00Z'),
     });
     await outbox.drain();
-    expect(mock.enviados.length).toBe(antes + 1);
+    expect(mock.enviados.filter((e) => e.to === '3001234567').length).toBe(antes + 1);
     const enviado = await ultimoMensajeDe('confirmacion');
     expect(enviado.estado).toBe('enviado');
     expect(enviado.sobreCupo).toBe(true);

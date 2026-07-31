@@ -17,7 +17,7 @@ import { GNumber } from './gestion-ui';
 import { ConfigBanner, ConfigCard, ProvControl, ProvField, SettingRow, type Scope } from './config-ui';
 import { ConfigSucursales, ConfigUsuarios } from './config-org';
 import { ConfigReservas } from './config-reservas';
-import { ConfigNotif, ConfigDeveloper, ConfigMarca, RegistroMensajes } from './config-cuenta';
+import { ConfigCredenciales, ConfigNotif, ConfigDeveloper, ConfigMarca, RegistroMensajes } from './config-cuenta';
 import { SuscripcionScreen } from './SuscripcionScreen';
 import { useVocabulario, type Vocabulario } from '../../lib/vocabulario';
 
@@ -34,6 +34,7 @@ const SECCIONES = [
   { id: 'sucursales', label: 'Sucursales', icon: 'store', scoped: false },
   { id: 'reservas', label: 'Reservas', icon: 'link', scoped: false },
   { id: 'usuarios', label: 'Usuarios', icon: 'users', scoped: false },
+  { id: 'cuenta', label: 'Cuenta', icon: 'lock', scoped: false },
   { id: 'suscripcion', label: 'Suscripción', icon: 'zap', scoped: false },
   { id: 'developer', label: 'Developer', icon: 'terminal', scoped: false },
 ] as const;
@@ -44,6 +45,7 @@ const META: Record<string, { title: string; desc: string }> = {
   agenda: { title: 'Reglas de agendamiento', desc: 'Cómo se confirman, recuerdan y cancelan las citas.' },
   horario: { title: 'Horario de atención', desc: 'Define a qué hora abre y cierra cada sede, los días que no atiende y los servicios que no ofreces ciertos días. Es lo que el cliente puede reservar desde tu enlace.' },
   reservas: { title: 'Enlaces y QR de reserva', desc: 'Comparte el enlace o imprime el código QR de cada sucursal para que tus clientes reserven.' },
+  cuenta: { title: 'Tu cuenta', desc: 'El correo y la contraseña con los que TÚ entras a Orkalis. Los accesos de tu equipo se administran en Usuarios.' },
 };
 
 export function ConfigScreen() {
@@ -101,6 +103,7 @@ export function ConfigScreen() {
         {section === 'sucursales' && <ConfigSucursales sucursales={sucs.data ?? []} onChanged={() => void sucs.recargar()} />}
         {section === 'reservas' && <ConfigReservas sucursales={sucs.data ?? []} />}
         {section === 'usuarios' && <ConfigUsuarios sucursales={sucs.data ?? []} />}
+        {section === 'cuenta' && <ConfigCredenciales />}
         {section === 'suscripcion' && <SuscripcionScreen />}
         {section === 'developer' && <ConfigDeveloper />}
       </div>

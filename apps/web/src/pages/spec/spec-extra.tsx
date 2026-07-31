@@ -1,7 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { EspecialistaEquipo } from '@orkalis/shared';
+import { api, ApiError } from '../../lib/api';
 import { hora, hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { useAuth, useMiFoto } from '../../lib/auth';
-import { borrarMiFoto, subirMiFoto } from '../../lib/useEquipo';
+import { borrarMiFoto, miTelefonoConfirmar, miTelefonoIniciar, subirMiFoto } from '../../lib/useEquipo';
 import { EditorFoto } from '../../ui/EditorFoto';
 import { rangoDiaBogota, useCitas } from '../../lib/useCitas';
 import { useGanancias } from '../../lib/useEspecialista';
@@ -232,6 +234,8 @@ export function PerfilSpec({ disponible, onToggleDisp, sucursales, sucActivaId, 
             </div>
           </div>
 
+          <VerificarCelularCard />
+
           <SectionLabel>Disponibilidad</SectionLabel>
           <Card padding={16} style={{ marginBottom: 18 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -280,5 +284,88 @@ export function PerfilSpec({ disponible, onToggleDisp, sucursales, sucActivaId, 
         </Sheet>
       )}
     </div>
+  );
+}
+
+/**
+ * Verificación del celular del propio especialista (Plan-Correo E5, D5).
+ * Aparece solo mientras el celular no esté verificado — el caso típico es
+ * haber pulsado «Lo haré después» en la invitación, o que la mensajería
+ * estuviera pausada ese día. Sin celular verificado no llegan los avisos de
+ * citas nuevas/canceladas.
+ */
+function VerificarCelularCard() {
+  const { usuario } = useAuth();
+  const toast = useToast();
+  const [esp, setEsp] = useState<EspecialistaEquipo | null>(null);
+  const [paso, setPaso] = useState<'aviso' | 'celular' | 'codigo' | 'listo'>('aviso');
+  const [celular, setCelular] = useState('');
+  const [codigo, setCodigo] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+
+  useEffect(() => {
+    if (!usuario?.especialistaId) return;
+    api.get<EspecialistaEquipo[]>('/especialistas')
+      .then((eqp) => setEsp(eqp.find((e) => e.id === usuario.especialistaId) ?? null))
+      .catch(() => { /* sin datos no se muestra nada */ });
+  }, [usuario?.especialistaId]);
+
+  if (!esp || esp.telefonoVerificadoEn || paso === 'listo') return null;
+
+  async function enviar() {
+    const digitos = celular.replace(/\D/g, '').replace(/^57/, '');
+    if (!/^3\d{9}$/.test(digitos)) { toast('Celular de 10 dígitos que empiece por 3.', 'error'); return; }
+    setOcupado(true);
+    try {
+      await miTelefonoIniciar(digitos);
+      setPaso('codigo');
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) toast('La mensajería está pausada; inténtalo más tarde.', 'warning');
+      else toast((e as Error).message, 'error');
+    } finally { setOcupado(false); }
+  }
+
+  async function confirmar() {
+    if (codigo.trim().length < 4) return;
+    setOcupado(true);
+    try {
+      await miTelefonoConfirmar(codigo.trim());
+      toast('¡Celular verificado! Ya te llegarán los avisos de tu agenda.', 'success');
+      setPaso('listo');
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally { setOcupado(false); }
+  }
+
+  return (
+    <Card padding={16} style={{ marginBottom: 18, border: '1px solid rgba(180,83,9,0.3)', background: 'var(--warning-tint)' }}>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <Icon name="smartphone" size={18} color="#B45309" style={{ flex: 'none', marginTop: 2 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>Verifica tu celular</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 2 }}>
+            Sin él no podemos avisarte cuando te agenden, cancelen o muevan una cita.
+          </div>
+
+          {paso === 'aviso' && (
+            <Button size="sm" variant="secondary" style={{ marginTop: 10 }} onClick={() => setPaso('celular')}>Verificar ahora</Button>
+          )}
+          {paso === 'celular' && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <input value={celular} onChange={(e) => setCelular(e.target.value)} placeholder="300 123 4567" inputMode="tel"
+                style={{ flex: 1, minWidth: 150, height: 36, padding: '0 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }} />
+              <Button size="sm" loading={ocupado} onClick={() => void enviar()}>Enviar código</Button>
+            </div>
+          )}
+          {paso === 'codigo' && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <input value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="Código SMS" inputMode="numeric"
+                style={{ flex: 1, minWidth: 120, height: 36, padding: '0 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', letterSpacing: '0.15em', color: 'var(--text-primary)' }} />
+              <Button size="sm" loading={ocupado} disabled={codigo.trim().length < 4} onClick={() => void confirmar()}>Confirmar</Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

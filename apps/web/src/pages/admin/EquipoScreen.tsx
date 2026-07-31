@@ -11,18 +11,21 @@ import {
   asignarSucursales,
   borrarFotoEspecialista,
   subirFotoEspecialista,
-  confirmarVerificacion,
   citasFuturasEspecialista,
   darDeBajaEspecialista,
   editarEspecialista,
-  iniciarVerificacion,
+  invitacionesPendientes,
+  invitarEspecialista,
+  invitarExistente,
   previewLiquidacion,
-  reenviarCodigo,
+  reenviarInvitacion,
   useEquipo,
+  type InvitacionPendiente,
 } from '../../lib/useEquipo';
 import { PageHead } from '../../ui/Shell';
 import {
   Avatar,
+  Badge,
   Button,
   Card,
   Dialog,
@@ -58,6 +61,11 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editSp, setEditSp] = useState<EspecialistaEquipo | null>(null);
   const [delSp, setDelSp] = useState<EspecialistaEquipo | null>(null);
+  // Invitar al panel a un especialista que ya existe sin acceso (Plan-Correo E5).
+  const [invitarSp, setInvitarSp] = useState<EspecialistaEquipo | null>(null);
+  // Invitaciones vigentes → badge "Invitación enviada" y botón de reenvío.
+  const invitaciones = useApi<InvitacionPendiente[]>(invitacionesPendientes);
+  const invPorEsp = useMemo(() => new Map((invitaciones.data ?? []).map((i) => [i.especialistaId, i])), [invitaciones.data]);
   // Cuando la baja choca con citas futuras, el servidor las cuenta y aquí se
   // decide qué hacer con ellas antes de reintentar.
   const [conflicto, setConflicto] = useState<{ esp: EspecialistaEquipo; citas: CitasFuturasResp } | null>(null);
@@ -104,6 +112,14 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
       }
       toast((err as Error).message, 'error');
     }
+  }
+
+  async function reenviar(e: EspecialistaEquipo) {
+    try {
+      await reenviarInvitacion(e.id);
+      toast(`Invitación reenviada a ${invPorEsp.get(e.id)?.email ?? 'su correo'}`, 'success');
+      await invitaciones.recargar();
+    } catch (err) { toast((err as Error).message, 'error'); }
   }
 
   async function resolverBaja(accion: 'reasignar' | 'cancelar') {
@@ -178,12 +194,30 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           {lista.map((e) => (
-            <SpecialistCard key={e.id} s={e} sucNombre={sucNombre} servNombre={servNombre} onToggle={() => toggleDisponible(e)} onEdit={() => { setEditSp(e); setFormOpen(true); }} onDelete={() => setDelSp(e)} />
+            <SpecialistCard
+              key={e.id}
+              s={e}
+              sucNombre={sucNombre}
+              servNombre={servNombre}
+              invitacion={invPorEsp.get(e.id) ?? null}
+              onToggle={() => toggleDisponible(e)}
+              onEdit={() => { setEditSp(e); setFormOpen(true); }}
+              onDelete={() => setDelSp(e)}
+              onReenviar={() => void reenviar(e)}
+              onInvitar={() => setInvitarSp(e)}
+            />
           ))}
         </div>
       )}
 
-      {formOpen && <SpecialistModal especialista={editSp} sucursales={sucs.data ?? []} servicios={serviciosActivos} onClose={() => { setFormOpen(false); setEditSp(null); }} onSaved={async () => { setFormOpen(false); setEditSp(null); await recargar(); }} />}
+      {formOpen && <SpecialistModal especialista={editSp} sucursales={sucs.data ?? []} servicios={serviciosActivos} onClose={() => { setFormOpen(false); setEditSp(null); }} onSaved={async () => { setFormOpen(false); setEditSp(null); await recargar(); await invitaciones.recargar(); }} />}
+      {invitarSp && (
+        <InvitarExistenteDialog
+          especialista={invitarSp}
+          onClose={() => setInvitarSp(null)}
+          onSent={async () => { setInvitarSp(null); await invitaciones.recargar(); }}
+        />
+      )}
       <GConfirm open={!!delSp} title="Dar de baja al especialista" danger confirmLabel="Dar de baja" confirmIcon="user-x"
         desc={delSp ? <span><strong style={{ color: 'var(--text-primary)' }}>{delSp.nombre}</strong> dejará de aparecer en el equipo, pero su historial de servicios y liquidaciones se conserva (borrado lógico).</span> : ''}
         onClose={() => setDelSp(null)} onConfirm={() => delSp && eliminar(delSp)} />
@@ -248,12 +282,19 @@ function Chip({ icon, children, tone }: { icon: string; children: React.ReactNod
   );
 }
 
-function SpecialistCard({ s, sucNombre, servNombre, onToggle, onEdit, onDelete }: { s: EspecialistaEquipo; sucNombre: Map<string, string>; servNombre: Map<string, string>; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
+function SpecialistCard({ s, sucNombre, servNombre, invitacion, onToggle, onEdit, onDelete, onReenviar, onInvitar }: { s: EspecialistaEquipo; sucNombre: Map<string, string>; servNombre: Map<string, string>; invitacion: InvitacionPendiente | null; onToggle: () => void; onEdit: () => void; onDelete: () => void; onReenviar: () => void; onInvitar: () => void }) {
   // Sin servicios declarados realiza todos: se dice en claro para que el admin no
   // lo lea como "no tiene ninguno asignado".
   const todos = s.servicioIds.length === 0;
   const visibles = s.servicioIds.slice(0, 3);
   const resto = s.servicioIds.length - visibles.length;
+  // Estado del acceso (Plan-Correo E5): con cuenta, con invitación en el aire o
+  // sin nada (los creados solo con nombre desde el asistente de alta).
+  const acceso = s.usuarioId
+    ? ({ tone: 'success', icon: 'check-circle', label: s.telefonoVerificadoEn ? 'Con acceso' : 'Con acceso · celular sin verificar' } as const)
+    : invitacion
+      ? ({ tone: 'info', icon: 'mail', label: 'Invitación enviada' } as const)
+      : ({ tone: 'neutral', icon: 'user-x', label: 'Sin acceso al panel' } as const);
   return (
     <Card padding={0} testId={`esp-row-${s.id}`} style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '16px 16px 0', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -265,9 +306,20 @@ function SpecialistCard({ s, sucNombre, servNombre, onToggle, onEdit, onDelete }
         <RowMenu items={[
           { icon: 'edit', label: 'Editar', onClick: onEdit },
           { icon: 'scissors', label: 'Asignar servicios', onClick: onEdit },
+          ...(!s.usuarioId && invitacion ? [{ icon: 'mail', label: 'Reenviar invitación', onClick: onReenviar }] : []),
+          ...(!s.usuarioId && !invitacion ? [{ icon: 'mail', label: 'Invitar al panel', onClick: onInvitar }] : []),
           { divider: true },
           { icon: 'trash-2', label: 'Eliminar', danger: true, onClick: onDelete },
         ]} />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 16px 0' }} title={invitacion ? `Enviada a ${invitacion.email}` : undefined}>
+        <Badge tone={acceso.tone} dot>{acceso.label}</Badge>
+        {invitacion && !s.usuarioId && (
+          <button type="button" onClick={onReenviar} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--brand)' }}>
+            Reenviar
+          </button>
+        )}
       </div>
 
       {s.sucursalIds.length > 0 && (
@@ -304,16 +356,9 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
   const toast = useToast();
   const [nombre, setNombre] = useState(especialista?.nombre ?? '');
   const [apellidos, setApellidos] = useState('');
-  const [celular, setCelular] = useState('');
   const [especialidad, setEspecialidad] = useState(especialista?.especialidad ?? '');
-  // Alta en dos pasos (FASE-06): al crear hay que verificar el celular.
-  const [verificacionId, setVerificacionId] = useState<string | null>(null);
-  // Con la mensajería sin envíos, el servidor devuelve el código para enseñarlo
-  // aquí: no hay SMS que esperar y sin esto el alta se quedaría a medias.
-  const [codigoVisible, setCodigoVisible] = useState<string | null>(null);
-  const [codigo, setCodigo] = useState('');
   // Vista previa en base64. Se sube DESPUÉS de que el especialista exista: al
-  // crear no hay id todavía (el alta pasa por la verificación del celular).
+  // crear no hay id todavía hasta que responda el alta.
   const [foto, setFoto] = useState<string | null>(null);
   const [fotoQuitada, setFotoQuitada] = useState(false);
   // Foto recién elegida, a la espera de encuadre en el editor.
@@ -326,24 +371,17 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
   const [selServ, setSelServ] = useState<string[]>(especialista?.servicioIds ?? []);
   const [notas, setNotas] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [touched, setTouched] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Acceso al panel (opcional): si se llena, crea/enlaza el login del especialista.
+  // Correo de la invitación (Plan-Correo E5): obligatorio en el alta. La
+  // contraseña y el celular los pone el propio especialista desde el enlace.
   const emailValid = /.+@.+\..+/.test(email.trim());
-  const quiereLogin = email.trim() !== '' || password !== '';
-  const loginOk = emailValid && password.length >= 8;
-
-  // Móvil colombiano: 10 dígitos empezando por 3 (se acepta con o sin +57).
-  const celularDigitos = celular.replace(/\D/g, '').replace(/^57/, '');
-  const celularOk = /^3\d{9}$/.test(celularDigitos);
-  const celularErr = touched && !especialista && !celularOk ? 'Celular de 10 dígitos que empiece por 3' : undefined;
 
   const nombreErr = touched && nombre.trim().length < 2 ? 'Escribe un nombre' : undefined;
   const sucErr = touched && sel.length === 0 ? 'Asigna al menos una sucursal' : undefined;
-  const loginErr = touched && quiereLogin && !loginOk ? 'Correo válido y contraseña de 8+ caracteres' : undefined;
-  const valid = nombre.trim().length >= 2 && sel.length > 0 && (!quiereLogin || loginOk) && (Boolean(especialista) || celularOk);
+  const emailErr = touched && !especialista && !emailValid ? 'Escribe un correo válido' : undefined;
+  const valid = nombre.trim().length >= 2 && sel.length > 0 && (Boolean(especialista) || emailValid);
 
   /**
    * Aplica el cambio de foto tras existir el especialista. Un fallo aquí NO
@@ -383,23 +421,19 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
         await guardarFoto(especialista.id);
         toast('Especialista actualizado', 'success');
       } else {
-        // Alta nueva: no se crea nada todavía; se envía el código al celular.
-        const { verificacionId: vid, codigoVisible: visible } = await iniciarVerificacion({
+        // Alta nueva (Plan-Correo E5): el especialista se crea YA y recibe la
+        // invitación en su correo; contraseña y celular los pone él.
+        const creado = await invitarEspecialista({
           nombre: nombre.trim(),
           apellidos: apellidos.trim() || undefined,
-          celular: celularDigitos,
           especialidad: especialidad.trim() || undefined,
+          email: email.trim(),
           sucursalIds: sel,
           servicioIds: selServ,
-          ...(quiereLogin ? { email: email.trim(), password } : {}),
+          disponible,
         });
-        setVerificacionId(vid);
-        setCodigoVisible(visible ?? null);
-        toast(
-          visible ? 'La mensajería está pausada: el código se muestra en pantalla' : 'Te enviamos un código al celular del especialista',
-          visible ? 'info' : 'success',
-        );
-        return; // el modal pasa al paso 2
+        await guardarFoto(creado.id);
+        toast(`Invitación enviada a ${email.trim()}`, 'success');
       }
       onSaved();
     } catch (err) {
@@ -409,78 +443,11 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
     }
   }
 
-  async function verificar() {
-    if (!verificacionId || codigo.trim().length < 4) return;
-    setGuardando(true);
-    try {
-      const creado = await confirmarVerificacion(verificacionId, codigo.trim());
-      if (!disponible) await editarEspecialista(creado.id, { disponible: false });
-      await guardarFoto(creado.id);
-      toast(quiereLogin ? 'Especialista creado con acceso al panel' : 'Especialista creado', 'success');
-      onSaved();
-    } catch (err) {
-      toast((err as Error).message, 'error');
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  async function reenviar() {
-    if (!verificacionId) return;
-    try {
-      const { codigoVisible: visible } = await reenviarCodigo(verificacionId);
-      setCodigoVisible(visible ?? null);
-      toast('Código reenviado', 'success');
-    } catch (err) {
-      toast((err as Error).message, 'error');
-    }
-  }
-
-  // ── Paso 2: código de verificación ────────────────────────────────────────
-  if (verificacionId) {
-    return (
-      <Dialog open onClose={onClose} width={460} title="Verifica el celular"
-        subtitle={codigoVisible
-          ? 'La mensajería está pausada, así que no se envió ningún SMS. Usa el código de abajo para terminar el alta.'
-          : `Enviamos un código de 6 dígitos al ${celularDigitos}. El especialista se crea al confirmarlo.`}
-        footer={<>
-          <Button variant="ghost" onClick={() => setVerificacionId(null)}>Volver</Button>
-          <Button variant="primary" loading={guardando} disabled={codigo.trim().length < 4} onClick={verificar}>Verificar y crear</Button>
-        </>}>
-        <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {codigoVisible && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--info-tint)' }}>
-              <Icon name="info" size={16} color="var(--info)" />
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
-                Código:{' '}
-                <strong className="data" style={{ fontSize: 'var(--text-md)', letterSpacing: '0.15em', color: 'var(--text-primary)' }}>{codigoVisible}</strong>
-              </span>
-            </div>
-          )}
-          <GField label="Código recibido">
-            <Input
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 8))}
-              placeholder="123456"
-              inputMode="numeric"
-              autoFocus
-              style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-lg)', letterSpacing: '0.25em', textAlign: 'center' }}
-            />
-          </GField>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>El código vence en 10 minutos.</span>
-            <Button variant="ghost" size="md" onClick={reenviar}>Reenviar código</Button>
-          </div>
-        </div>
-      </Dialog>
-    );
-  }
-
   return (
-    <Dialog open onClose={onClose} width={580} title={especialista ? 'Editar especialista' : 'Nuevo especialista'} subtitle={especialista ? especialista.nombre : 'Registra a un miembro del equipo y asígnalo a una o varias sucursales.'}
+    <Dialog open onClose={onClose} width={580} title={especialista ? 'Editar especialista' : 'Nuevo especialista'} subtitle={especialista ? especialista.nombre : 'Registra los datos básicos: el especialista recibirá una invitación por correo para crear su contraseña y confirmar su celular.'}
       footer={<>
         <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-        <Button variant="primary" loading={guardando} onClick={guardar}>{especialista ? 'Guardar cambios' : 'Enviar código'}</Button>
+        <Button variant="primary" loading={guardando} onClick={guardar}>{especialista ? 'Guardar cambios' : 'Crear y enviar invitación'}</Button>
       </>}>
       <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
@@ -511,8 +478,8 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
           <GField label="Nombre" error={nombreErr}><Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Andrés" /></GField>
           <GField label="Apellidos" optional><Input value={apellidos} onChange={(e) => setApellidos(e.target.value)} placeholder="Ej.: Mejía" /></GField>
           {!especialista && (
-            <GField label="Celular" span={2} error={celularErr} hint="Recibirá un código para confirmar el número; sin él no podremos avisarle de sus citas.">
-              <Input value={celular} onChange={(e) => setCelular(e.target.value)} placeholder="300 123 4567" inputMode="tel" />
+            <GField label="Correo" span={2} error={emailErr} hint="A este correo le llega la invitación: con ella crea su contraseña y confirma su celular por SMS.">
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nombre@negocio.co" />
             </GField>
           )}
           <GField label="Especialidad" optional span={2}><Input value={especialidad} onChange={(e) => setEspecialidad(e.target.value)} placeholder="Ej.: Barbero senior" /></GField>
@@ -569,16 +536,10 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
         </label>
 
         {!especialista && (
-          <div style={{ display: 'grid', gap: 12, padding: 14, borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>
-              Acceso al panel <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>· opcional</span>
-            </div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginTop: -4, lineHeight: 1.5 }}>
-              Si das correo y contraseña, el especialista podrá <strong>iniciar sesión en su panel</strong> (su agenda y ganancias). Su recurso de agenda y su cuenta quedan enlazados. Puedes dejarlo en blanco y agregar el acceso más adelante.
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
-              <GField label="Correo" optional error={loginErr}><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nombre@negocio.co" /></GField>
-              <GField label="Contraseña" optional hint="Mínimo 8 caracteres."><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></GField>
+          <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--info-tint)', border: '1px solid var(--border-subtle)' }}>
+            <Icon name="mail" size={16} color="var(--info)" style={{ flex: 'none', marginTop: 2 }} />
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              Tú ya no defines su contraseña ni su celular: la invitación (vence en <strong>7 días</strong>) lleva al especialista a <strong>crear su contraseña</strong> y a <strong>confirmar su celular</strong> con un código SMS. Mientras no la active, aparecerá como «Invitación enviada».
             </div>
           </div>
         )}
@@ -698,4 +659,46 @@ function periodosMes(): { key: string; label: string; desde: string; hasta: stri
     out.push({ key, label: fmt.format(ref), desde, hasta });
   }
   return out;
+}
+
+/**
+ * Invitar al panel a un especialista que ya existe sin acceso — el caso típico
+ * son los creados solo con el nombre desde el asistente de alta del negocio.
+ */
+function InvitarExistenteDialog({ especialista, onClose, onSent }: { especialista: EspecialistaEquipo; onClose: () => void; onSent: () => void }) {
+  const toast = useToast();
+  const [email, setEmail] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const emailValid = /.+@.+\..+/.test(email.trim());
+  const err = touched && !emailValid ? 'Escribe un correo válido' : undefined;
+
+  async function enviar() {
+    setTouched(true);
+    if (!emailValid || enviando) return;
+    setEnviando(true);
+    try {
+      await invitarExistente(especialista.id, email.trim());
+      toast(`Invitación enviada a ${email.trim()}`, 'success');
+      onSent();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose} width={460} title="Invitar al panel" subtitle={`${especialista.nombre} recibirá un enlace (7 días) para crear su contraseña y confirmar su celular.`}
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+        <Button variant="primary" loading={enviando} onClick={() => void enviar()}>Enviar invitación</Button>
+      </>}>
+      <div style={{ padding: '8px 0 18px' }}>
+        <GField label="Correo del especialista" error={err}>
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nombre@negocio.co" autoFocus />
+        </GField>
+      </div>
+    </Dialog>
+  );
 }

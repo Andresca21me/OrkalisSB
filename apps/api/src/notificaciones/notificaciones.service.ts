@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { adminDb } from '../db/admin-client';
 import { runInTenantTx } from '../db/tx';
 import { mensaje } from '../db/schema';
 import { JobQueue } from './job-queue';
@@ -12,7 +13,19 @@ import { valoresDe } from './plantillas.render';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 
 /** Tipos de mensaje que emite el dominio (crece por fase). */
-export type TipoMensaje = 'otp' | 'confirmacion' | 'recordatorio' | 'aviso' | 'aviso_especialista' | 'marketing' | 'alerta';
+export type TipoMensaje =
+  | 'otp'
+  | 'confirmacion'
+  | 'recordatorio'
+  | 'aviso'
+  | 'aviso_especialista'
+  | 'marketing'
+  | 'alerta'
+  // Correos de acceso/credenciales (Plan-Correo):
+  | 'alta_email'
+  | 'reset_password'
+  | 'cambio_email'
+  | 'invitacion';
 
 /** Datos comunes de trazabilidad de un mensaje encolado. */
 interface Contexto {
@@ -110,6 +123,43 @@ export class NotificacionesService implements OnModuleInit {
       asunto,
       cuerpo,
     });
+  }
+
+  /**
+   * Correo de acceso/credenciales (Plan-Correo): verificación del alta, reset de
+   * contraseña, cambio de correo, invitación de especialista.
+   *
+   * Difiere del resto de `encolar*` en dos cosas deliberadas:
+   * 1. **Puede no tener negocio** (`negocioId` null): la verificación del alta
+   *    ocurre antes de que el negocio exista. Por eso inserta con `adminDb`.
+   * 2. **SÍ lanza si no puede encolar**: aquí el correo ES la operación (sin él
+   *    el usuario queda esperando un enlace que nunca saldrá), así que el
+   *    endpoint debe enterarse y responder error, no seguir como si nada.
+   *
+   * No carga cupo del plan al negocio: es correo de plataforma, no mensajería
+   * del negocio (el worker además salta la contabilidad si `negocio_id` es null;
+   * con negocio, el tipo transaccional nunca se bloquea por cupo).
+   */
+  async encolarEmailAcceso(opts: {
+    negocioId?: string | null;
+    email: string;
+    asunto: string;
+    cuerpo: string;
+    html?: string;
+    tipo: Extract<TipoMensaje, 'alta_email' | 'reset_password' | 'cambio_email' | 'invitacion' | 'alerta'>;
+  }): Promise<void> {
+    await adminDb.insert(mensaje).values({
+      negocioId: opts.negocioId ?? null,
+      canal: 'email',
+      cupoCanal: 'email',
+      tipo: opts.tipo,
+      transaccional: true,
+      destino: opts.email,
+      asunto: opts.asunto,
+      cuerpo: opts.cuerpo,
+      cuerpoHtml: opts.html ?? null,
+    });
+    this.metrics.incPor(METRICAS.mensajesEncolados, 'email');
   }
 
   encolarExportacion(payload: Record<string, unknown>): void {

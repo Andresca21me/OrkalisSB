@@ -5,6 +5,7 @@ import {
   IsIn,
   IsInt,
   IsString,
+  IsUUID,
   Min,
   MinLength,
   ValidateNested,
@@ -50,4 +51,12 @@ export class RegistroDto {
 
   @IsIn(['prueba', 'pago'], { message: 'Modo inválido (prueba | pago).' })
   modo!: 'prueba' | 'pago';
+
+  /**
+   * Verificación de correo completada en el Paso 2 (Plan-Correo E2). El
+   * servidor exige que el enlace se haya abierto y que el email coincida con
+   * `admin.email` — la regla vive aquí, no solo en la UI del wizard.
+   */
+  @IsUUID('4', { message: 'Verificación de correo inválida.' })
+  verificacionId!: string;
 }

@@ -111,6 +111,12 @@ export const usuario = pgTable(
     email: text('email').notNull(),
     passwordHash: text('password_hash').notNull(),
     rol: rolUsuarioEnum('rol').notNull(),
+    /**
+     * Cuándo se probó que el dueño de la cuenta controla este email (Plan-Correo).
+     * NULL en cuentas anteriores al plan: siguen operando, solo pierden el badge
+     * "verificado" hasta que pasen por un flujo que lo estampe (reset, cambio…).
+     */
+    emailVerificadoEn: timestamp('email_verificado_en', { withTimezone: true }),
     activo: boolean('activo').notNull().default(true),
     creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
     actualizadoEn: timestamp('actualizado_en', { withTimezone: true }),

@@ -48,9 +48,15 @@ export const envSchema = z.object({
   TWILIO_WA_TPL_AVISO_ESPECIALISTA: z.string().optional(),
   TWILIO_WA_TPL_MARKETING: z.string().optional(),
 
-  // Email (FASE-11) — SendGrid (opcional).
+  // Email (FASE-11 / Plan-Correo) — SendGrid (opcional).
   SENDGRID_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  // Alias de MAIL_FROM: es el nombre que ya vive en Railway (Plan-Correo D6).
+  FROM_EMAIL: z.string().optional(),
+  // Base pública del frontend para los enlaces de los correos (verificación,
+  // restablecer contraseña, invitación). Sin ella se usa el primer origen de
+  // CORS_ORIGIN, que en dev apunta al Vite local.
+  APP_URL: z.string().optional(),
 
   // Pasarela de suscripción — Mercado Pago (Plan-Pagos FASE-02). Opcionales:
   // sin ellas el cliente opera en modo INACTIVO (no cobra, no llama a la API).
@@ -58,7 +64,10 @@ export const envSchema = z.object({
   MP_ACCESS_TOKEN: z.string().optional(), // credencial privada del backend
   MP_WEBHOOK_SECRET: z.string().optional(), // clave secreta para verificar x-signature
   MP_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
-});
+})
+  // MAIL_FROM y FROM_EMAIL son la misma cosa con dos nombres (el segundo es el
+  // que quedó configurado en Railway): el resto del código lee solo MAIL_FROM.
+  .transform((env) => ({ ...env, MAIL_FROM: env.MAIL_FROM ?? env.FROM_EMAIL }));
 
 export type Env = z.infer<typeof envSchema>;
 

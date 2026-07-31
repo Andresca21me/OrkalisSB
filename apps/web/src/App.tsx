@@ -22,6 +22,9 @@ const OnboardingApp = lazy(() => import('./pages/onboarding/OnboardingApp').then
 const SiteApp = lazy(() => import('./pages/site/SiteApp').then((m) => ({ default: m.SiteApp })));
 const UiCatalog = lazy(() => import('./pages/_ui/UiCatalog').then((m) => ({ default: m.UiCatalog })));
 const RecuperarAcceso = lazy(() => import('./pages/RecuperarAcceso').then((m) => ({ default: m.RecuperarAcceso })));
+const VerificarCorreoPage = lazy(() => import('./pages/public/VerificarCorreoPage').then((m) => ({ default: m.VerificarCorreoPage })));
+const RestablecerPage = lazy(() => import('./pages/public/RestablecerPage').then((m) => ({ default: m.RestablecerPage })));
+const InvitacionPage = lazy(() => import('./pages/public/InvitacionPage').then((m) => ({ default: m.InvitacionPage })));
 
 function Pantalla({ children }: { children: ReactNode }) {
   return (
@@ -69,6 +72,12 @@ export function App() {
 
         {/* Enlace público de reservas — sin sesión. */}
         <Route path="/reservar/:sucursalId" element={<BookingPage />} />
+
+        {/* Enlaces que llegan por correo (Plan-Correo): funcionan con o sin
+            sesión — pueden abrirse en otro dispositivo. */}
+        <Route path="/verificar-correo" element={<VerificarCorreoPage />} />
+        <Route path="/restablecer" element={<RestablecerPage />} />
+        <Route path="/invitacion" element={<InvitacionPage />} />
 
         <Route
           path="/login"

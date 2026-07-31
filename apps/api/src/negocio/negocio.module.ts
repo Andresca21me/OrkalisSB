@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { NotificacionesModule } from '../notificaciones/notificaciones.module';
+import { CorreoModule } from '../correo/correo.module';
 import { LogoNegocioController, MarcaController, NegocioController } from './negocio.controller';
 import { MarcaService, NegocioService } from './negocio.service';
 import { SucursalController } from './sucursal.controller';
 import { SucursalService } from './sucursal.service';
-import { EquipoController, EspecialistaFotoController } from './equipo.controller';
+import { EquipoController, EspecialistaFotoController, InvitacionPublicaController } from './equipo.controller';
 import { EquipoService } from './equipo.service';
-import { VerificacionEspecialistaService } from './verificacion-especialista.service';
+import { InvitacionEspecialistaService } from './invitacion-especialista.service';
 import { SuscripcionController } from './suscripcion.controller';
 import { SuscripcionService } from './suscripcion.service';
 import { UsuariosController } from './usuarios.controller';
@@ -17,10 +18,11 @@ import { UsuariosService } from './usuarios.service';
  * PlanModule (global) y del módulo de configurabilidad (global).
  */
 @Module({
-  // El alta verificada (FASE-06) usa el puerto Verify y el RemitenteResolver.
-  imports: [NotificacionesModule],
-  controllers: [NegocioController, MarcaController, LogoNegocioController, SucursalController, EquipoController, EspecialistaFotoController, SuscripcionController, UsuariosController],
-  providers: [NegocioService, MarcaService, SucursalService, EquipoService, VerificacionEspecialistaService, SuscripcionService, UsuariosService],
+  // La invitación de especialistas (Plan-Correo E5) usa el CorreoModule para el
+  // enlace de activación y el puerto Verify para el celular del especialista.
+  imports: [NotificacionesModule, CorreoModule],
+  controllers: [NegocioController, MarcaController, LogoNegocioController, SucursalController, EquipoController, EspecialistaFotoController, InvitacionPublicaController, SuscripcionController, UsuariosController],
+  providers: [NegocioService, MarcaService, SucursalService, EquipoService, InvitacionEspecialistaService, SuscripcionService, UsuariosService],
   exports: [SuscripcionService, MarcaService],
 })
 export class NegocioModule {}

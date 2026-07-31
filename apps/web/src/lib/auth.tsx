@@ -13,6 +13,8 @@ export interface RegistroPayload {
   numEspecialistas: number;
   admin: { nombre: string; email: string; password: string };
   modo: 'prueba' | 'pago';
+  /** Verificación de correo completada en el Paso 2 (Plan-Correo E2). */
+  verificacionId: string;
 }
 
 /** Opciones del alta. */

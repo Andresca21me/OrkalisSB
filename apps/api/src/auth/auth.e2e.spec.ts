@@ -1,14 +1,15 @@
 import { config as loadEnv } from 'dotenv';
 loadEnv();
 
+import { randomUUID } from 'node:crypto';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { eq, like } from 'drizzle-orm';
+import { and, desc, eq, like } from 'drizzle-orm';
 import request from 'supertest';
 import { AppModule } from '../app.module';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { negocio, suscripcion } from '../db/schema';
+import { mensaje, negocio, suscripcion, tokenAccion, usuario } from '../db/schema';
 
 /**
  * E2E del flujo de autenticación (FASE-05). Requiere el seed aplicado
@@ -30,14 +31,68 @@ describe('Auth (e2e)', () => {
   });
 
   afterAll(async () => {
-    // Limpia los negocios creados por las pruebas de registro (cascada).
+    // Limpia los negocios creados por las pruebas de registro (cascada). Los
+    // correos del alta y sus tokens NO caen en la cascada (negocio_id NULL):
+    // se barren aparte para no dejar filas `pendiente` que el worker de otra
+    // suite reclamaría (rompería sus conteos).
     await adminDb.delete(negocio).where(like(negocio.nombre, `${REG}%`));
+    await adminDb.delete(mensaje).where(like(mensaje.destino, '%@e2e.test'));
+    await adminDb.delete(tokenAccion).where(like(tokenAccion.email, '%@e2e.test'));
     await app.close();
     await adminClient.end();
     await client.end();
   });
 
+  /**
+   * Extrae el token del enlace del último correo encolado a ese destino y marca
+   * la fila como enviada: así el outbox de OTRA suite corriendo en paralelo no
+   * la reclama y le descuadra los conteos de su mock.
+   */
+  async function tokenDeCorreoEncolado(destino: string): Promise<string> {
+    const [m] = await adminDb
+      .select({ id: mensaje.id, cuerpo: mensaje.cuerpo })
+      .from(mensaje)
+      .where(eq(mensaje.destino, destino))
+      .orderBy(desc(mensaje.creadoEn))
+      .limit(1);
+    const match = /token=([A-Za-z0-9_-]+)/.exec(m?.cuerpo ?? '');
+    expect(match).not.toBeNull();
+    // Se marcan TODOS los correos de prueba (no solo este): cualquier fila
+    // `pendiente` nuestra que reclame el worker de otra suite le descuadra los
+    // conteos de su mock.
+    await adminDb
+      .update(mensaje)
+      .set({ estado: 'enviado' })
+      .where(and(like(mensaje.destino, '%@e2e.test'), eq(mensaje.estado, 'pendiente')));
+    return match![1];
+  }
+
   const http = () => request(app.getHttpServer());
+
+  /**
+   * Verificación de correo ya completada, insertada directo en BD (Plan-Correo
+   * E2). Evita gastar el throttle del endpoint público en cada registro de
+   * estas pruebas; la cadena completa por HTTP se prueba en su propio describe.
+   */
+  async function verificacionUsada(email: string): Promise<string> {
+    const [v] = await adminDb
+      .insert(tokenAccion)
+      .values({
+        tipo: 'alta_email',
+        tokenHash: randomUUID(),
+        email: email.toLowerCase().trim(),
+        usadoEn: new Date(),
+        expiraEn: new Date(Date.now() + 60 * 60 * 1000),
+      })
+      .returning({ id: tokenAccion.id });
+    return v.id;
+  }
+
+  /** POST /auth/registro con su verificación de correo ya resuelta. */
+  async function registrar(datos: { admin: { email: string; [k: string]: unknown } } & Record<string, unknown>) {
+    const verificacionId = await verificacionUsada(datos.admin.email);
+    return http().post('/api/auth/registro').send({ ...datos, verificacionId });
+  }
 
   it('login con credenciales válidas devuelve access + refresh', async () => {
     const res = await http().post('/api/auth/login').send({ email: EMAIL, password: PASSWORD });
@@ -109,7 +164,7 @@ describe('Auth (e2e)', () => {
     });
 
     it('modo prueba crea el tenant, inicia sesión y arranca en prueba', async () => {
-      const res = await http().post('/api/auth/registro').send(base());
+      const res = await registrar(base());
       expect(res.status).toBe(201);
       expect(res.body.accessToken).toEqual(expect.any(String));
       expect(res.body.requierePago).toBe(false);
@@ -127,33 +182,255 @@ describe('Auth (e2e)', () => {
     });
 
     it('modo pago marca requierePago = true (irá al checkout)', async () => {
-      const res = await http()
-        .post('/api/auth/registro')
-        .send(base({ negocioNombre: `${REG} Pago`, modo: 'pago' }));
+      const res = await registrar(base({ negocioNombre: `${REG} Pago`, modo: 'pago' }));
       expect(res.status).toBe(201);
       expect(res.body.requierePago).toBe(true);
     });
 
     it('email duplicado → 409', async () => {
       const datos = base({ negocioNombre: `${REG} Dup` });
-      const r1 = await http().post('/api/auth/registro').send(datos);
+      const r1 = await registrar(datos);
       expect(r1.status).toBe(201);
-      const r2 = await http().post('/api/auth/registro').send(datos); // mismo email
+      const r2 = await registrar(datos); // mismo email
       expect(r2.status).toBe(409);
     });
 
     it('numEspecialistas por debajo de los incluidos → 400', async () => {
-      const res = await http()
-        .post('/api/auth/registro')
-        .send(base({ negocioNombre: `${REG} Min`, plan: 'pro', numEspecialistas: 1 }));
+      const res = await registrar(base({ negocioNombre: `${REG} Min`, plan: 'pro', numEspecialistas: 1 }));
       expect(res.status).toBe(400);
     });
 
     it('contraseña corta (< 8) → 400 de validación', async () => {
-      const res = await http()
-        .post('/api/auth/registro')
-        .send(base({ negocioNombre: `${REG} Pass`, admin: { nombre: 'X', email: `x.${Date.now()}@e2e.test`, password: 'corta' } }));
+      const res = await registrar(base({ negocioNombre: `${REG} Pass`, admin: { nombre: 'X', email: `x.${Date.now()}@e2e.test`, password: 'corta' } }));
       expect(res.status).toBe(400);
+    });
+  });
+
+  // ── Verificación de correo en el alta (Plan-Correo E2) ──────────────────────
+  describe('Verificación de correo del alta (Paso 2 → 3)', () => {
+    const emailDe = (tag: string) => `${tag}.${Date.now()}@e2e.test`;
+
+    it('la cadena completa: iniciar → correo encolado → clic → polling verificado → registro', async () => {
+      const email = emailDe('cadena');
+      const ini = await http().post('/api/auth/alta/verificacion').send({ email, nombre: 'Ana Prueba' });
+      expect(ini.status).toBe(201);
+      const verificacionId = ini.body.verificacionId as string;
+
+      // Aún sin clic: el polling dice que no, y el registro se niega (403).
+      const antes = await http().get(`/api/auth/alta/verificacion/${verificacionId}`);
+      expect(antes.body.verificado).toBe(false);
+      const bloqueado = await http().post('/api/auth/registro').send({
+        negocioNombre: `${REG} SinClic`,
+        perfil: 'barberia',
+        plan: 'pro',
+        numEspecialistas: 2,
+        admin: { nombre: 'Ana Prueba', email, password: 'Password123' },
+        modo: 'prueba',
+        verificacionId,
+      });
+      expect(bloqueado.status).toBe(403);
+      expect(bloqueado.body.codigo).toBe('CORREO_NO_VERIFICADO');
+
+      // El correo quedó en el outbox como fila de PLATAFORMA (sin negocio).
+      const token = await tokenDeCorreoEncolado(email);
+
+      // Clic en el enlace (idempotente: el segundo clic responde amistoso).
+      const clic = await http().post('/api/auth/verificar-correo').send({ token });
+      expect(clic.status).toBe(200);
+      expect(clic.body.contexto).toBe('alta');
+      const doble = await http().post('/api/auth/verificar-correo').send({ token });
+      expect(doble.status).toBe(200);
+
+      // El polling del wizard ya lo ve y el registro pasa.
+      const despues = await http().get(`/api/auth/alta/verificacion/${verificacionId}`);
+      expect(despues.body.verificado).toBe(true);
+      const reg = await http().post('/api/auth/registro').send({
+        negocioNombre: `${REG} ConClic`,
+        perfil: 'barberia',
+        plan: 'pro',
+        numEspecialistas: 2,
+        admin: { nombre: 'Ana Prueba', email, password: 'Password123' },
+        modo: 'prueba',
+        verificacionId,
+      });
+      expect(reg.status).toBe(201);
+
+      // El registro estampó la prueba de que el correo es del dueño.
+      const [u] = await adminDb.select().from(usuario).where(eq(usuario.email, email));
+      expect(u.emailVerificadoEn).toBeInstanceOf(Date);
+
+      // La verificación quedó consumida: no pare una segunda cuenta.
+      const otra = await http().post('/api/auth/registro').send({
+        negocioNombre: `${REG} Segunda`,
+        perfil: 'barberia',
+        plan: 'pro',
+        numEspecialistas: 2,
+        admin: { nombre: 'Ana Prueba', email: emailDe('otra'), password: 'Password123' },
+        modo: 'prueba',
+        verificacionId,
+      });
+      expect(otra.status).toBe(403);
+    });
+
+    it('la verificación exige que el email del registro sea EL verificado', async () => {
+      const email = emailDe('cruce');
+      const verificacionId = await verificacionUsada(email);
+      const res = await http().post('/api/auth/registro').send({
+        negocioNombre: `${REG} Cruce`,
+        perfil: 'barberia',
+        plan: 'pro',
+        numEspecialistas: 2,
+        admin: { nombre: 'Otro', email: emailDe('impostor'), password: 'Password123' },
+        modo: 'prueba',
+        verificacionId,
+      });
+      expect(res.status).toBe(403);
+      expect(res.body.codigo).toBe('CORREO_NO_VERIFICADO');
+    });
+
+    it('un correo ya registrado se detecta al INICIAR la verificación (409)', async () => {
+      const res = await http().post('/api/auth/alta/verificacion').send({ email: EMAIL, nombre: 'Alguien' });
+      expect(res.status).toBe(409);
+    });
+
+    it('el enlace inválido responde 400 sin filtrar nada', async () => {
+      const res = await http().post('/api/auth/verificar-correo').send({ token: 'x'.repeat(43) });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  // ── Recuperación de contraseña (Plan-Correo E3) ─────────────────────────────
+  describe('Olvido y restablecimiento de contraseña', () => {
+    it('con un correo inexistente responde 204 igual (anti-enumeración)', async () => {
+      const res = await http().post('/api/auth/password/olvido').send({ email: `nadie.${Date.now()}@e2e.test` });
+      expect(res.status).toBe(204);
+    });
+
+    it('el flujo completo: olvido → enlace → nueva contraseña → sesiones viejas revocadas', async () => {
+      const email = `reset.${Date.now()}@e2e.test`;
+      const reg = await registrar({
+        negocioNombre: `${REG} Reset`,
+        perfil: 'barberia',
+        plan: 'pro',
+        numEspecialistas: 2,
+        admin: { nombre: 'Reset Owner', email, password: 'Password123' },
+        modo: 'prueba',
+      });
+      expect(reg.status).toBe(201);
+      const refreshViejo = reg.body.refreshToken as string;
+
+      expect((await http().post('/api/auth/password/olvido').send({ email })).status).toBe(204);
+      const token = await tokenDeCorreoEncolado(email);
+
+      // La página valida el enlace antes de pintar el formulario.
+      const val = await http().get(`/api/auth/password/token/${token}`);
+      expect(val.body.valido).toBe(true);
+
+      const cambio = await http().post('/api/auth/password/restablecer').send({ token, password: 'NuevaClave456' });
+      expect(cambio.status).toBe(204);
+
+      // La contraseña vieja murió; la nueva entra.
+      expect((await http().post('/api/auth/login').send({ email, password: 'Password123' })).status).toBe(401);
+      expect((await http().post('/api/auth/login').send({ email, password: 'NuevaClave456' })).status).toBe(200);
+
+      // El refresh emitido antes del reset quedó revocado (D8).
+      expect((await http().post('/api/auth/refresh').send({ refreshToken: refreshViejo })).status).toBe(401);
+
+      // El enlace sirve UNA vez: el segundo intento es 401 y la clave no cambia.
+      expect((await http().post('/api/auth/password/restablecer').send({ token, password: 'Pirata789x' })).status).toBe(401);
+      expect((await http().post('/api/auth/login').send({ email, password: 'NuevaClave456' })).status).toBe(200);
+      expect((await http().get(`/api/auth/password/token/${token}`)).body.valido).toBe(false);
+    });
+  });
+
+  // ── Credenciales desde Configuración (Plan-Correo E4) ───────────────────────
+  describe('Credenciales en Configuración (cambiar contraseña y correo)', () => {
+    let token: string;
+    let refreshTk: string;
+    let email: string;
+    const auth = () => ({ Authorization: `Bearer ${token}` });
+
+    beforeAll(async () => {
+      email = `cred.${Date.now()}@e2e.test`;
+      const r = await registrar({
+        negocioNombre: `${REG} Credenciales`,
+        perfil: 'salon',
+        plan: 'pro',
+        numEspecialistas: 2,
+        admin: { nombre: 'Cred Owner', email, password: 'Password123' },
+        modo: 'prueba',
+      });
+      token = r.body.accessToken;
+      refreshTk = r.body.refreshToken;
+    });
+
+    it('cambiar contraseña exige la actual y revoca las sesiones', async () => {
+      const mala = await http().post('/api/auth/password/cambiar').set(auth()).send({ passwordActual: 'equivocada1', passwordNueva: 'OtraClave456' });
+      expect(mala.status).toBe(401);
+
+      const ok = await http().post('/api/auth/password/cambiar').set(auth()).send({ passwordActual: 'Password123', passwordNueva: 'OtraClave456' });
+      expect(ok.status).toBe(204);
+
+      expect((await http().post('/api/auth/login').send({ email, password: 'Password123' })).status).toBe(401);
+      const relogin = await http().post('/api/auth/login').send({ email, password: 'OtraClave456' });
+      expect(relogin.status).toBe(200);
+      expect((await http().post('/api/auth/refresh').send({ refreshToken: refreshTk })).status).toBe(401);
+      token = relogin.body.accessToken;
+    });
+
+    it('cambiar el correo: se consolida SOLO al confirmar la dirección nueva', async () => {
+      const nuevo = `cred.nuevo.${Date.now()}@e2e.test`;
+
+      // Password mala → 401; correo del seed (ya en uso) → 409.
+      expect((await http().post('/api/auth/email/cambio').set(auth()).send({ password: 'equivocada1', nuevoEmail: nuevo })).status).toBe(401);
+      expect((await http().post('/api/auth/email/cambio').set(auth()).send({ password: 'OtraClave456', nuevoEmail: EMAIL })).status).toBe(409);
+
+      expect((await http().post('/api/auth/email/cambio').set(auth()).send({ password: 'OtraClave456', nuevoEmail: nuevo })).status).toBe(204);
+      expect((await http().get('/api/auth/email/cambio').set(auth())).body.pendiente).toBe(nuevo);
+
+      // Todavía se entra con el correo viejo; con el nuevo no existe cuenta.
+      expect((await http().post('/api/auth/login').send({ email, password: 'OtraClave456' })).status).toBe(200);
+      expect((await http().post('/api/auth/login').send({ email: nuevo, password: 'OtraClave456' })).status).toBe(401);
+
+      // Clic en el enlace enviado a la dirección NUEVA → consolida.
+      const t = await tokenDeCorreoEncolado(nuevo);
+      const clic = await http().post('/api/auth/verificar-correo').send({ token: t });
+      expect(clic.status).toBe(200);
+      expect(clic.body.contexto).toBe('cambio_email');
+
+      expect((await http().post('/api/auth/login').send({ email: nuevo, password: 'OtraClave456' })).status).toBe(200);
+      expect((await http().post('/api/auth/login').send({ email, password: 'OtraClave456' })).status).toBe(401);
+      expect((await http().get('/api/auth/email/cambio').set(auth())).body.pendiente).toBeNull();
+
+      // Quedó encolado el aviso a la dirección anterior.
+      const [aviso] = await adminDb
+        .select({ tipo: mensaje.tipo })
+        .from(mensaje)
+        .where(eq(mensaje.destino, email))
+        .orderBy(desc(mensaje.creadoEn))
+        .limit(1);
+      expect(aviso?.tipo).toBe('cambio_email');
+      await adminDb
+        .update(mensaje)
+        .set({ estado: 'enviado' })
+        .where(and(like(mensaje.destino, '%@e2e.test'), eq(mensaje.estado, 'pendiente')));
+      email = nuevo;
+    });
+
+    it('cancelar la solicitud mata el enlace enviado', async () => {
+      const otro = `cred.cancelado.${Date.now()}@e2e.test`;
+      expect((await http().post('/api/auth/email/cambio').set(auth()).send({ password: 'OtraClave456', nuevoEmail: otro })).status).toBe(204);
+      const t = await tokenDeCorreoEncolado(otro);
+
+      const canc = await http().delete('/api/auth/email/cambio').set(auth());
+      expect(canc.status).toBe(204);
+      expect((await http().get('/api/auth/email/cambio').set(auth())).body.pendiente).toBeNull();
+      expect((await http().post('/api/auth/verificar-correo').send({ token: t })).status).toBe(400);
+    });
+
+    it('sin sesión, los endpoints de credenciales responden 401', async () => {
+      expect((await http().post('/api/auth/password/cambiar').send({ passwordActual: 'x', passwordNueva: 'Password123' })).status).toBe(401);
+      expect((await http().get('/api/auth/email/cambio')).status).toBe(401);
     });
   });
 
@@ -164,9 +441,7 @@ describe('Auth (e2e)', () => {
     const auth = () => `Bearer ${token}`;
 
     beforeAll(async () => {
-      const r = await http()
-        .post('/api/auth/registro')
-        .send({
+      const r = await registrar({
           negocioNombre: `${REG} Trial`,
           perfil: 'barberia',
           plan: 'pro',
@@ -242,9 +517,7 @@ describe('Auth (e2e)', () => {
   // entran al panel con normalidad (regla única `tieneAcceso`, ADR-P2).
   describe('Estados con acceso entran al panel (FASE-11)', () => {
     async function cuentaEn(estado: 'en_gracia' | 'cortesia'): Promise<string> {
-      const r = await http()
-        .post('/api/auth/registro')
-        .send({
+      const r = await registrar({
           negocioNombre: `${REG} ${estado}`,
           perfil: 'barberia',
           plan: 'pro',
@@ -278,9 +551,7 @@ describe('Auth (e2e)', () => {
     let negocioId: string;
 
     beforeAll(async () => {
-      const r = await http()
-        .post('/api/auth/registro')
-        .send({
+      const r = await registrar({
           negocioNombre: `${REG} Bloqueo`,
           perfil: 'salon',
           plan: 'basico',

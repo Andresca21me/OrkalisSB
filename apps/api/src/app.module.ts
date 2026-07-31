@@ -15,6 +15,7 @@ import { AgendamientoModule } from './agendamiento/agendamiento.module';
 import { FinanzasModule } from './finanzas/finanzas.module';
 import { OperacionModule } from './operacion/operacion.module';
 import { NotificacionesModule } from './notificaciones/notificaciones.module';
+import { CorreoModule } from './correo/correo.module';
 import { PagosModule } from './pagos/pagos.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
@@ -49,6 +50,7 @@ import { SuscripcionAccesoGuard } from './auth/guards/suscripcion-acceso.guard';
     NegocioModule,
     FinanzasModule,
     NotificacionesModule,
+    CorreoModule,
     AgendamientoModule,
     OperacionModule,
     PagosModule,

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, type MotivoBloqueo } from '../lib/auth';
-import { ApiError } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 import { Button, Icon, Logo, Spinner } from '../ui/ui';
 import { RisingSquares } from '../ui/RisingSquares';
 
-type EstadoLogin = 'normal' | 'suspendida' | 'bloqueo';
+type EstadoLogin = 'normal' | 'suspendida' | 'bloqueo' | 'olvido';
 
 /**
  * Login del panel (FASE-02), fiel a `login-app.jsx`: pantalla dividida (panel
@@ -112,6 +112,8 @@ export function LoginPage() {
             <SuspendedNotice motivo={motivoBloqueo} onVolver={() => window.location.reload()} />
           ) : vista === 'bloqueo' ? (
             <LockedNotice />
+          ) : vista === 'olvido' ? (
+            <OlvidoNotice emailInicial={email} onVolver={() => setEstado('normal')} />
           ) : (
             <>
               <h2 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em', margin: 0 }}>Ingresa a tu panel</h2>
@@ -148,7 +150,9 @@ export function LoginPage() {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '12px 0 22px' }}>
-                  <a href="#" onClick={(e) => e.preventDefault()} style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--brand)' }}>¿Olvidaste tu contraseña?</a>
+                  <button type="button" onClick={() => setEstado('olvido')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--brand)' }}>
+                    ¿Olvidaste tu contraseña?
+                  </button>
                 </div>
 
                 <Button type="submit" variant="primary" size="lg" fullWidth disabled={cargando}>
@@ -163,7 +167,7 @@ export function LoginPage() {
               </form>
 
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', textAlign: 'center', margin: '22px 0 0', lineHeight: '18px' }}>
-                No hay registro público. El acceso es solo para el personal del negocio.
+                ¿Aún no tienes cuenta? <Link to="/alta" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Crea tu negocio</Link> en minutos.
                 <br />
                 ¿Problemas para entrar? Escribe a{' '}
                 <a href="mailto:soporte@orkalis.co" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>soporte@orkalis.co</a>
@@ -286,6 +290,75 @@ function SuspendedNotice({ motivo, onVolver }: { motivo: MotivoBloqueo | null; o
         </Button>
       </div>
       <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', textAlign: 'center', margin: '18px 0 0' }}>soporte@orkalis.co · +57 601 432 0099</p>
+    </div>
+  );
+}
+
+/**
+ * "¿Olvidaste tu contraseña?" (Plan-Correo E3). Pide el correo y SIEMPRE
+ * muestra el mismo mensaje neutro: el backend responde 204 exista o no la
+ * cuenta (anti-enumeración), así que aquí no hay rama de "no existe".
+ */
+function OlvidoNotice({ emailInicial, onVolver }: { emailInicial: string; onVolver: () => void }) {
+  const [email, setEmail] = useState(emailInicial);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/.+@.+\..+/.test(email.trim())) {
+      setError('Escribe un correo válido.');
+      return;
+    }
+    setError(null);
+    setEnviando(true);
+    try {
+      await api.post('/auth/password/olvido', { email: email.trim() }, false);
+      setEnviado(true);
+    } catch (err) {
+      setError(err instanceof ApiError && err.status === 429 ? 'Demasiados intentos. Espera un minuto y vuelve a probar.' : 'No pudimos procesar la solicitud. Intenta de nuevo.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  if (enviado) {
+    return (
+      <div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 52, height: 52, borderRadius: 'var(--radius-lg)', background: 'var(--brand-tint)', marginBottom: 18 }}>
+          <Icon name="mail" size={24} color="var(--brand)" />
+        </span>
+        <h2 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em', margin: 0 }}>Revisa tu correo</h2>
+        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', margin: '10px 0 22px', lineHeight: 1.5 }}>
+          Si <strong>{email.trim()}</strong> tiene una cuenta en Orkalis, te llegará un enlace para crear una contraseña nueva. Vence en 60 minutos; revisa también el spam.
+        </p>
+        <Button variant="ghost" size="lg" fullWidth onClick={onVolver}>Volver al ingreso</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em', margin: 0 }}>Recupera tu acceso</h2>
+      <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', margin: '8px 0 26px' }}>
+        Escribe el correo con el que entras a Orkalis y te enviaremos un enlace para crear una contraseña nueva.
+      </p>
+      {error && (
+        <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--error-tint)', border: '1px solid rgba(239,68,68,0.24)', marginBottom: 18 }}>
+          <Icon name="alert-circle" size={18} color="var(--error)" style={{ flex: 'none', marginTop: 1 }} />
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', lineHeight: '20px' }}><strong>{error}</strong></div>
+        </div>
+      )}
+      <form onSubmit={enviar}>
+        <LoginField label="Correo" type="email" icon="mail" value={email} onChange={setEmail} placeholder="tu@negocio.co" invalid={!!error} disabled={enviando} autoComplete="username" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 22 }}>
+          <Button type="submit" variant="primary" size="lg" fullWidth disabled={enviando}>
+            {enviando ? (<><Spinner size={18} color="#fff" /> Enviando…</>) : 'Enviar enlace'}
+          </Button>
+          <Button variant="ghost" size="lg" fullWidth onClick={onVolver}>Volver al ingreso</Button>
+        </div>
+      </form>
     </div>
   );
 }

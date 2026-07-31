@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { medirSms, VARIABLES_PLANTILLA, type CanalCupo, type EventoPlantilla, type PlantillaMensaje } from '@orkalis/shared';
-import { api } from '../../lib/api';
+import { api, ApiError, tokens } from '../../lib/api';
 import { fechaCorta, fechaHora, num } from '../../lib/format';
 import { marcarAlertaLeida, useAlertas, useCupos } from '../../lib/useCupos';
 import { guardarPlantilla, usePlantillas } from '../../lib/usePlantillas';
@@ -10,7 +10,7 @@ import { colorDominante, prepararLogo } from '../../lib/imagen';
 import { contrasteBajo, textoSobre } from '../../lib/color';
 import { useAuth } from '../../lib/auth';
 import { useEstadoMensajeria, useMensajes, useResumenMensajes } from '../../lib/useMensajes';
-import { Badge, Button, Dialog, ErrorState, Icon, Select, Spinner, useToast } from '../../ui/ui';
+import { Badge, Button, Dialog, ErrorState, Icon, Input, Select, Spinner, useToast } from '../../ui/ui';
 import { GField } from './gestion-ui';
 import { ConfigBanner, ConfigCard } from './config-ui';
 
@@ -540,5 +540,169 @@ export function ConfigMarca() {
         <Button loading={guardando} iconLeft="check" onClick={guardar}>Guardar marca</Button>
       </div>
     </div>
+  );
+}
+
+// ── Cuenta: correo de acceso y contraseña (Plan-Correo E4) ───────────────────
+
+/**
+ * Credenciales del usuario EN SESIÓN (no confundir con Configuración › Usuarios,
+ * que administra a los demás). El cambio de contraseña revoca todas las
+ * sesiones en el backend (D8): aquí se renueva la propia iniciando sesión con
+ * la clave nueva acto seguido, para que el usuario no se entere del corte. El
+ * cambio de correo queda "pendiente" hasta que la dirección nueva confirme el
+ * enlace que le llega.
+ */
+export function ConfigCredenciales() {
+  const { usuario } = useAuth();
+  const toast = useToast();
+
+  // Cambio de contraseña.
+  const [actual, setActual] = useState('');
+  const [nueva, setNueva] = useState('');
+  const [confirmar, setConfirmar] = useState('');
+  const [errorPass, setErrorPass] = useState<string>();
+  const [guardandoPass, setGuardandoPass] = useState(false);
+
+  // Cambio de correo.
+  const [pendiente, setPendiente] = useState<string | null>(null);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [passEmail, setPassEmail] = useState('');
+  const [nuevoEmail, setNuevoEmail] = useState('');
+  const [errorEmail, setErrorEmail] = useState<string>();
+  const [enviandoEmail, setEnviandoEmail] = useState(false);
+
+  useEffect(() => {
+    api.get<{ pendiente: string | null }>('/auth/email/cambio')
+      .then((r) => setPendiente(r.pendiente))
+      .catch(() => { /* sin estado pendiente no se rompe nada */ });
+  }, []);
+
+  async function cambiarPassword() {
+    if (guardandoPass) return;
+    if (nueva.length < 8) { setErrorPass('La nueva contraseña necesita al menos 8 caracteres.'); return; }
+    if (nueva !== confirmar) { setErrorPass('Las contraseñas no coinciden.'); return; }
+    setErrorPass(undefined);
+    setGuardandoPass(true);
+    try {
+      await api.post('/auth/password/cambiar', { passwordActual: actual, passwordNueva: nueva });
+      // El backend revocó todas las sesiones: se renueva la propia en silencio.
+      try {
+        const r = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', { email: usuario!.email, password: nueva }, false);
+        tokens.set(r.accessToken, r.refreshToken);
+      } catch { /* si falla, la sesión sigue viva ~15 min y el guard pedirá login */ }
+      setActual(''); setNueva(''); setConfirmar('');
+      toast('Contraseña actualizada. Las sesiones en otros dispositivos se cerraron.', 'success');
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) setErrorPass('La contraseña actual no es correcta.');
+      else if (e instanceof ApiError && e.status === 429) setErrorPass('Demasiados intentos. Espera un minuto.');
+      else setErrorPass('No pudimos cambiar la contraseña. Intenta de nuevo.');
+    } finally {
+      setGuardandoPass(false);
+    }
+  }
+
+  async function solicitarCambioEmail() {
+    if (enviandoEmail) return;
+    if (!/.+@.+\..+/.test(nuevoEmail.trim())) { setErrorEmail('Escribe un correo válido.'); return; }
+    setErrorEmail(undefined);
+    setEnviandoEmail(true);
+    try {
+      await api.post('/auth/email/cambio', { password: passEmail, nuevoEmail: nuevoEmail.trim() });
+      setPendiente(nuevoEmail.trim().toLowerCase());
+      setFormAbierto(false);
+      setPassEmail(''); setNuevoEmail('');
+      toast('Te enviamos un enlace de confirmación a la dirección nueva.', 'success');
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) setErrorEmail('La contraseña no es correcta.');
+      else if (e instanceof ApiError && e.status === 409) setErrorEmail('Ya existe una cuenta con ese correo.');
+      else if (e instanceof ApiError && e.status === 400) setErrorEmail(e.message);
+      else setErrorEmail('No pudimos enviar la solicitud. Intenta de nuevo.');
+    } finally {
+      setEnviandoEmail(false);
+    }
+  }
+
+  async function reenviarCambioEmail() {
+    try {
+      await api.post('/auth/email/cambio/reenviar');
+      toast('Enlace reenviado.', 'success');
+    } catch (e) {
+      toast(e instanceof ApiError && e.status === 429 ? 'Espera un momento antes de reenviar.' : 'No pudimos reenviar el enlace.', 'error');
+    }
+  }
+
+  async function cancelarCambioEmail() {
+    try {
+      await api.del('/auth/email/cambio');
+      setPendiente(null);
+      toast('Solicitud cancelada. El enlace enviado dejó de servir.', 'info');
+    } catch {
+      toast('No pudimos cancelar la solicitud.', 'error');
+    }
+  }
+
+  const verificado = !!usuario?.emailVerificadoEn;
+
+  return (
+    <>
+      <ConfigCard title="Correo de acceso" desc="Es tu usuario para entrar a Orkalis. Si lo cambias, la dirección nueva debe confirmar un enlace antes de que el cambio se aplique." pad={22}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <Icon name="mail" size={18} color="var(--text-tertiary)" />
+          <span className="data" style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--text-primary)' }}>{usuario?.email}</span>
+          <Badge tone={verificado ? 'success' : 'neutral'}>{verificado ? 'Verificado' : 'Sin verificar'}</Badge>
+          {!pendiente && !formAbierto && (
+            <Button variant="secondary" size="sm" iconLeft="edit-3" onClick={() => setFormAbierto(true)} style={{ marginLeft: 'auto' }}>Cambiar correo</Button>
+          )}
+        </div>
+
+        {pendiente && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 16, padding: '12px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}>
+            <Icon name="clock" size={16} color="var(--text-tertiary)" />
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+              Pendiente de confirmación: <strong>{pendiente}</strong>
+            </span>
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+              <Button variant="ghost" size="sm" onClick={() => void reenviarCambioEmail()}>Reenviar</Button>
+              <Button variant="ghost" size="sm" onClick={() => void cancelarCambioEmail()}>Cancelar</Button>
+            </div>
+          </div>
+        )}
+
+        {formAbierto && !pendiente && (
+          <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 420 }}>
+            <GField label="Tu contraseña" hint="para confirmar que eres tú">
+              <Input type="password" value={passEmail} onChange={(e) => setPassEmail(e.target.value)} placeholder="Tu contraseña actual" autoComplete="current-password" />
+            </GField>
+            <GField label="Nuevo correo" error={errorEmail}>
+              <Input type="email" value={nuevoEmail} onChange={(e) => setNuevoEmail(e.target.value)} placeholder="nuevo@negocio.co" autoComplete="email" />
+            </GField>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Button variant="primary" size="sm" loading={enviandoEmail} onClick={() => void solicitarCambioEmail()}>Enviar confirmación</Button>
+              <Button variant="ghost" size="sm" onClick={() => { setFormAbierto(false); setErrorEmail(undefined); }}>Cancelar</Button>
+            </div>
+          </div>
+        )}
+      </ConfigCard>
+
+      <ConfigCard title="Cambiar contraseña" desc="Al guardarla se cierran las sesiones abiertas en otros dispositivos." pad={22}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 420 }}>
+          <GField label="Contraseña actual">
+            <Input type="password" value={actual} onChange={(e) => setActual(e.target.value)} placeholder="Tu contraseña de hoy" autoComplete="current-password" />
+          </GField>
+          <GField label="Nueva contraseña" hint="mínimo 8 caracteres">
+            <Input type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} placeholder="Crea una contraseña" autoComplete="new-password" />
+          </GField>
+          <GField label="Confírmala" error={errorPass}>
+            <Input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} placeholder="Repite la contraseña" autoComplete="new-password" />
+          </GField>
+          <div>
+            <Button variant="primary" size="sm" iconLeft="check" loading={guardandoPass} disabled={!actual || !nueva || !confirmar} onClick={() => void cambiarPassword()}>
+              Guardar contraseña
+            </Button>
+          </div>
+        </div>
+      </ConfigCard>
+    </>
   );
 }

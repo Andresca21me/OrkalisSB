@@ -19,6 +19,8 @@ export interface MensajeSalida {
   variables?: Record<string, string>;
   /** Email: asunto. */
   asunto?: string;
+  /** Email: cuerpo HTML (Plan-Correo). `cuerpo` queda como fallback plano. */
+  html?: string;
 }
 
 export interface ResultadoEnvio {

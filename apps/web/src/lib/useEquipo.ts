@@ -54,35 +54,56 @@ export function previewLiquidacion(body: { desde: string; hasta: string; sucursa
   return api.post('/liquidaciones/preview', body);
 }
 
-// ── Alta con verificación de celular (FASE-06, D3) ───────────────────────────
-// El especialista NO se crea al iniciar: solo cuando el código es correcto.
+// ── Alta por invitación (Plan-Correo E5, D4) ─────────────────────────────────
+// El admin captura los datos básicos + correo; la contraseña y el celular los
+// pone el propio especialista desde el enlace que recibe (7 días).
 
-export interface IniciarVerificacionBody {
+export interface InvitarEspecialistaBody {
   nombre: string;
   apellidos?: string;
-  celular: string;
   especialidad?: string;
-  sucursalIds?: string[];
-  email?: string;
-  password?: string;
+  email: string;
+  sucursalIds: string[];
   servicioIds?: string[];
+  disponible?: boolean;
 }
 
-/** Paso 1: guarda el borrador y envía el código por SMS. */
-export function iniciarVerificacion(
-  body: IniciarVerificacionBody,
-): Promise<{ verificacionId: string; expiraEn: string; codigoVisible?: string }> {
-  return api.post('/especialistas/verificacion/iniciar', body);
+/** Crea el especialista (ya cuenta para el cupo) y le envía la invitación. */
+export function invitarEspecialista(body: InvitarEspecialistaBody): Promise<EspecialistaEquipo & { invitacionEmail: string }> {
+  return api.post('/especialistas/invitar', body);
 }
 
-/** Paso 2: valida el código y crea el especialista. */
-export function confirmarVerificacion(verificacionId: string, codigo: string): Promise<EspecialistaEquipo> {
-  return api.post('/especialistas/verificacion/confirmar', { verificacionId, codigo });
+export interface InvitacionPendiente {
+  especialistaId: string;
+  email: string;
+  expiraEn: string;
 }
 
-/** Reenvía el código (cooldown 30 s, máximo 3 reenvíos). */
-export function reenviarCodigo(verificacionId: string): Promise<{ reenvios: number; codigoVisible?: string }> {
-  return api.post('/especialistas/verificacion/reenviar', { verificacionId });
+/** Invitaciones vigentes del negocio (para los badges del equipo). */
+export function invitacionesPendientes(): Promise<InvitacionPendiente[]> {
+  return api.get('/especialistas/invitaciones');
+}
+
+/** Invita (o re-invita con otro correo) a un especialista existente sin acceso. */
+export function invitarExistente(id: string, email: string): Promise<unknown> {
+  return api.post(`/especialistas/${id}/invitar`, { email });
+}
+
+/** Reenvía la invitación vigente (cooldown 60 s, máximo 5 reenvíos). */
+export function reenviarInvitacion(id: string): Promise<unknown> {
+  return api.post(`/especialistas/${id}/invitacion/reenviar`);
+}
+
+// ── El propio especialista verifica su celular ───────────────────────────────
+
+/** Guarda el celular del especialista en sesión y dispara el código SMS. */
+export function miTelefonoIniciar(celular: string): Promise<{ ok: true }> {
+  return api.post('/especialistas/mi/telefono/iniciar', { celular });
+}
+
+/** Comprueba el código y deja el celular verificado (habilita avisos de agenda). */
+export function miTelefonoConfirmar(codigo: string): Promise<{ ok: true }> {
+  return api.post('/especialistas/mi/telefono/confirmar', { codigo });
 }
 
 /** Sube o reemplaza la foto del especialista (data URL ya reducido). */

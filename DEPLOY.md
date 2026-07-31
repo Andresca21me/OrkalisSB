@@ -108,6 +108,9 @@ multi-tenant **siempre** aplique. Las migraciones/seed usan el rol **dueño**.
    | `JWT_REFRESH_SECRET` | **otro** secreto largo distinto |
    | `THROTTLE_TTL_MS` / `THROTTLE_LIMIT` | opcionales (120 req/min por IP por defecto) |
    | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | SMS real (ver §7). Sin ellas → mock (no envía) |
+   | `SENDGRID_API_KEY` | Correo transaccional real (Plan-Correo). Sin ella → mock (no envía) |
+   | `FROM_EMAIL` (o `MAIL_FROM`) | Remitente verificado en SendGrid, p. ej. `orkalis.corporation@orkalis.com`. El código acepta cualquiera de los dos nombres |
+   | `APP_URL` | Base pública del frontend para los enlaces de los correos (verificar correo, restablecer contraseña, invitación), p. ej. `https://orkalis.com`. Sin ella se usa `CORS_ORIGIN` |
    | `MP_ACCESS_TOKEN` | Mercado Pago privado del backend (`APP_USR-…` en prod) |
    | `MP_PUBLIC_KEY` | Mercado Pago público (`APP_USR-…`); igual valor que `VITE_MP_PUBLIC_KEY` |
    | `MP_WEBHOOK_SECRET` | clave del webhook (verifica `x-signature`) |
@@ -170,13 +173,14 @@ curl -sI https://<web>.up.railway.app | head -n 1          # 200 OK
 Luego, en el navegador: abre el frontend, entra con un usuario, crea una cita y
 comprueba que las llamadas a `/api/...` no dan CORS ni 401 espurios.
 
-## 7. Twilio / Mercado Pago: pasar a real
+## 7. Twilio / SendGrid / Mercado Pago: pasar a real
 
 > El SDK `twilio` **ya es dependencia** de `apps/api` (envío real de SMS). El
-> cliente de Mercado Pago usa `fetch` directo (no necesita SDK). **Nota v1**: hoy
-> solo el canal **SMS** está cableado para envío real (OTP del cliente y avisos por
-> SMS). **WhatsApp y email** aún no envían de verdad — es el
-> `Plan-Ejecucion-Mensajeria` pendiente de aprobar.
+> cliente de Mercado Pago usa `fetch` directo (no necesita SDK). **Nota**: hoy
+> están cableados para envío real los canales **SMS** (OTP del cliente y avisos)
+> y **email** (Plan-Correo: verificación de correo en el alta, recuperación de
+> contraseña, cambio de correo e invitación de especialistas). **WhatsApp** aún
+> no envía de verdad.
 
 **Twilio (SMS real):**
 1. Número con SMS habilitado para Colombia (cuenta paga; el trial solo envía a
@@ -184,6 +188,18 @@ comprueba que las llamadas a `/api/...` no dan CORS ni 401 espurios.
 2. Pega `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` en el
    servicio API y re-despliega. Sin estas variables, la API usa el **mock** (loguea,
    no envía) y todo lo demás sigue funcionando.
+
+**SendGrid (correo transaccional real, Plan-Correo):**
+1. En SendGrid, completa la **autenticación del dominio** (SPF/DKIM) del dominio
+   del remitente: sin ella los correos de verificación caen a spam y el alta se
+   frena. Verifica también el remitente (`FROM_EMAIL`).
+2. Pega `SENDGRID_API_KEY` y `FROM_EMAIL` en el servicio API, define `APP_URL`
+   con el dominio público del frontend (los enlaces de los correos se construyen
+   con ella) y re-despliega. Sin claves, el correo corre en **mock** (loguea, no
+   envía).
+3. Humo: crea una cuenta de prueba en `/alta` con un correo real, pide un
+   "olvidé mi contraseña" desde `/login` e invita a un especialista; los tres
+   correos deben llegar y sus enlaces deben abrir en `APP_URL`.
 
 **Mercado Pago (cobro real):**
 1. En tu app de Mercado Pago, obtén las credenciales **de producción** (`APP_USR-…`):

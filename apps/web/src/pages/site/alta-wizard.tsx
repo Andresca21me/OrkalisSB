@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState, type CSSProperties } from 'react';
 import { PerfilNegocio, type PlanSuscripcion } from '@orkalis/shared';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { money } from '../../lib/format';
 import { prepararLogo } from '../../lib/imagen';
@@ -109,6 +109,15 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
   const [ciclo, setCiclo] = useState<Ciclo>(funnel.cycle);
 
   const [errores, setErrores] = useState<Record<string, string>>({});
+  // ── Verificación del correo del Paso 2 (Plan-Correo E2) ──
+  // El backend exige un enlace abierto antes de crear la cuenta; aquí se guarda
+  // la verificación en curso, si la sub-vista de espera está visible y el
+  // cooldown del botón «Reenviar».
+  const [verificacion, setVerificacion] = useState<{ id: string; email: string; verificado: boolean } | null>(null);
+  const [verificando, setVerificando] = useState(false);
+  const [enviandoVerif, setEnviandoVerif] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [avisoVerif, setAvisoVerif] = useState<string>();
   const [creando, setCreando] = useState<null | 'prueba' | 'pago'>(null);
   const [progreso, setProgreso] = useState('');
   const [errorServidor, setErrorServidor] = useState<string>();
@@ -162,6 +171,12 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
 
   function continuar() {
     if (!validar(paso)) return;
+    // El Paso 2 no avanza sin verificar el correo: manda el enlace y abre la
+    // sub-vista de espera (el backend lo exige igual en el registro, D1).
+    if (paso === 2) {
+      void iniciarVerificacion();
+      return;
+    }
     setPaso((p) => Math.min(PASO_LISTO, p + 1));
     window.scrollTo(0, 0);
   }
@@ -169,6 +184,80 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
     setErrores({});
     setPaso((p) => Math.max(1, p - 1));
   }
+
+  // ── Verificación de correo (Paso 2 → 3, Plan-Correo E2) ──
+  async function iniciarVerificacion() {
+    const email = cuenta.email.trim().toLowerCase();
+    // Ya verificado y sin cambiar el correo: pasa directo (p. ej. volvió atrás).
+    if (verificacion?.verificado && verificacion.email === email) {
+      setPaso(3);
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (enviandoVerif) return;
+    setEnviandoVerif(true);
+    setAvisoVerif(undefined);
+    try {
+      const r = await api.post<{ verificacionId: string }>('/auth/alta/verificacion', { email, nombre: cuenta.responsable.trim() }, false);
+      setVerificacion({ id: r.verificacionId, email, verificado: false });
+      setVerificando(true);
+      setCooldown(60);
+      window.scrollTo(0, 0);
+    } catch (e) {
+      setErrores({
+        email:
+          e instanceof ApiError && e.status === 409
+            ? 'Ya existe una cuenta con ese correo. Inicia sesión.'
+            : 'No pudimos enviar el correo de verificación. Intenta de nuevo.',
+      });
+    } finally {
+      setEnviandoVerif(false);
+    }
+  }
+
+  async function reenviarVerificacion() {
+    if (!verificacion || cooldown > 0) return;
+    setAvisoVerif(undefined);
+    try {
+      await api.post('/auth/alta/verificacion/reenviar', { verificacionId: verificacion.id }, false);
+      setCooldown(60);
+      setAvisoVerif('Listo, te enviamos otro correo.');
+    } catch (e) {
+      setAvisoVerif(e instanceof ApiError && e.status === 429 ? 'Espera un momento antes de reenviar.' : 'No pudimos reenviar el correo. Intenta de nuevo.');
+    }
+  }
+
+  // Polling: cada 4 s se pregunta si el enlace ya se abrió (pudo abrirse en el
+  // celular o en otra pestaña); al confirmarse, el asistente avanza solo.
+  useEffect(() => {
+    if (!verificando || !verificacion || verificacion.verificado) return;
+    let activo = true;
+    const t = setInterval(() => {
+      api
+        .get<{ verificado: boolean }>(`/auth/alta/verificacion/${verificacion.id}`, false)
+        .then((r) => {
+          if (!activo || !r.verificado) return;
+          setVerificacion((v) => (v ? { ...v, verificado: true } : v));
+          setVerificando(false);
+          setPaso(3);
+          window.scrollTo(0, 0);
+        })
+        .catch(() => {
+          /* red caída o backend reiniciando: el siguiente tick reintenta */
+        });
+    }, 4000);
+    return () => {
+      activo = false;
+      clearInterval(t);
+    };
+  }, [verificando, verificacion]);
+
+  // Cuenta regresiva del botón «Reenviar».
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
   function saltarA(n: number) {
     setErrores({});
     setPaso(n);
@@ -254,6 +343,14 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
         return;
       }
     }
+    // Sin correo verificado el backend rechaza el registro: mejor devolver al
+    // usuario al Paso 2 con la explicación que dejarlo estrellarse con un 403.
+    if (!verificacion?.verificado || verificacion.email !== cuenta.email.trim().toLowerCase()) {
+      setErrores({ email: 'Verifica tu correo para continuar.' });
+      setPaso(2);
+      window.scrollTo(0, 0);
+      return;
+    }
     setErrorServidor(undefined);
     setCreando(modo);
     setProgreso('Creando tu cuenta…');
@@ -268,6 +365,7 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
           numEspecialistas,
           admin: { nombre: cuenta.responsable.trim(), email: cuenta.email.trim(), password: cuenta.pass },
           modo,
+          verificacionId: verificacion.id,
         },
         // La sesión se activa al final, con «Ir a mi panel».
         { entrar: false },
@@ -285,6 +383,16 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
       setPaso(PASO_LISTO);
       window.scrollTo(0, 0);
     } catch (e) {
+      // La verificación caducó entre el Paso 2 y este clic: se vuelve a empezar
+      // esa parte (correo nuevo → enlace nuevo) en vez de mostrar un 403 seco.
+      if (e instanceof ApiError && e.status === 403 && (e.body as { codigo?: string } | null)?.codigo === 'CORREO_NO_VERIFICADO') {
+        setVerificacion(null);
+        setErrores({ email: 'Tu verificación venció. Verifica tu correo otra vez.' });
+        setPaso(2);
+        window.scrollTo(0, 0);
+        setProgreso('');
+        return;
+      }
       setErrorServidor(e instanceof Error ? e.message : 'No se pudo crear la cuenta. Intenta de nuevo.');
       setProgreso('');
     } finally {
@@ -347,8 +455,44 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
             </StepShell>
           )}
 
+          {/* ── 2b · Espera de verificación del correo (Plan-Correo E2) ── */}
+          {paso === 2 && verificando && verificacion && (
+            <StepShell n={2} total={TOTAL} title="Revisa tu bandeja de entrada" desc="Para continuar necesitamos confirmar que el correo es tuyo.">
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, padding: '26px 12px', textAlign: 'center' }}>
+                <div aria-hidden style={{ width: 64, height: 64, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'var(--blue-tint, rgba(37,99,235,0.1))' }}>
+                  <Icon name="mail" size={30} color="var(--blue)" />
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 6px', fontSize: 'var(--text-base)', color: 'var(--text-primary)' }}>
+                    Te enviamos un enlace a <strong>{verificacion.email}</strong>.
+                  </p>
+                  <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+                    Ábrelo desde cualquier dispositivo; en cuanto lo confirmes, este asistente continúa solo.
+                  </p>
+                </div>
+                <div aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>
+                  <span className="onb-spin" aria-hidden style={{ width: 14, height: 14, border: '2px solid var(--border-strong)', borderTopColor: 'var(--blue)', borderRadius: '50%', display: 'inline-block', animation: 'onb-girar 0.9s linear infinite' }} />
+                  Esperando tu confirmación…
+                </div>
+                {avisoVerif && <p role="status" style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{avisoVerif}</p>}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <Button variant="secondary" size="md" disabled={cooldown > 0} onClick={() => void reenviarVerificacion()}>
+                    {cooldown > 0 ? `Reenviar (${cooldown}s)` : 'Reenviar correo'}
+                  </Button>
+                  <Button variant="ghost" size="md" onClick={() => { setVerificando(false); setAvisoVerif(undefined); }}>
+                    Cambiar correo
+                  </Button>
+                </div>
+                <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+                  ¿No llega? Revisa la carpeta de spam o correo no deseado.
+                </p>
+              </div>
+              <style>{'@keyframes onb-girar { to { transform: rotate(360deg); } }'}</style>
+            </StepShell>
+          )}
+
           {/* ── 2 · Cuenta ─────────────────────────────────────────────── */}
-          {paso === 2 && (
+          {paso === 2 && !verificando && (
             <StepShell n={2} total={TOTAL} title="Tus datos de acceso" desc="Con este correo y esta contraseña entrarás a Orkalis como administrador del negocio.">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <div className="onb-grid-2">
@@ -519,10 +663,10 @@ export function SignupPage({ vertical, go, funnel, setFunnel }: Props) {
 
           {/* Navegación. El último paso de configuración lleva sus propios CTA
               de alta, así que allí solo queda «Atrás». */}
-          {paso < PASO_FINAL && (
+          {paso < PASO_FINAL && !(paso === 2 && verificando) && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 28, gap: 12 }}>
               <div>{paso > 1 && <Button variant="ghost" size="lg" iconLeft="arrow-left" onClick={atras}>Atrás</Button>}</div>
-              <Button variant="primary" size="lg" iconRight="arrow-right" onClick={continuar}>Continuar</Button>
+              <Button variant="primary" size="lg" iconRight="arrow-right" loading={enviandoVerif} disabled={enviandoVerif} onClick={continuar}>Continuar</Button>
             </div>
           )}
           {paso === PASO_FINAL && (

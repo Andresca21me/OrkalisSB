@@ -20,16 +20,22 @@ export class GestionPage {
   // ── Equipo ──
   filaEsp(id: string): Locator { return this.page.getByTestId(`esp-row-${id}`); }
 
-  /** Crea un especialista. `sucursalesExtra` = sedes a pulsar además de la pre-seleccionada (la 1ª). */
-  async crearEspecialista(nombre: string, sucursalesExtra: string[] = [], especialidad?: string) {
+  /**
+   * Crea un especialista por invitación (Plan-Correo E5): el alta pide el
+   * correo del invitado y el especialista queda creado de inmediato con el
+   * badge «Invitación enviada». `sucursalesExtra` = sedes a pulsar además de la
+   * pre-seleccionada (la 1ª). En E2E el correo sale por el MockAdapter (log).
+   */
+  async crearEspecialista(nombre: string, sucursalesExtra: string[] = [], especialidad?: string, email?: string) {
     await this.page.getByRole('button', { name: 'Nuevo especialista' }).first().click();
     const dlg = this.page.getByRole('dialog');
-    await dlg.getByLabel('Nombre completo').fill(nombre);
+    await dlg.getByLabel(/^Nombre/).fill(nombre);
+    await dlg.getByLabel(/Correo/).fill(email ?? `e2e.${Date.now()}.${Math.floor(Math.random() * 1e6)}@invitado.test`);
     if (especialidad) await dlg.getByLabel(/Especialidad/).fill(especialidad);
     // Los botones de sede heredan el texto del label del campo en su nombre
     // accesible, por eso se exige coincidencia exacta.
     for (const s of sucursalesExtra) await dlg.getByRole('button', { name: s, exact: true }).click();
-    await dlg.getByRole('button', { name: 'Crear especialista' }).click();
+    await dlg.getByRole('button', { name: 'Crear y enviar invitación' }).click();
     await expect(dlg).toBeHidden({ timeout: 15_000 });
   }
 

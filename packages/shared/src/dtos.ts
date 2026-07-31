@@ -19,6 +19,8 @@ export interface SesionUsuario {
   id: string;
   nombre: string;
   email: string;
+  /** Cuándo se probó que el correo es del dueño (Plan-Correo); null = sin verificar. */
+  emailVerificadoEn: string | null;
   rol: RolUsuario;
   negocioId: string;
   /** null = alcance consolidado (admin/operador); lista = sucursales asignadas. */
@@ -245,6 +247,11 @@ export interface EspecialistaEquipo {
   servicioIds: string[];
   /** Fecha de la foto (hace de versión en la URL) o null si no tiene. */
   fotoVersion: string | null;
+  /** Login enlazado (Plan-Correo E5): null = aún sin acceso al panel. */
+  usuarioId: string | null;
+  /** Celular en E.164 o null; verificado solo si `telefonoVerificadoEn` existe. */
+  telefono: string | null;
+  telefonoVerificadoEn: string | null;
 }
 
 /** Citas futuras pendientes de un especialista (previo a darlo de baja). */

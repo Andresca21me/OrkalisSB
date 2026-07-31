@@ -31,6 +31,7 @@ import type {
 } from './auth.types';
 import type { RegistroDto } from './dto/registro.dto';
 import { PlanService } from '../plans/plan.service';
+import { TokenAccionService } from '../correo/token-accion.service';
 import { SuscripcionEstadoService } from '../pagos/suscripcion-estado.service';
 import { TransicionInvalidaError } from '../pagos/suscripcion-estado';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
@@ -83,6 +84,7 @@ export class AuthService {
     private readonly config: ConfigService<Env, true>,
     private readonly metrics: MetricsService,
     private readonly plans: PlanService,
+    private readonly tokens: TokenAccionService,
     private readonly suscripcionEstado: SuscripcionEstadoService,
   ) {}
 
@@ -95,6 +97,25 @@ export class AuthService {
    */
   async registrar(dto: RegistroDto): Promise<RegistroResult> {
     const email = dto.admin.email.toLowerCase().trim();
+
+    // Candado de verificación de correo (Plan-Correo E2, D1): el enlace del
+    // Paso 2 tiene que haberse abierto (usado), no haberse gastado en otro
+    // registro (consumido) y ser de ESTE correo. La regla vive aquí y no solo
+    // en el wizard: sin ella bastaría llamar el endpoint a mano para saltársela.
+    const verificacion = await this.tokens.porId(dto.verificacionId);
+    const verificada =
+      verificacion &&
+      verificacion.tipo === 'alta_email' &&
+      verificacion.email === email &&
+      verificacion.usadoEn &&
+      !verificacion.consumidoEn &&
+      Date.now() - verificacion.usadoEn.getTime() < 24 * 60 * 60 * 1000;
+    if (!verificada) {
+      throw new ForbiddenException({
+        codigo: 'CORREO_NO_VERIFICADO',
+        message: 'Verifica tu correo antes de crear la cuenta.',
+      });
+    }
 
     const incluidos = this.plans.getPlan(dto.plan).especialistasIncluidos;
     if (dto.numEspecialistas < incluidos) {
@@ -144,6 +165,8 @@ export class AuthService {
             email,
             passwordHash,
             rol: RolUsuario.Admin,
+            // El candado de arriba probó que el dueño del correo abrió el enlace.
+            emailVerificadoEn: new Date(),
           })
           .returning({ id: usuario.id });
         await tx.insert(usuarioSucursal).values({ usuarioId: admin.id, sucursalId: suc.id });
@@ -158,6 +181,10 @@ export class AuthService {
       }
       throw e;
     }
+
+    // La verificación se gasta al registrar: un enlace verificado no puede
+    // parir dos cuentas (el índice único de email ya cubre la carrera).
+    await this.tokens.consumir(dto.verificacionId);
 
     this.metrics.inc(METRICAS.loginExitosos);
     const tokens = await this.emitirTokens(usuarioId, negocioId, RolUsuario.Admin, null, randomUUID());
@@ -268,6 +295,7 @@ export class AuthService {
       id: u.id,
       nombre: u.nombre,
       email: u.email,
+      emailVerificadoEn: u.emailVerificadoEn?.toISOString() ?? null,
       rol: u.rol as RolUsuario,
       negocioId: u.negocioId,
       sucursalIds: ctx.sucursalIds,

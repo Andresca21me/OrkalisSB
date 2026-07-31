@@ -33,6 +33,7 @@ export class SendgridEmailAdapter implements NotificationSender {
       from: this.mailFrom,
       subject: mensaje.asunto ?? '',
       text: mensaje.cuerpo ?? '',
+      ...(mensaje.html ? { html: mensaje.html } : {}),
     });
     this.logger.log(`Email enviado a ${mensaje.to}`);
     return { proveedorId: (res?.headers?.['x-message-id'] as string) ?? 'sendgrid' };
