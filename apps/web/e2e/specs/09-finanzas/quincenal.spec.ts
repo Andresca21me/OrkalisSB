@@ -5,12 +5,12 @@ import { reseed } from '../../fixtures/seed';
 import { FinanzasPage } from '../../pages/finanzas.page';
 
 /**
- * FASE-09 v3 · Finanzas · Control quincenal y cierre (HU-ADM-011). El módulo de
- * cierre viene apagado por defecto (barbería): se verifica su ausencia y, al
- * encenderlo, ver la quincena y archivar el cierre. Es DESTRUCTIVO → reseed por
- * prueba.
+ * Plan-Finanzas F6 · Cierre de período (HU-ADM-011). El módulo viene apagado
+ * por defecto (barbería): se verifica su ausencia y, al encenderlo, cerrar el
+ * mes archiva el snapshot completo y el anti-solape bloquea repetirlo.
+ * DESTRUCTIVO → reseed por prueba.
  */
-test.describe('Finanzas · control quincenal', () => {
+test.describe('Finanzas · cierre de período', () => {
   let api: APIRequestContext;
   let negocioId: string;
 
@@ -21,34 +21,36 @@ test.describe('Finanzas · control quincenal', () => {
     negocioId = await negocioIdDe(api, USERS.adminBarberia);
   });
 
-  test('módulo de cierre apagado: la pestaña Control quincenal no aparece', async ({ browser }) => {
+  test('módulo de cierre apagado: la pestaña Cierre de período no aparece', async ({ browser }) => {
     const s = await abrirRoles(browser, ['adminBarberia']);
     try {
       const fin = new FinanzasPage(s.adminBarberia.page);
       await fin.abrir();
-      await expect(s.adminBarberia.page.getByText('Análisis financiero')).toBeVisible({ timeout: 15_000 });
-      await expect(s.adminBarberia.page.getByRole('button', { name: 'Control quincenal', exact: true })).toHaveCount(0);
+      await expect(s.adminBarberia.page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
+      await expect(s.adminBarberia.page.getByRole('button', { name: 'Cierre de período', exact: true })).toHaveCount(0);
     } finally {
       await cerrarRoles(s);
     }
   });
 
-  test('con cierre activo: ve la quincena y cierra el mes (archiva)', async ({ browser }) => {
+  test('con cierre activo: cierra el mes (archiva) y el período queda protegido contra el doble cierre', async ({ browser }) => {
     await setModuloApi(api, USERS.adminBarberia, negocioId, 'modulo.cierre_periodo', true);
     const s = await abrirRoles(browser, ['adminBarberia']);
     try {
       const page = s.adminBarberia.page;
       const fin = new FinanzasPage(page);
       await fin.abrir();
-      await fin.subtab('Control quincenal');
-      await expect(page.getByRole('heading', { name: 'Control quincenal' })).toBeVisible({ timeout: 15_000 });
+      await fin.subtab('Cierre de período');
+      await expect(page.getByRole('heading', { name: 'Cierre de período' })).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('Ingresos del período')).toBeVisible();
-      await expect(page.getByText('Sin cierres')).toBeVisible(); // aún no hay cierres
+      await expect(page.getByText('Aún no has cerrado ningún período')).toBeVisible();
 
       await fin.cerrarMes();
-      // El cierre queda archivado en "Períodos cerrados".
-      await expect(page.getByText('Sin cierres')).toHaveCount(0, { timeout: 15_000 });
-      await expect(page.getByRole('cell', { name: 'mensual' })).toBeVisible({ timeout: 15_000 });
+      // El cierre queda archivado con su tipo correcto…
+      await expect(page.getByText('Aún no has cerrado ningún período')).toHaveCount(0, { timeout: 15_000 });
+      await expect(page.getByText('Mensual', { exact: true })).toBeVisible({ timeout: 15_000 });
+      // …y el período pasa a estar protegido: no se puede cerrar dos veces.
+      await expect(page.getByText('Este período ya tiene cierre')).toBeVisible({ timeout: 15_000 });
     } finally {
       await cerrarRoles(s);
     }

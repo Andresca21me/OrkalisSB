@@ -84,8 +84,4 @@ export class GestionPage {
     await expect(dlg).toBeHidden({ timeout: 15_000 });
   }
 
-  /** Va a la pestaña de Liquidación (requiere módulo de partición ON). */
-  async abrirLiquidacion() {
-    await this.page.getByRole('button', { name: 'Liquidación', exact: true }).click();
-  }
 }

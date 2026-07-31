@@ -6,13 +6,14 @@ import { hora, hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { useAuth, useMiFoto } from '../../lib/auth';
 import { borrarMiFoto, miTelefonoConfirmar, miTelefonoIniciar, subirMiFoto } from '../../lib/useEquipo';
 import { EditorFoto } from '../../ui/EditorFoto';
-import { rangoDiaBogota, useCitas } from '../../lib/useCitas';
-import { useGanancias } from '../../lib/useEspecialista';
+import { rangoDiaBogota } from '../../lib/useCitas';
+import { useGananciasDetalle } from '../../lib/useEspecialista';
+import { DesgloseSheet } from './spec-desglose';
 import { diasATimestamps, etiquetaRango, presetRango, type RangoDias } from '../../lib/useReportes';
 import { AppHeader, ScrollArea } from '../../ui';
 import { RangeCalendar } from '../../ui/RangeCalendar';
 import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Icon, Skeleton, Segmented, Switch, useToast } from '../../ui/ui';
-import { DayStat, SectionLabel, Sheet, turnoCliente, turnoTotal } from './spec-ui';
+import { DayStat, SectionLabel, Sheet } from './spec-ui';
 
 interface Sucursal { id: string; nombre: string; activa: boolean }
 type Periodo = 'hoy' | 'semana' | 'mes';
@@ -26,15 +27,18 @@ function rango(p: Periodo): { desde: string; hasta: string } {
 }
 
 // ── Ganancias ────────────────────────────────────────────────────────────────
-export function GananciasSpec({ especialistaId, sucursalId }: { especialistaId: string; sucursalId: string | null }) {
+export function GananciasSpec({ especialistaId }: { especialistaId: string; sucursalId: string | null }) {
   const [periodo, setPeriodo] = useState<Periodo>('hoy');
   const [custom, setCustom] = useState<RangoDias | null>(null);
   const [rangoSheet, setRangoSheet] = useState(false);
+  // "Ver desglose" de una transacción concreta (Plan-Finanzas F2).
+  const [desgloseCita, setDesgloseCita] = useState<string | null>(null);
   const { desde, hasta } = useMemo(() => (custom ? diasATimestamps(custom) : rango(periodo)), [custom, periodo]);
-  const g = useGanancias(especialistaId, desde, hasta);
-  const citas = useCitas({ desde, hasta, sucursalId, especialistaId });
+  // Una sola fuente: los agregados Y las filas salen del mismo endpoint, así la
+  // lista SIEMPRE suma lo que dice el hero (antes se pintaba el bruto de los
+  // servicios en verde-ganancia y nada cuadraba).
+  const g = useGananciasDetalle(especialistaId, desde, hasta);
 
-  const completados = useMemo(() => (citas.data ?? []).filter((c) => c.estado === 'completada').sort((a, b) => b.inicio.localeCompare(a.inicio)), [citas.data]);
   const d = g.data;
   const avg = d && d.servicios ? Math.round(d.ganServicios / d.servicios) : 0;
   const esHoy = !custom && periodo === 'hoy';
@@ -84,26 +88,50 @@ export function GananciasSpec({ especialistaId, sucursalId }: { especialistaId: 
               <DayStat value={money(d.comisiones)} label="Comisiones" mono accent />
             </div>
 
-            <SectionLabel>Turnos completados {esHoy ? 'hoy' : `· ${completados.length}`}</SectionLabel>
-            {completados.length === 0 ? (
-              <Card padding={18}><div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>El detalle por turno del período aparece aquí.</div></Card>
+            <SectionLabel>Tus transacciones {esHoy ? 'de hoy' : `· ${d.transacciones.length}`}</SectionLabel>
+            {d.transacciones.length === 0 ? (
+              <Card padding={18}><div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>El detalle por transacción del período aparece aquí.</div></Card>
             ) : (
               <Card padding={0}>
-                {completados.map((t, i) => (
-                  <div key={t.id}>
-                    {i > 0 && <div style={{ height: 1, background: 'var(--border-subtle)' }} />}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px' }}>
-                      <span className="data" style={{ flex: 'none', fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', minWidth: 42 }}>{hora(t.inicio)}</span>
+                {d.transacciones.map((t, i) => {
+                  const clave = t.atencionId ?? t.ventaId ?? String(i);
+                  const contenido = (
+                    <>
+                      <span className="data" style={{ flex: 'none', fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', minWidth: 42 }}>{hora(t.fecha)}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{turnoCliente(t)}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.servicios.map((s) => s.nombre).join(' · ')}</div>
+                        <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {t.tipo === 'venta_directa' ? 'Venta directa' : (t.clienteNombre ?? 'Walk-in')}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {t.concepto} · {t.reglaResumen}
+                        </div>
                       </div>
-                      <span className="data" style={{ flex: 'none', fontWeight: 700, fontSize: 'var(--text-sm)', color: '#0A8F5B' }}>{money(turnoTotal(t))}</span>
+                      <div style={{ flex: 'none', textAlign: 'right' }}>
+                        {/* El verde es SOLO para tu ganancia; el bruto queda de referencia. */}
+                        <div className="data" style={{ fontWeight: 700, fontSize: 'var(--text-sm)', color: '#0A8F5B' }}>{money(t.neto)}</div>
+                        <div className="data" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>de {money(t.bruto)}</div>
+                      </div>
+                      {t.citaId && <Icon name="chevron-right" size={15} color="var(--text-tertiary)" style={{ flex: 'none' }} />}
+                    </>
+                  );
+                  return (
+                    <div key={clave}>
+                      {i > 0 && <div style={{ height: 1, background: 'var(--border-subtle)' }} />}
+                      {t.citaId ? (
+                        <button type="button" onClick={() => setDesgloseCita(t.citaId)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                          {contenido}
+                        </button>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px' }}>{contenido}</div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </Card>
             )}
+            <p style={{ margin: '10px 2px 0', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+              Toca una transacción para ver la fórmula aplicada: precio × regla = tu ganancia.
+            </p>
           </div>
         )}
       </ScrollArea>
@@ -111,6 +139,7 @@ export function GananciasSpec({ especialistaId, sucursalId }: { especialistaId: 
       <Sheet open={rangoSheet} onClose={() => setRangoSheet(false)} title="Elige el rango de fechas">
         <RangeCalendar value={custom ?? presetRango('mes')} onApply={(r) => { setCustom(r); setRangoSheet(false); }} />
       </Sheet>
+      <DesgloseSheet citaId={desgloseCita} open={desgloseCita !== null} onClose={() => setDesgloseCita(null)} />
     </div>
   );
 }

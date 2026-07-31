@@ -1,4 +1,6 @@
-import { MetodoPago } from '@orkalis/shared';
+import { useEffect, useState } from 'react';
+import { MetodoPago, type ContextoCobro } from '@orkalis/shared';
+import { api } from '../lib/api';
 import type { PagoLinea } from '../lib/useCitas';
 import { money } from '../lib/format';
 import { Icon, Select } from './ui';
@@ -37,9 +39,25 @@ function metodoLibre(lineas: PagoLinea[]): MetodoPago {
   return (METODOS.find((m) => !usados.has(m.id))?.id ?? 'efectivo') as MetodoPago;
 }
 
-export function PagoSplit({ total, lineas, onChange }: { total: number; lineas: PagoLinea[]; onChange: (l: PagoLinea[]) => void }) {
+/** Métodos que generan comisión bancaria (candado D9 del Plan-Finanzas). */
+const ELECTRONICOS = new Set<string>(['tarjeta', 'transferencia', 'nequi']);
+
+export function PagoSplit({ total, lineas, onChange, sucursalId }: { total: number; lineas: PagoLinea[]; onChange: (l: PagoLinea[]) => void; sucursalId?: string }) {
   const suma = sumaPagos(lineas);
   const restante = Math.round(total) - suma;
+
+  // Candado D9: mientras el negocio no ASIGNE su comisión bancaria, los métodos
+  // electrónicos quedan bloqueados (el backend además rechaza el cobro — esto
+  // solo evita el choque). Sin `sucursalId` no se bloquea nada (compatibilidad).
+  const [ctxCobro, setCtxCobro] = useState<ContextoCobro | null>(null);
+  useEffect(() => {
+    if (!sucursalId) return;
+    api
+      .get<ContextoCobro>(`/finanzas/contexto-cobro?sucursalId=${sucursalId}`)
+      .then(setCtxCobro)
+      .catch(() => { /* sin contexto no se bloquea; el backend sigue siendo la barrera */ });
+  }, [sucursalId]);
+  const bloqueado = !!sucursalId && ctxCobro !== null && !ctxCobro.comisionBancariaConfigurada;
 
   const setLinea = (i: number, patch: Partial<PagoLinea>) => onChange(lineas.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   const quitar = (i: number) => onChange(lineas.filter((_, idx) => idx !== i));
@@ -52,12 +70,24 @@ export function PagoSplit({ total, lineas, onChange }: { total: number; lineas: 
 
   return (
     <div>
+      {bloqueado && (
+        <div role="alert" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', marginBottom: 10, borderRadius: 'var(--radius-sm)', background: 'var(--warning-tint)', border: '1px solid rgba(180,83,9,0.3)' }}>
+          <Icon name="alert-circle" size={15} color="#B45309" style={{ flex: 'none', marginTop: 2 }} />
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+            <strong>Tarjeta, transferencia y Nequi están bloqueados</strong>: el administrador debe asignar la comisión bancaria en <strong>Configuración → Financieros</strong> (puede ser 0%). Así el cierre refleja lo que el banco descuenta de verdad.
+          </span>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {lineas.map((l, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ flex: '1 1 120px', minWidth: 0 }}>
               <Select value={l.metodo} onChange={(e) => setLinea(i, { metodo: e.target.value as MetodoPago })}>
-                {METODOS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                {METODOS.map((m) => (
+                  <option key={m.id} value={m.id} disabled={bloqueado && ELECTRONICOS.has(m.id)}>
+                    {m.label}{bloqueado && ELECTRONICOS.has(m.id) ? ' (bloqueado)' : ''}
+                  </option>
+                ))}
               </Select>
             </div>
             <div style={{ flex: '1 1 110px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 4 }}>

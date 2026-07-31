@@ -226,7 +226,9 @@ export async function completarCitaApi(
   metodoPago = 'efectivo',
 ): Promise<void> {
   const token = await loginAPI(request, email);
-  const res = await request.post(`/api/citas/${citaId}/completar`, { headers: authHeaders(token), data: { metodoPago } });
+  // `metodoUnico`: el backend cobra el TOTAL calculado con ese método (el
+  // fixture no conoce el monto exacto — tarifas/productos lo mueven).
+  const res = await request.post(`/api/citas/${citaId}/completar`, { headers: authHeaders(token), data: { metodoUnico: metodoPago } });
   expect(res.ok(), `POST /citas/:id/completar: ${res.status()} ${await res.text()}`).toBeTruthy();
 }
 

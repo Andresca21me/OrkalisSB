@@ -13,7 +13,6 @@ export function GestionScreen() {
   const { sucursalActivaId } = useSucursal();
   const config = useConfig(sucursalActivaId);
   const inventarioOn = moduloActivo(config.data, 'modulo.inventario');
-  const particion = moduloActivo(config.data, 'modulo.particion_por_especialista');
 
   const tabs = useMemo<TabDef[]>(
     () => [
@@ -51,7 +50,7 @@ export function GestionScreen() {
 
       {tab === 'inventario' && inventarioOn && <InventarioScreen sucursalId={sucursalActivaId} />}
       {tab === 'servicios' && <ServiciosScreen />}
-      {tab === 'equipo' && <EquipoScreen particion={particion} />}
+      {tab === 'equipo' && <EquipoScreen />}
     </div>
   );
 }

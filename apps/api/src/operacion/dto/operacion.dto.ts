@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Min,
   MinLength,
 } from 'class-validator';
@@ -97,12 +98,17 @@ export class LiquidacionDto {
 export class PreviewLiquidacionDto {
   @IsISO8601() desde!: string;
   @IsISO8601() hasta!: string;
-  @IsUUID('4') sucursalId!: string;
+  /** Opcional desde Plan-Finanzas F5: sin sucursal = consolidado del negocio. */
+  @IsOptional() @IsUUID('4') sucursalId?: string;
 }
 
 export class CierreDto {
   @IsIn(['quincenal', 'mensual']) tipo!: 'quincenal' | 'mensual';
-  @IsISO8601() desde!: string;
-  @IsISO8601() hasta!: string;
+  /**
+   * Fecha ANCLA del período (YYYY-MM-DD, día local Bogotá). El backend deriva
+   * el rango: quincenal → 1–15 o 16–fin según el día; mensual → el mes entero
+   * (Plan-Finanzas F6). El navegador ya no manda desde/hasta.
+   */
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'El ancla debe ser YYYY-MM-DD.' }) ancla!: string;
   @IsOptional() @IsUUID('4') sucursalId?: string;
 }

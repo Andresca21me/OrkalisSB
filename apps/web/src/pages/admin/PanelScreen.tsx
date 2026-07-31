@@ -157,7 +157,7 @@ export function PanelScreen({ onNav }: { onNav: (id: string) => void }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Button fullWidth iconLeft="plus" onClick={() => setNueva(true)}>Nueva cita</Button>
               <Button variant="secondary" fullWidth iconLeft="users" onClick={() => onNav('clientes')}>Clientes</Button>
-              <Button variant="secondary" fullWidth iconLeft="bar-chart-2" onClick={() => onNav('gastos')}>Finanzas</Button>
+              <Button variant="secondary" fullWidth iconLeft="bar-chart-2" onClick={() => onNav('finanzas')}>Finanzas</Button>
             </div>
           </Card>
         </aside>

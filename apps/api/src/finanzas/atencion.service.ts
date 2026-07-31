@@ -4,10 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { eq, inArray, sql } from 'drizzle-orm';
-import { EstadoCita, MetodoPago, SplitType } from '@orkalis/shared';
+import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { EstadoCita, MetodoPago, NivelConfig, SplitType } from '@orkalis/shared';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
-import { atencion, atencionPago, atencionProducto, cita, citaServicio, movimientoInventario, producto, servicio } from '../db/schema';
+import { atencion, atencionPago, atencionProducto, atencionServicio, cierrePeriodo, cita, citaServicio, movimientoInventario, producto, servicio } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { ConfigResolverService } from '../config-module/config-resolver.service';
 import { ModuloGate } from '../operacion/modulo-gate.service';
@@ -15,6 +15,7 @@ import { transicionar } from '../agendamiento/cita-state-machine';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 import {
   calcularAtencion,
+  esMetodoElectronico,
   type ComisionProductoTipo,
   type ParametrosFinancieros,
   type ProductoReal,
@@ -23,7 +24,12 @@ import {
 
 export interface CompletarInput {
   /** Desglose del pago: uno o más métodos que deben sumar el total. */
-  pagos: { metodo: MetodoPago; monto: number }[];
+  pagos?: { metodo: MetodoPago; monto: number }[];
+  /**
+   * Alternativa a `pagos` para flujos donde el monto no se conoce de antemano
+   * (walk-in retroactivo, D7): un solo método por el total calculado.
+   */
+  metodoUnico?: MetodoPago;
   /** Servicios reales (opcional: por defecto los ya registrados en la cita). */
   servicios?: { servicioId: string; precio?: number }[];
   /** Productos vendidos/consumidos (si inventario activo). */
@@ -54,10 +60,10 @@ export class AtencionService {
 
   /** Completa el turno: calcula, persiste atención + stock, transiciona. */
   async completar(ctx: TenantContext, citaId: string, input: CompletarInput): Promise<Atencion> {
-    if (!input.pagos?.length) {
+    if (!input.pagos?.length && !input.metodoUnico) {
       throw new BadRequestException('No se puede completar sin registrar el pago.');
     }
-    if (input.pagos.some((p) => !(p.monto > 0))) {
+    if (input.pagos?.some((p) => !(p.monto > 0))) {
       throw new BadRequestException('Cada método de pago debe tener un monto mayor a cero.');
     }
 
@@ -73,6 +79,21 @@ export class AtencionService {
     // ni cobrar (Plan-Inventario, §2.5).
     if (input.productos?.length && !params.inventarioActivo) {
       throw new BadRequestException('El módulo de inventario no está activo.');
+    }
+    // Candado D9 (Plan-Finanzas): no se cobra con métodos electrónicos hasta
+    // que el negocio ASIGNE su comisión bancaria (asignar 0 explícito cuenta).
+    // Sin esto, el cálculo aplicaría el default en silencio y el cierre del
+    // período no reflejaría lo que el banco de verdad descuenta.
+    const metodosDelCobro = input.metodoUnico ? [input.metodoUnico] : (input.pagos ?? []).map((p) => p.metodo);
+    if (metodosDelCobro.some((m) => esMetodoElectronico(m))) {
+      const cb = await this.config.resolver(ctx.negocioId, c.sucursalId, 'finanzas.comision_bancaria');
+      if (cb.procedencia === NivelConfig.Sistema) {
+        throw new ConflictException({
+          codigo: 'COMISION_BANCARIA_SIN_CONFIGURAR',
+          message:
+            'Antes de cobrar con tarjeta, transferencia o Nequi, asigna la comisión bancaria en Configuración → Financieros (puede ser 0%).',
+        });
+      }
     }
     const permitirStockNegativo = params.inventarioActivo
       ? await this.config.resolverModulo(ctx.negocioId, c.sucursalId, 'inventario.permitir_stock_negativo')
@@ -114,10 +135,18 @@ export class AtencionService {
         }
       }
 
-      const r = calcularAtencion(servicios, productosReales, input.pagos, params);
+      // `metodoUnico` (D7): el monto es el total calculado — se resuelve en dos
+      // pasadas porque el total depende del cálculo y el cálculo de los pagos
+      // (comisión bancaria sobre la porción electrónica).
+      let pagos = input.pagos ?? [];
+      if (input.metodoUnico) {
+        const prev = calcularAtencion(servicios, productosReales, [], params);
+        pagos = [{ metodo: input.metodoUnico, monto: prev.total }];
+      }
+      const r = calcularAtencion(servicios, productosReales, pagos, params);
 
       // El desglose de pago debe cuadrar con el total cobrado (± redondeo).
-      const sumaPagos = input.pagos.reduce((s, p) => s + p.monto, 0);
+      const sumaPagos = pagos.reduce((s, p) => s + p.monto, 0);
       if (Math.abs(sumaPagos - r.total) > TOLERANCIA_PAGO) {
         throw new BadRequestException(
           `La suma de los pagos (${sumaPagos.toFixed(2)}) no coincide con el total (${r.total.toFixed(2)}).`,
@@ -147,14 +176,29 @@ export class AtencionService {
           ganProf: r.ganProf.toFixed(2),
           ganSalon: r.ganSalon.toFixed(2),
           comisionProductos: r.comisionProductos.toFixed(2),
-          metodoPago: metodoDominante(input.pagos), // legacy: método dominante
+          metodoPago: metodoDominante(pagos), // legacy: método dominante
           snapshotParam: r.snapshot,
         })
         .returning();
 
       // Desglose de pago (uno o varios métodos).
       await tx.insert(atencionPago).values(
-        input.pagos.map((p) => ({ atencionId: at.id, metodo: p.metodo, monto: p.monto.toFixed(2) })),
+        pagos.map((p) => ({ atencionId: at.id, metodo: p.metodo, monto: p.monto.toFixed(2) })),
+      );
+
+      // Desglose por línea de servicio (Plan-Finanzas F1): la regla aplicada y
+      // la ganancia del profesional quedan congeladas por transacción.
+      await tx.insert(atencionServicio).values(
+        servicios.map((s, i) => ({
+          atencionId: at.id,
+          servicioId: s.servicioId!,
+          nombre: s.nombre ?? '',
+          precio: s.precio.toFixed(2),
+          reglaTipo: r.repartoPorServicio[i].regla.tipo,
+          reglaValor: r.repartoPorServicio[i].regla.valor.toFixed(2),
+          reglaOrigen: r.repartoPorServicio[i].regla.origen,
+          ganProf: r.repartoPorServicio[i].ganProf.toFixed(2),
+        })),
       );
 
       // Productos: registrar (con costo y comisión snapshot), descontar stock y
@@ -205,9 +249,37 @@ export class AtencionService {
    * inventario; la salida original queda como registro fiel (no se borra su
    * movimiento de kardex).
    */
-  async revertir(ctx: TenantContext, citaId: string, reponerStock = true): Promise<void> {
+  async revertir(ctx: TenantContext, citaId: string, reponerStock = true): Promise<{ advertencia: string | null }> {
     const c = await this.cargarCita(ctx, citaId);
     const nuevoEstado = transicionar(c.estado as EstadoCita, 'revertir'); // valida completada→en_progreso
+
+    // D6 (Plan-Finanzas): si el cobro cae dentro de un período ya CERRADO, la
+    // reversión se permite pero se avisa — el snapshot archivado no cambia y el
+    // admin debe saber que su cierre quedó desfasado de la realidad.
+    let advertencia: string | null = null;
+    const fechaCobro = await runInTenantTx(ctx, async (tx) => {
+      const [at] = await tx.select({ creadoEn: atencion.creadoEn }).from(atencion).where(eq(atencion.citaId, citaId)).limit(1);
+      return at?.creadoEn ?? null;
+    });
+    if (fechaCobro) {
+      const [cerrado] = await runInTenantTx(ctx, (tx) =>
+        tx
+          .select({ id: cierrePeriodo.id })
+          .from(cierrePeriodo)
+          .where(
+            and(
+              sql`(${cierrePeriodo.sucursalId} IS NULL OR ${cierrePeriodo.sucursalId} = ${c.sucursalId})`,
+              lte(cierrePeriodo.desde, fechaCobro),
+              gte(cierrePeriodo.hasta, fechaCobro),
+            ),
+          )
+          .limit(1),
+      );
+      if (cerrado) {
+        advertencia =
+          'Este cobro pertenece a un período que ya tiene cierre: el archivo del cierre no cambia, pero la realidad sí. Considera regenerar la liquidación de ese período.';
+      }
+    }
 
     await runInTenantTx(ctx, async (tx) => {
       const [at] = await tx.select({ id: atencion.id }).from(atencion).where(eq(atencion.citaId, citaId)).limit(1);
@@ -237,10 +309,12 @@ export class AtencionService {
       }
 
       await tx.delete(atencionProducto).where(eq(atencionProducto.atencionId, at.id));
+      await tx.delete(atencionServicio).where(eq(atencionServicio.atencionId, at.id));
       await tx.delete(atencion).where(eq(atencion.id, at.id));
       await tx.update(cita).set({ estado: nuevoEstado, actualizadoEn: new Date() }).where(eq(cita.id, citaId));
     });
     this.metrics.inc(METRICAS.turnosRevertidos);
+    return { advertencia };
   }
 
   private async resolverParametros(ctx: TenantContext, sucursalId: string): Promise<ParametrosFinancieros> {
@@ -290,7 +364,7 @@ export class AtencionService {
     if (override?.length) {
       const ids = override.map((o) => o.servicioId);
       const defs = await tx
-        .select({ id: servicio.id, precio: servicio.precio, splitType: servicio.splitType, splitValor: servicio.splitValor })
+        .select({ id: servicio.id, nombre: servicio.nombre, precio: servicio.precio, splitType: servicio.splitType, splitValor: servicio.splitValor })
         .from(servicio)
         .where(inArray(servicio.id, ids));
       const byId = new Map(defs.map((d) => [d.id, d]));
@@ -298,6 +372,8 @@ export class AtencionService {
         const d = byId.get(o.servicioId);
         if (!d) throw new NotFoundException('Servicio no encontrado.');
         return {
+          servicioId: o.servicioId,
+          nombre: d.nombre,
           precio: o.precio ?? Number(d.precio),
           splitType: d.splitType as SplitType,
           splitValor: Number(d.splitValor),
@@ -305,11 +381,13 @@ export class AtencionService {
       });
     }
     const lineas = await tx
-      .select({ precio: citaServicio.precioAplicado, splitType: servicio.splitType, splitValor: servicio.splitValor })
+      .select({ servicioId: citaServicio.servicioId, nombre: servicio.nombre, precio: citaServicio.precioAplicado, splitType: servicio.splitType, splitValor: servicio.splitValor })
       .from(citaServicio)
       .innerJoin(servicio, eq(servicio.id, citaServicio.servicioId))
       .where(eq(citaServicio.citaId, citaId));
     return lineas.map((l) => ({
+      servicioId: l.servicioId,
+      nombre: l.nombre,
       precio: Number(l.precio),
       splitType: l.splitType as SplitType,
       splitValor: Number(l.splitValor),

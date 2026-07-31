@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react';
 import type { MovimientoInventarioItem, VentaProductoHistorial } from '@orkalis/shared';
 import { useSucursal } from '../../lib/sucursal';
 import { money } from '../../lib/format';
-import { diasATimestamps, presetRango, type RangoDias } from '../../lib/useReportes';
 import { useCompras, useHistorialVentas } from '../../lib/useInventario';
 import { useEquipo } from '../../lib/useEquipo';
+import type { Periodo } from '../../ui/PeriodPicker';
 import { Card, EmptyState, ErrorState, Select, Skeleton } from '../../ui/ui';
-import { FinTile, RangePicker } from './finanzas-ui';
+import { FinTile } from './finanzas-ui';
 
 type OrigenFiltro = 'todas' | 'cita' | 'directa';
 
@@ -15,14 +15,14 @@ type OrigenFiltro = 'todas' | 'cita' | 'directa';
  * producto (en cita + directas) con las compras/inversión del período. Solo se
  * monta con el módulo de inventario activo (lo decide `FinanzasScreen`).
  */
-export function VentasInventarioScreen() {
+export function VentasInventarioScreen({ periodo }: { periodo: Periodo }) {
   const { sucursalActivaId } = useSucursal();
-  const [rango, setRango] = useState<RangoDias>(() => presetRango('mes'));
   const [origen, setOrigen] = useState<OrigenFiltro>('todas');
   const [especialistaId, setEspecialistaId] = useState('');
   const equipo = useEquipo();
 
-  const ts = diasATimestamps(rango);
+  // El rango viene del período GLOBAL de Finanzas (F4).
+  const ts = { desde: periodo.desde, hasta: periodo.hasta };
   const ventas = useHistorialVentas({
     sucursalId: sucursalActivaId,
     desde: ts.desde,
@@ -41,7 +41,7 @@ export function VentasInventarioScreen() {
   return (
     <div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <RangePicker value={rango} onChange={setRango} />
+        <span className="eyebrow">{periodo.etiqueta}</span>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Select value={origen} onChange={(e) => setOrigen(e.target.value as OrigenFiltro)}>
             <option value="todas">Todas las ventas</option>

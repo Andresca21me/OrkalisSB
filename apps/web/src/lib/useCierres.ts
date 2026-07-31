@@ -6,6 +6,10 @@ export function useCierres() {
   return useApi<Cierre[]>(() => api.get('/cierres'));
 }
 
-export function crearCierre(body: { tipo: 'quincenal' | 'mensual'; desde: string; hasta: string; sucursalId?: string }): Promise<Cierre> {
+/**
+ * Cierra el período (Plan-Finanzas F6): se manda el ANCLA (día Bogotá) y el
+ * backend deriva el rango — el navegador ya no decide fechas de cierre.
+ */
+export function crearCierre(body: { tipo: 'quincenal' | 'mensual'; ancla: string; sucursalId?: string }): Promise<Cierre> {
   return api.post('/cierres', body);
 }

@@ -116,6 +116,22 @@ export class EquipoController {
     return this.equipoService.ganancias(ctx, id, new Date(desde), new Date(hasta));
   }
 
+  /**
+   * Detalle por transacción de las ganancias (Plan-Finanzas F2): citas cobradas
+   * y ventas directas, con bruto × regla = neto. Mismo candado que `ganancias`:
+   * un especialista solo consulta las suyas (D2).
+   */
+  @Get(':id/ganancias/detalle')
+  @Roles(RolUsuario.Admin, RolUsuario.Especialista)
+  gananciasDetalle(
+    @CurrentTenant() ctx: TenantContext,
+    @Param('id') id: string,
+    @Query('desde') desde: string,
+    @Query('hasta') hasta: string,
+  ) {
+    return this.equipoService.gananciasDetalle(ctx, id, new Date(desde), new Date(hasta));
+  }
+
   @Post()
   crear(@CurrentTenant() ctx: TenantContext, @Body() dto: CrearEspecialistaDto) {
     const credenciales =

@@ -5,6 +5,7 @@ import { rangoDiaBogota, useCitas } from '../../lib/useCitas';
 import { AppHeader, FooterBar, ScrollArea } from '../../ui';
 import { Avatar, Button, Card, EmptyState, ErrorState, Icon, Skeleton, Segmented } from '../../ui/ui';
 import { ESTADO_COLOR, ESTADO_TINT, EstadoBadgeSpec, SectionLabel, Sheet, minutosDelDia, turnoCliente, turnoTotal } from './spec-ui';
+import { DesgloseSheet } from './spec-desglose';
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const navBtn: CSSProperties = { flex: 'none', width: 34, height: 34, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--surface-card)', cursor: 'pointer' };
@@ -174,8 +175,11 @@ export function DetalleTurno({ turno, onBack, onIniciar, onCompletar, onCancelar
 }) {
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [reponer, setReponer] = useState(true);
+  const [verGanancia, setVerGanancia] = useState(false);
   const st = turno.estado;
-  const total = turnoTotal(turno);
+  // Completada: el total REAL cobrado (con productos y tarifa); antes se sumaban
+  // solo los servicios y el "Total cobrado" mentía si hubo venta de productos.
+  const total = turno.cobro?.total ?? turnoTotal(turno);
 
   const cfg: Record<Exclude<SheetKind, null>, { title: string; body: string; cta: string; run: () => void }> = {
     noasistio: { title: '¿Marcar como no asistió?', body: 'El cliente no se presentó. El turno quedará registrado como “No asistió” y se liberará tu agenda.', cta: 'Marcar no asistió', run: onNoAsistio },
@@ -209,12 +213,33 @@ export function DetalleTurno({ turno, onBack, onIniciar, onCompletar, onCancelar
                 </div>
               </div>
             ))}
+            {st === 'completada' && (turno.cobro?.numProductos ?? 0) > 0 && (
+              <>
+                <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px' }}>
+                  <div style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--text-primary)' }}>
+                    Productos vendidos <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}>×{turno.cobro!.numProductos}</span>
+                  </div>
+                  <span className="data" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{money(turno.cobro!.totalProductos)}</span>
+                </div>
+              </>
+            )}
             <div style={{ height: 1, background: 'var(--border-subtle)' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 14px', background: 'var(--surface-sunken)' }}>
               <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{st === 'completada' ? 'Total cobrado' : 'Total estimado'}</span>
               <span className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-md)', color: 'var(--text-primary)' }}>{money(total)}</span>
             </div>
           </Card>
+
+          {st === 'completada' && turno.cobro?.miGanancia != null && (
+            <button type="button" onClick={() => setVerGanancia(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', marginBottom: 14, padding: '13px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--surface-card)', cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>Tu ganancia en este turno</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span className="data" style={{ fontWeight: 800, fontSize: 'var(--text-md)', color: '#0A8F5B' }}>{money(turno.cobro.miGanancia)}</span>
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--brand)' }}>Ver desglose</span>
+              </span>
+            </button>
+          )}
 
           {(st === 'cancelada' || st === 'no_asistio') && (
             <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 'var(--radius-md)', background: st === 'cancelada' ? 'var(--error-tint)' : 'var(--warning-tint)', border: `1px solid ${st === 'cancelada' ? 'rgba(239,68,68,0.22)' : 'rgba(245,158,11,0.28)'}` }}>
@@ -261,6 +286,8 @@ export function DetalleTurno({ turno, onBack, onIniciar, onCompletar, onCancelar
           )}
         </Sheet>
       )}
+
+      <DesgloseSheet citaId={turno.id} open={verGanancia} onClose={() => setVerGanancia(false)} />
     </div>
   );
 }

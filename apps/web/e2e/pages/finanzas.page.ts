@@ -46,11 +46,18 @@ export class FinanzasPage {
     return download;
   }
 
-  // ── Cierre (Control quincenal) ──
+  // ── Período global (Plan-Finanzas F4) ──
+  /** Cambia el período de TODAS las pestañas: 'Quincena 1' | 'Quincena 2' | 'Mes'. */
+  async elegirPeriodo(nombre: string) {
+    await this.page.getByTestId('period-picker').getByText(nombre, { exact: true }).click();
+  }
+
+  // ── Cierre de período (Plan-Finanzas F6) ──
   async cerrarMes() {
-    await this.page.getByRole('button', { name: 'Cerrar mes completo' }).click();
+    await this.elegirPeriodo('Mes');
+    await this.page.getByRole('button', { name: 'Cerrar el mes' }).click();
     const dlg = this.page.getByRole('dialog');
-    await dlg.getByRole('button', { name: 'Sí, cerrar y archivar' }).click();
+    await dlg.getByRole('button', { name: 'Generar cierre' }).click();
     await expect(dlg).toBeHidden({ timeout: 15_000 });
   }
 }

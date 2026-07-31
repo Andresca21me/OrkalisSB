@@ -20,7 +20,7 @@ test.describe('Finanzas · análisis', () => {
       const page = s.adminBarberia.page;
       const fin = new FinanzasPage(page);
       await fin.abrir(); // arranca en Análisis (consolidado, con datos del seed)
-      await expect(page.getByRole('heading', { name: 'Análisis financiero' })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('Total gastos')).toBeVisible();
       await expect(page.getByText('Ingresos del salón').first()).toBeVisible();
       await expect(page.getByText('Ganancia neta').first()).toBeVisible();
@@ -49,7 +49,7 @@ test.describe('Finanzas · análisis', () => {
     try {
       const fin = new FinanzasPage(s.adminBarberia.page);
       await fin.abrir();
-      await expect(s.adminBarberia.page.getByRole('heading', { name: 'Análisis financiero' })).toBeVisible({ timeout: 15_000 });
+      await expect(s.adminBarberia.page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
       const dl = await fin.exportarCsv('CSV');
       expect(dl.suggestedFilename()).toMatch(/analisis-.*\.csv/);
     } finally {

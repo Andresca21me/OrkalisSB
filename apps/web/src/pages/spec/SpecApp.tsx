@@ -147,7 +147,10 @@ function MiDia({ me, turnos, current, cargando, error, onRetry, disponible, onTo
 }) {
   const miFoto = useMiFoto();
   const completados = turnos.filter((t) => t.estado === 'completada').length;
-  const gananciasHoy = turnos.filter((t) => t.estado === 'completada').reduce((a, t) => a + turnoTotal(t), 0);
+  // TU ganancia real del día (Plan-Finanzas F2): suma de `cobro.miGanancia`, no
+  // el bruto de los servicios — antes se pintaba el precio al cliente como si
+  // fuera lo ganado y nunca cuadraba con la pestaña de ganancias.
+  const gananciasHoy = turnos.filter((t) => t.estado === 'completada').reduce((a, t) => a + (t.cobro?.miGanancia ?? 0), 0);
   const upcoming = turnos.filter((t) => t !== current && t.estado !== 'completada' && t.estado !== 'cancelada' && t.estado !== 'no_asistio');
   const nextTurno = upcoming.find((t) => t !== current);
   const primerNombre = me.split(' ')[0];
@@ -209,7 +212,7 @@ function MiDia({ me, turnos, current, cargando, error, onRetry, disponible, onTo
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>
               <DayStat value={turnos.length} label="Turnos" />
               <DayStat value={completados} label="Completados" />
-              <DayStat value={money(gananciasHoy)} label="Hoy" accent mono />
+              <DayStat value={money(gananciasHoy)} label="Ganado hoy" accent mono />
             </div>
 
             <SectionLabel>Próximos hoy · {upcoming.length}</SectionLabel>

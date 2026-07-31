@@ -1,17 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { and, eq, gte, lte } from 'drizzle-orm';
-import { MetodoPago } from '@orkalis/shared';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
 import { atencion, especialista, liquidacion, ventaProducto } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { ModuloGate } from './modulo-gate.service';
 import { round2 } from '../finanzas/calculo';
-
-const ELECTRONICOS: ReadonlySet<string> = new Set([
-  MetodoPago.Tarjeta,
-  MetodoPago.Transferencia,
-  MetodoPago.Nequi,
-]);
 
 export interface LiquidacionResultado {
   especialistaId: string;
@@ -31,31 +24,24 @@ export class LiquidacionesService {
   constructor(private readonly gate: ModuloGate) {}
 
   /**
-   * Genera y persiste las liquidaciones de un período para una sucursal.
-   * bruto = Σ gan_prof + Σ comisiones de venta; descuento = retención por pago
-   * electrónico (según la comisión del snapshot); neto = bruto − descuento.
-   */
-  /**
-   * Calcula (sin persistir) las liquidaciones de un período/sucursal. Lo usan
-   * tanto `preview` (solo lectura) como `generar` (persiste). Devuelve un
-   * resultado por especialista con actividad.
+   * Calcula (sin persistir) las liquidaciones de un período. Lo usan tanto
+   * `preview` (solo lectura) como `generar` (persiste). Devuelve un resultado
+   * por especialista con actividad. `sucursalId` opcional = consolidado (F5).
    */
   private async computar(
     tx: DrizzleTx,
-    input: { desde: Date; hasta: Date; sucursalId: string },
+    input: { desde: Date; hasta: Date; sucursalId?: string },
   ): Promise<LiquidacionResultado[]> {
     const atenciones = await tx
       .select({
         especialistaId: atencion.especialistaId,
         ganProf: atencion.ganProf,
         comisionProductos: atencion.comisionProductos,
-        metodoPago: atencion.metodoPago,
-        snapshot: atencion.snapshotParam,
       })
       .from(atencion)
       .where(
         and(
-          eq(atencion.sucursalId, input.sucursalId),
+          input.sucursalId ? eq(atencion.sucursalId, input.sucursalId) : undefined,
           gte(atencion.creadoEn, input.desde),
           lte(atencion.creadoEn, input.hasta),
         ),
@@ -66,7 +52,7 @@ export class LiquidacionesService {
       .from(ventaProducto)
       .where(
         and(
-          eq(ventaProducto.sucursalId, input.sucursalId),
+          input.sucursalId ? eq(ventaProducto.sucursalId, input.sucursalId) : undefined,
           gte(ventaProducto.creadoEn, input.desde),
           lte(ventaProducto.creadoEn, input.hasta),
         ),
@@ -77,17 +63,16 @@ export class LiquidacionesService {
     const acc = new Map<string, { bruto: number; comisionProductos: number; descuento: number }>();
     const get = (id: string) => acc.get(id) ?? { bruto: 0, comisionProductos: 0, descuento: 0 };
 
+    // D3 (Plan-Finanzas): la comisión bancaria la absorbe el salón EN EL COBRO
+    // (`calcularAtencion` ya la restó de gan_salon, prorrateada por pagos
+    // reales). Antes aquí se descontaba OTRA VEZ al especialista —recalculada
+    // sobre el método "dominante"—: la misma comisión cobrada dos veces, a dos
+    // actores, con dos bases. El descuento queda en 0; la columna se conserva
+    // por compatibilidad del contrato.
     for (const a of atenciones) {
-      const ganProf = Number(a.ganProf);
       const cur = get(a.especialistaId);
-      cur.bruto += ganProf;
+      cur.bruto += Number(a.ganProf);
       cur.comisionProductos += Number(a.comisionProductos);
-      if (ELECTRONICOS.has(a.metodoPago)) {
-        const comisionPct = Number(
-          (a.snapshot as { parametros?: { comisionBancaria?: number } })?.parametros?.comisionBancaria ?? 0,
-        );
-        cur.descuento += round2((ganProf * comisionPct) / 100);
-      }
       acc.set(a.especialistaId, cur);
     }
     for (const c of comisiones) {
@@ -126,7 +111,7 @@ export class LiquidacionesService {
   /** Vista previa de liquidación (solo lectura, no persiste). FASE-07. */
   async preview(
     ctx: TenantContext,
-    input: { desde: Date; hasta: Date; sucursalId: string },
+    input: { desde: Date; hasta: Date; sucursalId?: string },
   ): Promise<LiquidacionResultado[]> {
     await this.gate.assertActivo(ctx, 'modulo.particion_por_especialista');
     return runInTenantTx(ctx, (tx) => this.computar(tx, input));
@@ -146,6 +131,11 @@ export class LiquidacionesService {
           sucursalId: input.sucursalId,
           especialistaId: r.especialistaId,
           periodo: input.periodo,
+          // Rango real + desglose persistidos (F5): antes se perdían al guardar.
+          desde: input.desde,
+          hasta: input.hasta,
+          comisionServicios: r.comisionServicios.toFixed(2),
+          comisionProductos: r.comisionProductos.toFixed(2),
           bruto: r.bruto.toFixed(2),
           descuento: r.descuento.toFixed(2),
           neto: r.neto.toFixed(2),

@@ -2,11 +2,11 @@ import { config as loadEnv } from 'dotenv';
 loadEnv();
 
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, NivelConfig, OrigenCita, PerfilNegocio, PlanSuscripcion, TipoGasto, TipoProducto } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { atencion, atencionProducto, cita, especialista, especialistaSucursal, gasto, negocio, producto, sucursal, suscripcion } from '../db/schema';
+import { atencion, atencionProducto, cita, especialista, especialistaSucursal, gasto, liquidacion, negocio, producto, sucursal, suscripcion } from '../db/schema';
 import { PlanService } from '../plans/plan.service';
 import type { TenantContext } from '../db/tenant-context';
 import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
@@ -55,7 +55,7 @@ describe('Operación interna (FASE-10)', () => {
     gastos = new GastosService();
     liquidaciones = new LiquidacionesService(gate);
     reportes = new ReportesService();
-    cierre = new CierreService(gate, reportes);
+    cierre = new CierreService(gate, reportes, liquidaciones);
   });
 
   afterAll(async () => {
@@ -257,8 +257,27 @@ describe('Operación interna (FASE-10)', () => {
     const mia = res.find((r) => r.especialistaId === espId);
     expect(mia).toBeDefined();
     expect(mia!.bruto).toBe(50000);
-    expect(mia!.descuento).toBe(1000); // 2% de 50000
-    expect(mia!.neto).toBe(49000);
+    // D3 (Plan-Finanzas F5): la comisión bancaria la absorbió el salón EN EL
+    // COBRO; la liquidación ya no la descuenta OTRA VEZ al especialista. Antes
+    // aquí se esperaba descuento=1000 (2% recalculado sobre el método
+    // dominante): era un doble cobro de la misma comisión.
+    expect(mia!.descuento).toBe(0);
+    expect(mia!.neto).toBe(50000);
+
+    // La fila persistida guarda el rango real y el desglose (F5).
+    const [persistida] = await adminDb
+      .select()
+      .from(liquidacion)
+      .where(and(eq(liquidacion.especialistaId, espId), eq(liquidacion.periodo, '2030-03')))
+      .orderBy(desc(liquidacion.creadoEn))
+      .limit(1);
+    expect(persistida.desde).toEqual(new Date('2030-03-01'));
+    expect(Number(persistida.comisionServicios)).toBe(50000);
+
+    // Consolidado (sin sucursal): incluye al menos lo mismo que la sede.
+    const consolidado = await liquidaciones.preview(ctx, { desde: new Date('2030-03-01'), hasta: new Date('2030-04-01') });
+    const miaCons = consolidado.find((r) => r.especialistaId === espId);
+    expect(miaCons!.bruto).toBeGreaterThanOrEqual(50000);
 
     const csv = liquidaciones.exportarCsv(res);
     expect(csv.charCodeAt(0)).toBe(0xfeff); // BOM
@@ -272,20 +291,34 @@ describe('Operación interna (FASE-10)', () => {
     expect(r.salud).toBe('sin_datos');
   });
 
-  it('cierre: no disponible con módulo OFF; disponible con ON', async () => {
-    await expect(
-      cierre.cerrar(ctx, { tipo: 'mensual', desde: new Date('2030-03-01'), hasta: new Date('2030-04-01'), sucursalId }),
-    ).rejects.toThrow();
+  it('cierre F6: rangos por ancla en Bogotá, tipo correcto, archivo completo y anti-solape', async () => {
+    // Módulo OFF → bloqueado.
+    await expect(cierre.cerrar(ctx, { tipo: 'mensual', ancla: '2030-03-01', sucursalId })).rejects.toThrow();
 
     await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'modulo.cierre_periodo', true);
-    const c = await cierre.cerrar(ctx, {
-      tipo: 'mensual',
-      desde: new Date('2030-03-01'),
-      hasta: new Date('2030-04-01'),
-      sucursalId,
-    });
-    expect(c.id).toBeDefined();
-    expect(c.datosArchivados).toBeTruthy();
+
+    // El BACKEND deriva el rango del ancla (antes lo mandaba el navegador y el
+    // tipo siempre llegaba 'mensual').
+    const q1 = await cierre.cerrar(ctx, { tipo: 'quincenal', ancla: '2030-03-07', sucursalId });
+    expect(q1.tipo).toBe('quincenal');
+    expect(q1.desde.toISOString()).toBe('2030-03-01T05:00:00.000Z'); // 1 mar 00:00 Bogotá
+    expect(q1.hasta.toISOString()).toBe('2030-03-16T04:59:59.999Z'); // 15 mar 23:59 Bogotá
+
+    // El archivo lleva el análisis COMPLETO + la liquidación del período.
+    const archivo = q1.datosArchivados as { analisis?: { ingresosTotales: number }; liquidaciones?: unknown[] };
+    expect(archivo.analisis).toBeDefined();
+    expect(Array.isArray(archivo.liquidaciones)).toBe(true);
+
+    // Anti-solape: el mes que contiene la quincena cerrada choca → 409.
+    await expect(cierre.cerrar(ctx, { tipo: 'mensual', ancla: '2030-03-01', sucursalId })).rejects.toMatchObject({ status: 409 });
+    // La segunda quincena NO choca.
+    const q2 = await cierre.cerrar(ctx, { tipo: 'quincenal', ancla: '2030-03-16', sucursalId });
+    expect(q2.desde.toISOString()).toBe('2030-03-16T05:00:00.000Z');
+    expect(q2.hasta.toISOString()).toBe('2030-04-01T04:59:59.999Z'); // 31 mar 23:59 Bogotá
+    // Y el consolidado (sin sucursal) es OTRO alcance: puede cerrar el mismo mes.
+    const cons = await cierre.cerrar(ctx, { tipo: 'mensual', ancla: '2030-03-01' });
+    expect(cons.sucursalId).toBeNull();
+
     await writer.remove(ctx, NivelConfig.Negocio, negocioId, 'modulo.cierre_periodo');
   });
 });

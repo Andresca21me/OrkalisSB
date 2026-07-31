@@ -60,8 +60,14 @@ export class PagoLineaDto {
 }
 
 export class CompletarDto {
-  @IsArray() @ArrayNotEmpty() @ValidateNested({ each: true }) @Type(() => PagoLineaDto)
-  pagos!: PagoLineaDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => PagoLineaDto)
+  pagos?: PagoLineaDto[];
+  /**
+   * Alternativa a `pagos` (Plan-Finanzas): un solo método por el TOTAL que
+   * calcule el backend. Para flujos donde el monto exacto no se conoce en el
+   * cliente (fixtures, retroactivos). Debe venir `pagos` o `metodoUnico`.
+   */
+  @IsOptional() @IsEnum(MetodoPago) metodoUnico?: MetodoPago;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ServicioRealDto)
   servicios?: ServicioRealDto[];
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ProductoRealDto)

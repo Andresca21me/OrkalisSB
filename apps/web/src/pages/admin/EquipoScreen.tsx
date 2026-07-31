@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { CitasFuturasResp, EspecialistaEquipo, LiquidacionResultado } from '@orkalis/shared';
+import { useMemo, useState } from 'react';
+import type { CitasFuturasResp, EspecialistaEquipo } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { useSucursal } from '../../lib/sucursal';
-import { money } from '../../lib/format';
 import { urlFotoEspecialista } from '../../lib/api';
 import { EditorFoto } from '../../ui/EditorFoto';
 import { useAuth } from '../../lib/auth';
@@ -19,7 +18,6 @@ import {
   invitacionesPendientes,
   invitarEspecialista,
   invitarExistente,
-  previewLiquidacion,
   reenviarInvitacion,
   useEquipo,
   vincularMiCuenta,
@@ -36,9 +34,7 @@ import {
   ErrorState,
   Icon,
   Input,
-  Select,
   Skeleton,
-  Spinner,
   StatTile,
   Switch,
   Tabs,
@@ -46,11 +42,11 @@ import {
   useToast,
 } from '../../ui/ui';
 import { useServicios } from '../../lib/useServicios';
-import { GConfirm, GField, GSummaryRow, RowMenu } from './gestion-ui';
+import { GConfirm, GField, RowMenu } from './gestion-ui';
 
 interface Sucursal { id: string; nombre: string; activa: boolean }
 
-export function EquipoScreen({ particion }: { particion: boolean }) {
+export function EquipoScreen() {
   const { consolidado, sucursalActiva } = useSucursal();
   const toast = useToast();
   const { data, cargando, error, recargar } = useEquipo();
@@ -77,8 +73,6 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
   // Cuando la baja choca con citas futuras, el servidor las cuenta y aquí se
   // decide qué hacer con ellas antes de reintentar.
   const [conflicto, setConflicto] = useState<{ esp: EspecialistaEquipo; citas: CitasFuturasResp } | null>(null);
-
-  useEffect(() => { if (!particion && filtro === 'liquidacion') setFiltro('todos'); }, [particion, filtro]);
 
   const activos = useMemo(() => (data ?? []).filter((e) => e.activo), [data]);
   const libres = activos.filter((e) => e.disponible).length;
@@ -157,11 +151,12 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
     } catch (err) { toast((err as Error).message, 'error'); }
   }
 
+  // La Liquidación vive ahora en Finanzas (Plan-Finanzas F5): es el pago del
+  // período, no gestión del equipo.
   const tabs = [
     { value: 'todos', label: 'Todos' },
     { value: 'libres', label: 'Libres' },
     { value: 'ocupados', label: 'Ocupados' },
-    ...(particion ? [{ value: 'liquidacion', label: 'Liquidación' }] : []),
   ];
 
   return (
@@ -196,9 +191,7 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
 
       <div style={{ marginBottom: 20 }}><Tabs tabs={tabs} value={filtro} onChange={setFiltro} /></div>
 
-      {filtro === 'liquidacion' ? (
-        <LiquidationPanel sucursales={sucs.data ?? []} />
-      ) : error ? (
+      {error ? (
         <ErrorState onRetry={recargar} />
       ) : cargando ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
@@ -619,117 +612,6 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
       </div>
     </Dialog>
   );
-}
-
-function LiquidationPanel({ sucursales }: { sucursales: Sucursal[] }) {
-  const { sucursalActivaId } = useSucursal();
-  const toast = useToast();
-  const periodos = useMemo(periodosMes, []);
-  const [sucId, setSucId] = useState(sucursalActivaId ?? sucursales[0]?.id ?? '');
-  const [periodoKey, setPeriodoKey] = useState(periodos[0]?.key ?? '');
-  const [rows, setRows] = useState<LiquidacionResultado[] | null>(null);
-  const [cargando, setCargando] = useState(false);
-  const [error, setError] = useState(false);
-
-  const periodo = periodos.find((p) => p.key === periodoKey) ?? periodos[0];
-
-  useEffect(() => {
-    if (!sucId || !periodo) { setRows([]); return; }
-    let vivo = true;
-    setCargando(true); setError(false);
-    previewLiquidacion({ desde: periodo.desde, hasta: periodo.hasta, sucursalId: sucId })
-      .then((r) => { if (vivo) setRows(r); })
-      .catch(() => { if (vivo) setError(true); })
-      .finally(() => { if (vivo) setCargando(false); });
-    return () => { vivo = false; };
-  }, [sucId, periodo?.key]);
-
-  const total = (rows ?? []).reduce((a, r) => a + r.neto, 0);
-
-  function exportarCsv() {
-    if (!rows || rows.length === 0) return;
-    const head = 'especialista,bruto,descuento,neto';
-    const body = rows.map((r) => `"${r.nombre}",${r.bruto},${r.descuento},${r.neto}`).join('\n');
-    const blob = new Blob(['﻿' + head + '\n' + body + '\n'], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `liquidacion-${periodo?.key ?? 'periodo'}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('Liquidación exportada (CSV)', 'success');
-  }
-
-  return (
-    <div>
-      <Card padding={18} style={{ marginBottom: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 16, alignItems: 'end' }}>
-          <GField label="Sucursal"><Select value={sucId} onChange={(e) => setSucId(e.target.value)}>{sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}</Select></GField>
-          <GField label="Período"><Select value={periodoKey} onChange={(e) => setPeriodoKey(e.target.value)}>{periodos.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</Select></GField>
-          <Button variant="secondary" iconLeft="download" disabled={!rows || rows.length === 0} onClick={exportarCsv}>Exportar CSV</Button>
-        </div>
-      </Card>
-
-      {error ? (
-        <ErrorState onRetry={() => setSucId((v) => v)} />
-      ) : cargando ? (
-        <div style={{ display: 'grid', placeItems: 'center', padding: 40 }}><Spinner /></div>
-      ) : !rows || rows.length === 0 ? (
-        <Card padding={0}><EmptyState icon="calendar-x" title="Sin actividad en el período" desc="No hay servicios liquidables para esta sucursal en el período elegido. Prueba con otro." /></Card>
-      ) : (
-        <Card padding={0} style={{ overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
-              <thead><tr>
-                {['Especialista', 'Bruto', 'Descuento', 'Neto a pagar'].map((h, i) => (
-                  <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '14px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.especialistaId}>
-                    <td style={{ padding: '13px 16px', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', borderTop: '1px solid var(--border-subtle)' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}><Avatar name={r.nombre} size={28} />{r.nombre}</span>
-                    </td>
-                    <td style={tdNum}>{money(r.bruto)}</td>
-                    <td style={{ ...tdNum, color: r.descuento ? 'var(--error)' : 'var(--text-tertiary)' }}>{r.descuento ? `− ${money(r.descuento)}` : '—'}</td>
-                    <td style={{ ...tdNum, fontWeight: 700, color: 'var(--brand)' }}>{money(r.neto)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border-subtle)' }}>
-            <GSummaryRow first strong label="Total neto del período" value={money(total)} />
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-const tdNum: React.CSSProperties = { padding: '13px 16px', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', borderTop: '1px solid var(--border-subtle)', textAlign: 'right', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' };
-
-/** Últimos 4 meses como períodos de liquidación. */
-function periodosMes(): { key: string; label: string; desde: string; hasta: string }[] {
-  // Mes/año ACTUALES en la zona del negocio (Bogotá), no en UTC: en la noche del
-  // último día del mes, UTC ya rodó al mes siguiente y el período por defecto se
-  // saltaba uno (dejando la liquidación del mes en curso vacía).
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
-  const yNow = Number(parts.find((p) => p.type === 'year')!.value);
-  const mNow = Number(parts.find((p) => p.type === 'month')!.value) - 1; // 0-indexed
-  const fmt = new Intl.DateTimeFormat('es-CO', { month: 'long', year: 'numeric', timeZone: 'America/Bogota' });
-  const out: { key: string; label: string; desde: string; hasta: string }[] = [];
-  for (let i = 0; i < 4; i++) {
-    const y = yNow;
-    const m = mNow - i;
-    const desde = new Date(Date.UTC(y, m, 1, 5, 0, 0)).toISOString();
-    const hasta = new Date(Date.UTC(y, m + 1, 1, 4, 59, 59)).toISOString();
-    const ref = new Date(Date.UTC(y, m, 15));
-    const key = `${ref.getUTCFullYear()}-${String(ref.getUTCMonth() + 1).padStart(2, '0')}`;
-    out.push({ key, label: fmt.format(ref), desde, hasta });
-  }
-  return out;
 }
 
 /**

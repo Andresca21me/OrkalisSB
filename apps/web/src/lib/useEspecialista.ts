@@ -1,4 +1,4 @@
-import type { GananciasEspecialista, MetodoPago } from '@orkalis/shared';
+import type { GananciasDetalle, GananciasEspecialista, MetodoPago } from '@orkalis/shared';
 import { api } from './api';
 import { useApi } from './useApi';
 
@@ -6,6 +6,18 @@ import { useApi } from './useApi';
 export function useGanancias(especialistaId: string | null, desde: string, hasta: string) {
   return useApi<GananciasEspecialista>(
     () => api.get(`/especialistas/${especialistaId}/ganancias?desde=${desde}&hasta=${hasta}`),
+    [especialistaId, desde, hasta],
+  );
+}
+
+/**
+ * Ganancias + detalle por transacción (Plan-Finanzas F2): los mismos agregados
+ * de `useGanancias` más la tabla Fecha · Cliente · Concepto · Bruto · Regla ·
+ * Neto (citas cobradas y ventas directas).
+ */
+export function useGananciasDetalle(especialistaId: string | null, desde: string, hasta: string) {
+  return useApi<GananciasDetalle>(
+    () => api.get(`/especialistas/${especialistaId}/ganancias/detalle?desde=${desde}&hasta=${hasta}`),
     [especialistaId, desde, hasta],
   );
 }

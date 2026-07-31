@@ -235,12 +235,18 @@ export class SpecAgendaPage {
   async completar() {
     await this.page.getByRole('button', { name: 'Completar turno' }).click();
   }
-  async cobrar(metodo = 'Efectivo') {
-    await this.page.getByText(metodo, { exact: true }).click();
+  /**
+   * Cobra el turno. PagoSplit arranca con un solo método (efectivo) por el
+   * total, y tras cobrar aparece la pantalla de resultado con la ganancia
+   * (Plan-Finanzas F2) que se cierra con «Listo».
+   */
+  async cobrar(_metodo = 'Efectivo') {
     await this.page.getByRole('button', { name: 'Confirmar cobro y completar' }).click();
+    await this.page.getByRole('button', { name: 'Listo' }).click();
   }
-  async confirmarCobroSinPago() {
-    await this.page.getByRole('button', { name: 'Confirmar cobro y completar' }).click();
+  /** Vacía el monto de la línea de pago (el cobro deja de cuadrar). */
+  async vaciarMontoPago() {
+    await this.page.getByLabel('Monto').fill('');
   }
   async marcarNoAsistio() {
     await this.page.getByRole('button', { name: 'No asistió' }).click();

@@ -85,6 +85,12 @@ describe('AtencionService (completar / revertir transaccional)', () => {
     writer = new ConfigWriteService(resolver, events);
     const gate = new ModuloGate(resolver, new PlanService());
     service = new AtencionService(resolver, new MetricsService(), gate);
+
+    // Candado D9 (Plan-Finanzas): sin comisión bancaria ASIGNADA, los métodos
+    // electrónicos se rechazan. Este spec la asigna en 0 (negocio que no paga
+    // datáfono) para que las pruebas con Transferencia sigan cubriendo el resto;
+    // el candado en sí se prueba en desglose.spec.ts con un negocio limpio.
+    await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'finanzas.comision_bancaria', 0);
   });
 
   afterAll(async () => {

@@ -23,6 +23,25 @@ export interface ServicioReal {
   precio: number;
   splitType: SplitType;
   splitValor: number;
+  /**
+   * Identidad opcional de la línea (Plan-Finanzas F1). El cálculo la ignora;
+   * viaja para que el llamador persista el desglose por servicio en el mismo
+   * orden en que lo recibe.
+   */
+  servicioId?: string;
+  nombre?: string;
+}
+
+/** Reparto aplicado a UNA línea de servicio (Plan-Finanzas F1, transparencia). */
+export interface RepartoServicio {
+  /** Ganancia del profesional por esta línea, ANTES de la deducción admin. */
+  ganProf: number;
+  regla: {
+    tipo: 'porcentaje' | 'valor_fijo';
+    valor: number;
+    /** De dónde salió la regla: el split propio del servicio o el % global. */
+    origen: 'servicio' | 'global';
+  };
 }
 
 export interface ProductoReal {
@@ -65,6 +84,8 @@ export interface ResultadoCalculo {
   comisionProductos: number;
   /** Comisión por cada línea de producto, en el MISMO orden que el array de entrada. */
   comisionesPorLinea: number[];
+  /** Reparto por cada línea de servicio, en el MISMO orden que el array de entrada. */
+  repartoPorServicio: RepartoServicio[];
   snapshot: Record<string, unknown>;
 }
 
@@ -100,6 +121,11 @@ const METODOS_ELECTRONICOS: ReadonlySet<MetodoPago> = new Set([
   MetodoPago.Nequi,
 ]);
 
+/** ¿El método genera comisión bancaria? (Candado D9 del Plan-Finanzas.) */
+export function esMetodoElectronico(m: MetodoPago): boolean {
+  return METODOS_ELECTRONICOS.has(m);
+}
+
 export function calcularAtencion(
   servicios: ServicioReal[],
   productos: ProductoReal[],
@@ -120,18 +146,26 @@ export function calcularAtencion(
     : productos.map(() => 0);
   const comisionProductos = round2(comisionesPorLinea.reduce((s, c) => s + c, 0));
 
-  // Repartición por servicio.
+  // Repartición por servicio. Se registra el reparto de CADA línea (F1): es lo
+  // que permite mostrar "$40.000 × 60% = $24.000" con la regla que de verdad
+  // se aplicó, no la vigente cuando alguien pregunte.
   let ganProfServicios = 0;
   let ganSalonServicios = 0;
+  const repartoPorServicio: RepartoServicio[] = [];
   for (const s of servicios) {
     let prof: number;
+    let regla: RepartoServicio['regla'];
     if (s.splitType === SplitType.ValorFijo) {
       prof = Math.min(s.splitValor, s.precio);
+      regla = { tipo: 'valor_fijo', valor: s.splitValor, origen: 'servicio' };
     } else {
       // Porcentaje: % por servicio si está definido (>0); si no, el estándar de la sucursal.
-      const pctProf = s.splitValor > 0 ? s.splitValor : p.reparticionProfesional;
+      const propio = s.splitValor > 0;
+      const pctProf = propio ? s.splitValor : p.reparticionProfesional;
       prof = round2((s.precio * pctProf) / 100);
+      regla = { tipo: 'porcentaje', valor: pctProf, origen: propio ? 'servicio' : 'global' };
     }
+    repartoPorServicio.push({ ganProf: p.particionPorEspecialista ? prof : 0, regla });
     ganProfServicios += prof;
     ganSalonServicios += s.precio - prof;
   }
@@ -177,6 +211,7 @@ export function calcularAtencion(
     totalProductos,
     comisionProductos,
     comisionesPorLinea,
+    repartoPorServicio,
     snapshot: {
       parametros: p,
       pagos,

@@ -120,8 +120,21 @@ export class ReportesService {
     desde: Date,
     hasta: Date,
     sucursalId?: string,
+    filtros?: { especialistaId?: string; servicioId?: string },
   ): Promise<ReporteAnalisis> {
     return runInTenantTx(ctx, async (tx) => {
+      // Filtros de transparencia (Plan-Finanzas F4). Con filtro de servicio, las
+      // ventas DIRECTAS de mostrador quedan fuera (no llevan servicio). Los
+      // gastos no se filtran: son del negocio, no de un especialista.
+      const condAtencion = and(
+        gte(atencion.creadoEn, desde),
+        lte(atencion.creadoEn, hasta),
+        sucursalId ? eq(atencion.sucursalId, sucursalId) : undefined,
+        filtros?.especialistaId ? eq(atencion.especialistaId, filtros.especialistaId) : undefined,
+        filtros?.servicioId
+          ? sql`EXISTS (SELECT 1 FROM ${citaServicio} cs WHERE cs.cita_id = ${atencion.citaId} AND cs.servicio_id = ${filtros.servicioId})`
+          : undefined,
+      );
       const ats = await tx
         .select({
           total: atencion.total,
@@ -132,19 +145,28 @@ export class ReportesService {
           creadoEn: atencion.creadoEn,
         })
         .from(atencion)
-        .where(and(gte(atencion.creadoEn, desde), lte(atencion.creadoEn, hasta), sucursalId ? eq(atencion.sucursalId, sucursalId) : undefined));
+        .where(condAtencion);
 
       // "Por método de pago" desde el desglose real (soporta pago dividido).
       const pagos = await tx
         .select({ metodo: atencionPago.metodo, monto: atencionPago.monto })
         .from(atencionPago)
         .innerJoin(atencion, eq(atencion.id, atencionPago.atencionId))
-        .where(and(gte(atencion.creadoEn, desde), lte(atencion.creadoEn, hasta), sucursalId ? eq(atencion.sucursalId, sucursalId) : undefined));
+        .where(condAtencion);
 
-      const ventas = await tx
-        .select({ total: ventaProducto.total, comisionProf: ventaProducto.comisionProf, creadoEn: ventaProducto.creadoEn })
-        .from(ventaProducto)
-        .where(and(gte(ventaProducto.creadoEn, desde), lte(ventaProducto.creadoEn, hasta), sucursalId ? eq(ventaProducto.sucursalId, sucursalId) : undefined));
+      const ventas = filtros?.servicioId
+        ? []
+        : await tx
+            .select({ total: ventaProducto.total, comisionProf: ventaProducto.comisionProf, creadoEn: ventaProducto.creadoEn })
+            .from(ventaProducto)
+            .where(
+              and(
+                gte(ventaProducto.creadoEn, desde),
+                lte(ventaProducto.creadoEn, hasta),
+                sucursalId ? eq(ventaProducto.sucursalId, sucursalId) : undefined,
+                filtros?.especialistaId ? eq(ventaProducto.especialistaId, filtros.especialistaId) : undefined,
+              ),
+            );
 
       // Productos vendidos DENTRO de citas (para el KPI informativo de ventas de
       // producto). Su ingreso ya está en `atencion.total`, así que NO se suma a
@@ -156,7 +178,7 @@ export class ReportesService {
         })
         .from(atencionProducto)
         .innerJoin(atencion, eq(atencion.id, atencionProducto.atencionId))
-        .where(and(gte(atencion.creadoEn, desde), lte(atencion.creadoEn, hasta), sucursalId ? eq(atencion.sucursalId, sucursalId) : undefined));
+        .where(condAtencion);
 
       const gastos = await tx
         .select({ tipo: gasto.tipo, monto: gasto.monto })

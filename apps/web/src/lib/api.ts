@@ -104,6 +104,8 @@ export const api = {
   get: <T>(path: string, auth = true) => ejecutar<T>(path, { method: 'GET', auth }),
   post: <T>(path: string, body?: unknown, auth = true) =>
     ejecutar<T>(path, { method: 'POST', body, auth }),
+  /** POST que devuelve texto crudo (CSV de liquidación, Plan-Finanzas F5). */
+  postRaw: (path: string, body?: unknown) => ejecutar<string>(path, { method: 'POST', body, auth: true, raw: true }),
   patch: <T>(path: string, body?: unknown, auth = true) =>
     ejecutar<T>(path, { method: 'PATCH', body, auth }),
   put: <T>(path: string, body?: unknown, auth = true) =>

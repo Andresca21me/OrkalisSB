@@ -49,8 +49,8 @@ export function asignarServicios(id: string, servicioIds: string[]): Promise<unk
   return api.put(`/especialistas/${id}/servicios`, { servicioIds });
 }
 
-/** Vista previa de liquidación (no persiste). Requiere partición ON. */
-export function previewLiquidacion(body: { desde: string; hasta: string; sucursalId: string }): Promise<LiquidacionResultado[]> {
+/** Vista previa de liquidación (no persiste). Sin sucursal = consolidado. Requiere partición ON. */
+export function previewLiquidacion(body: { desde: string; hasta: string; sucursalId?: string }): Promise<LiquidacionResultado[]> {
   return api.post('/liquidaciones/preview', body);
 }
 

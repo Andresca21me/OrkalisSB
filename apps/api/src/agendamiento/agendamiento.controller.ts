@@ -86,11 +86,15 @@ export class AgendamientoController {
     return this.atencion.completar(ctx, id, dto);
   }
 
-  /** Revierte una atención completada (deshace ganancias; repone stock salvo que se indique lo contrario). */
+  /**
+   * Revierte una atención completada (deshace ganancias; repone stock salvo que
+   * se indique lo contrario). Devuelve `advertencia` si el cobro pertenecía a
+   * un período ya cerrado (Plan-Finanzas D6) — se permite, pero se avisa.
+   */
   @Post(':id/revertir')
-  @HttpCode(204)
-  async revertir(@CurrentTenant() ctx: TenantContext, @Param('id') id: string, @Body() dto: RevertirDto): Promise<void> {
-    await this.atencion.revertir(ctx, id, dto.reponerStock ?? true);
+  @HttpCode(200)
+  revertir(@CurrentTenant() ctx: TenantContext, @Param('id') id: string, @Body() dto: RevertirDto): Promise<{ advertencia: string | null }> {
+    return this.atencion.revertir(ctx, id, dto.reponerStock ?? true);
   }
 
   @Post(':id/cancelar')

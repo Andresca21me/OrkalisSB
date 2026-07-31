@@ -155,6 +155,8 @@ export interface CitaAgenda {
   servicios: { nombre: string; precio: string }[];
   /** Ids de los servicios de la cita: permiten filtrar quién puede atenderla al reasignar. */
   servicioIds: string[];
+  /** Cobro real (Plan-Finanzas): solo en citas completadas; null en el resto. */
+  cobro: CobroCita | null;
 }
 
 /** Resumen del panel admin (`GET /reportes/panel?fecha&sucursalId`). */
@@ -387,14 +389,161 @@ export interface ReporteAnalisis {
   tendencia: { etiqueta: string; total: number }[];
 }
 
-/** Cierre de período archivado (`GET /cierres`). */
+// ── Transparencia financiera por transacción (Plan-Finanzas) ─────────────────
+
+/**
+ * Resumen del cobro real embebido en la agenda (`CitaAgenda.cobro`, solo citas
+ * completadas). El ticket es lo COBRADO (servicios + productos + tarifa), no el
+ * estimado de catálogo.
+ */
+export interface CobroCita {
+  atencionId: string;
+  total: number;
+  totalServicios: number;
+  totalProductos: number;
+  /** Unidades de producto vendidas en la cita (badge "incluye productos"). */
+  numProductos: number;
+  /** Métodos usados, orden por monto desc. */
+  metodos: MetodoPago[];
+  /**
+   * Ganancia del especialista en esta cita. Viaja solo para el admin y para el
+   * PROPIO especialista; null para recepción y compañeros (D2).
+   */
+  miGanancia: number | null;
+}
+
+/** Una transacción del especialista (cita cobrada o venta directa de mostrador). */
+export interface TransaccionEspecialista {
+  tipo: 'cita' | 'venta_directa';
+  fecha: string;
+  citaId: string | null;
+  atencionId: string | null;
+  ventaId: string | null;
+  clienteNombre: string | null;
+  /** "Corte + Barba" · "Shampoo ×2". */
+  concepto: string;
+  /** Valor de los servicios (cita) o de la venta (mostrador). */
+  bruto: number;
+  /** "60%" · "Fijo $20.000" · "60% + comisión productos". */
+  reglaResumen: string;
+  /** Lo que ganó el especialista en la transacción. */
+  neto: number;
+}
+
+/** `GET /especialistas/:id/ganancias/detalle` — los agregados + sus filas. */
+export interface GananciasDetalle extends GananciasEspecialista {
+  transacciones: TransaccionEspecialista[];
+}
+
+/** `GET /finanzas/contexto-cobro` — lo que la pantalla de cobro debe saber (D9). */
+export interface ContextoCobro {
+  /** false = los métodos electrónicos están bloqueados hasta asignarla. */
+  comisionBancariaConfigurada: boolean;
+  /** % vigente (0 si no está configurada). */
+  comisionBancaria: number;
+}
+
+/** Reparto aplicado a una línea de servicio dentro de una atención. */
+export interface DesgloseServicio {
+  nombre: string;
+  /** Precio congelado al cobrar. */
+  precio: number;
+  regla: { tipo: 'porcentaje' | 'valor_fijo'; valor: number; origen: 'servicio' | 'global' };
+  /** Ganancia del profesional por esta línea (antes de la deducción admin). */
+  ganProf: number;
+  /**
+   * true en atenciones anteriores al plan de transparencia: la regla se
+   * reconstruyó con la configuración ACTUAL y puede no ser la aplicada.
+   */
+  aproximado?: boolean;
+}
+
+export interface DesgloseProducto {
+  nombre: string;
+  cantidad: number;
+  precioUnitario: number;
+  total: number;
+  /** Comisión del especialista por esta línea (congelada al cobrar). */
+  comision: number;
+}
+
+/**
+ * Desglose completo de una transacción (`GET /citas/:id/atencion`).
+ * Invariante que la UI muestra en la fila de cuadre:
+ * `totales.total = totales.ganSalon + totales.ganProf + comisionBancaria`.
+ */
+export interface DesgloseAtencion {
+  atencionId: string;
+  citaId: string;
+  fecha: string;
+  clienteNombre: string | null;
+  especialista: { id: string; nombre: string };
+  servicios: DesgloseServicio[];
+  productos: DesgloseProducto[];
+  pagos: { metodo: MetodoPago; monto: number }[];
+  /** % extra sobre servicios que paga el cliente y va al profesional. */
+  tarifaCliente: number;
+  /** Retención del salón sobre la ganancia del profesional. */
+  deduccionAdmin: number;
+  /** La absorbe el salón (D3). */
+  comisionBancaria: number;
+  totales: {
+    total: number;
+    totalServicios: number;
+    totalProductos: number;
+    ganProf: number; // incluye la comisión por productos
+    ganSalon: number;
+  };
+}
+
+/** Fila del arqueo de transacciones del admin (`GET /atenciones`). */
+export interface ArqueoFila {
+  atencionId: string;
+  citaId: string;
+  fecha: string;
+  clienteNombre: string | null;
+  especialista: { id: string; nombre: string };
+  servicios: string[];
+  numProductos: number;
+  metodos: MetodoPago[];
+  total: number;
+  ganProf: number;
+  ganSalon: number;
+}
+
+export interface ArqueoResp {
+  filas: ArqueoFila[];
+  hayMas: boolean;
+  /** Totales del RANGO completo (no de la página). */
+  totales: {
+    transacciones: number;
+    total: number;
+    totalServicios: number;
+    totalProductos: number;
+    ganProf: number;
+    ganSalon: number;
+    comisionBancaria: number;
+  };
+}
+
+/** Snapshot completo que archiva un cierre (Plan-Finanzas F6). */
+export interface CierreArchivo {
+  analisis: ReporteAnalisis;
+  liquidaciones: LiquidacionResultado[];
+}
+
+/**
+ * Cierre de período archivado (`GET /cierres`). `datosArchivados` es
+ * `CierreArchivo` en los cierres nuevos; los anteriores a Plan-Finanzas F6
+ * guardaron un `ReporteFinanciero` plano (la UI distingue por la forma).
+ */
 export interface Cierre {
   id: string;
   sucursalId: string | null;
   tipo: 'quincenal' | 'mensual';
   desde: string;
   hasta: string;
-  datosArchivados: ReporteFinanciero;
+  datosArchivados: CierreArchivo | ReporteFinanciero;
   creadoEn: string;
 }
 

@@ -45,7 +45,13 @@ export const liquidacion = pgTable('liquidacion', {
     .notNull()
     .references(() => especialista.id, { onDelete: 'restrict' }),
   periodo: text('periodo').notNull(),
+  /** Rango real del período (Plan-Finanzas F1; null en filas anteriores). */
+  desde: timestamp('desde', { withTimezone: true }),
+  hasta: timestamp('hasta', { withTimezone: true }),
   bruto: numeric('bruto', { precision: 12, scale: 2 }).notNull(),
+  /** Desglose del bruto (Plan-Finanzas F1): servicios vs productos. */
+  comisionServicios: numeric('comision_servicios', { precision: 12, scale: 2 }).notNull().default('0'),
+  comisionProductos: numeric('comision_productos', { precision: 12, scale: 2 }).notNull().default('0'),
   descuento: numeric('descuento', { precision: 12, scale: 2 }).notNull().default('0'),
   neto: numeric('neto', { precision: 12, scale: 2 }).notNull(),
   pagado: boolean('pagado').notNull().default(false),

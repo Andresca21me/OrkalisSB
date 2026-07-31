@@ -32,7 +32,7 @@ test.describe('Finanzas · gastos', () => {
       const page = s.adminBarberia.page;
       const fin = new FinanzasPage(page);
       await fin.abrir();
-      await expect(page.getByRole('heading', { name: 'Análisis financiero' })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
       await fin.agregarGasto('fijo', 90000, categoria);
 
       // Aparece en la lista de gastos fijos.
@@ -53,7 +53,7 @@ test.describe('Finanzas · gastos', () => {
       const page = s.adminBarberia.page;
       const fin = new FinanzasPage(page);
       await fin.abrir();
-      await expect(page.getByRole('heading', { name: 'Análisis financiero' })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
       await fin.agregarGasto('variable', 30000, categoria);
       await expect(page.getByText(categoria)).toBeVisible({ timeout: 15_000 });
     } finally {
@@ -68,7 +68,7 @@ test.describe('Finanzas · gastos', () => {
       const page = s.adminBarberia.page;
       const fin = new FinanzasPage(page);
       await fin.abrir();
-      await expect(page.getByRole('heading', { name: 'Análisis financiero' })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
       await fin.agregarGasto('fijo', 40000, categoria);
       await expect(page.getByText(categoria)).toBeVisible({ timeout: 15_000 });
 

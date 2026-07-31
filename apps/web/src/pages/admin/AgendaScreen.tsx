@@ -7,6 +7,7 @@ import { accionCita, rangoDiaBogota, useCitas, type EventoCita } from '../../lib
 import { fechaDesdeISO, hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { Button, Card, EmptyState, ErrorState, EstadoBadge, Icon, PageHead, Spinner, Tabs } from '../../ui';
 import { AppointmentRow, CobroModal, DayCounters, MiniCalendar, NuevaCitaModal, colorDe, horaCorta } from './agenda-ui';
+import { DesgloseDialog } from './DesgloseDialog';
 import { useToast } from '../../ui';
 
 interface Especialista { id: string; nombre: string; especialidad: string | null; activo: boolean }
@@ -17,6 +18,8 @@ export function AgendaScreen() {
   const [tab, setTab] = useState('agenda');
   const [dia, setDia] = useState(hoyISO());
   const [cobro, setCobro] = useState<CitaAgenda | null>(null);
+  // Arqueo de una transacción concreta (Plan-Finanzas F3).
+  const [desglose, setDesglose] = useState<string | null>(null);
   const [nueva, setNueva] = useState(false);
   const [espFiltro, setEspFiltro] = useState<string | null>(null);
   const [verAntiguos, setVerAntiguos] = useState(false);
@@ -129,7 +132,7 @@ export function AgendaScreen() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {lista.map((c) => (
-                      <AppointmentRow key={c.id} appt={c} showPrice onAccion={(ev) => void accion(c, ev)} onCobrar={() => setCobro(c)} onRevertido={() => { toast("Cobro revertido", "info"); refrescar(); }} />
+                      <AppointmentRow key={c.id} appt={c} showPrice onAccion={(ev) => void accion(c, ev)} onCobrar={() => setCobro(c)} onRevertido={() => { toast("Cobro revertido", "info"); refrescar(); }} onDesglose={() => setDesglose(c.id)} />
                     ))}
                   </div>
                 )}
@@ -153,7 +156,7 @@ export function AgendaScreen() {
               ) : (historial.data ?? []).length === 0 ? (
                 <EmptyState icon="file-text" title="Sin historial" desc="Las citas pasadas aparecerán aquí." compact />
               ) : (
-                <ArchiveTable rows={historial.data ?? []} />
+                <ArchiveTable rows={historial.data ?? []} onDesglose={setDesglose} />
               )}
             </div>
           </Card>
@@ -161,6 +164,7 @@ export function AgendaScreen() {
       )}
 
       {cobro && <CobroModal cita={cobro} onClose={() => setCobro(null)} onDone={() => { setCobro(null); toast('Turno completado · ganancias calculadas', 'success'); refrescar(); }} />}
+      {desglose && <DesgloseDialog citaId={desglose} onClose={() => setDesglose(null)} />}
       {nueva && <NuevaCitaModal sucursalId={sucursalActivaId} fechaIso={dia} onClose={() => setNueva(false)} onDone={() => { setNueva(false); toast('Cita creada', 'success'); refrescar(); }} />}
     </div>
   );
@@ -181,7 +185,7 @@ function FilaEspecialista({ esp, activo, onToggle }: { esp: Especialista; activo
   );
 }
 
-function ArchiveTable({ rows }: { rows: CitaAgenda[] }) {
+function ArchiveTable({ rows, onDesglose }: { rows: CitaAgenda[]; onDesglose: (citaId: string) => void }) {
   const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' };
   const td: React.CSSProperties = { padding: '12px', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', borderTop: '1px solid var(--border-subtle)' };
   return (
@@ -200,7 +204,17 @@ function ArchiveTable({ rows }: { rows: CitaAgenda[] }) {
               <td style={td}>{a.clienteNombre ?? '—'}</td>
               <td style={{ ...td, color: 'var(--text-secondary)' }}>{a.servicios.map((s) => s.nombre).join(' · ') || '—'}</td>
               <td style={td}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><span style={{ width: 7, height: 7, borderRadius: 99, background: colorDe(a.especialistaId) }} />{a.especialistaNombre}</span></td>
-              <td style={{ ...td, textAlign: 'right' }}><span className="data" style={{ fontWeight: 600 }}>{money(a.servicios.reduce((x, s) => x + Number(s.precio), 0) || Number(a.precioEst ?? 0))}</span></td>
+              <td style={{ ...td, textAlign: 'right' }}>
+                {/* Ticket REAL en completadas (incluye productos); estimado en el resto. */}
+                {a.cobro ? (
+                  <button type="button" title="Ver desglose de la transacción" onClick={() => onDesglose(a.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {a.cobro.numProductos > 0 && <Icon name="package" size={13} color="var(--text-tertiary)" />}
+                    <span className="data" style={{ fontWeight: 600, color: 'var(--brand)', textDecoration: 'underline', textDecorationColor: 'var(--border-strong)', textUnderlineOffset: 3 }}>{money(a.cobro.total)}</span>
+                  </button>
+                ) : (
+                  <span className="data" style={{ fontWeight: 600 }}>{money(a.servicios.reduce((x, s) => x + Number(s.precio), 0) || Number(a.precioEst ?? 0))}</span>
+                )}
+              </td>
               <td style={{ ...td, textAlign: 'right' }}><EstadoBadge estado={a.estado} /></td>
             </tr>
           ))}

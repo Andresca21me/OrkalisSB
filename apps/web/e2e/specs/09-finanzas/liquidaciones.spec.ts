@@ -4,14 +4,15 @@ import {
   sucursalesDe, previewLiquidacionApi, negocioIdDe, setModuloApi,
   crearEspecialista, crearServicioApi, crearCitaInterna, accionCitaApi, completarCitaApi, setConfigApi, type Sucursal,
 } from '../../fixtures/api';
-import { GestionPage } from '../../pages/gestion.page';
+import { FinanzasPage } from '../../pages/finanzas.page';
 import { reseed } from '../../fixtures/seed';
 import { hoyISO, nombreUnico } from '../../fixtures/data';
 
 /**
- * FASE-09 v3 · Finanzas · Liquidaciones (HU-ADM-009): la liquidación del período
- * aplica el descuento del 2% por pago electrónico sobre el bruto del profesional;
- * con partición desactivada, la liquidación no está disponible.
+ * Plan-Finanzas F5 · Liquidaciones (HU-ADM-009). Viven en Finanzas (ya no en
+ * Gestión → Equipo) y SIN doble descuento bancario: la comisión la absorbe el
+ * negocio en el cobro (D3), así que neto = bruto. Con partición desactivada,
+ * la pestaña no existe.
  */
 test.describe('Finanzas · liquidaciones', () => {
   let api: APIRequestContext;
@@ -39,7 +40,8 @@ test.describe('Finanzas · liquidaciones', () => {
     await accionCitaApi(api, USERS.adminBarberia, cita.id, 'iniciar');
     await completarCitaApi(api, USERS.adminBarberia, cita.id, 'transferencia');
 
-    // Oráculo: bruto 50% de 100000 = 50000; descuento 2% = 1000; neto 49000.
+    // Oráculo D3: bruto 50% de 100000 = 50000 y neto = bruto — la comisión
+    // bancaria ya la absorbió el negocio en el cobro; NO se descuenta otra vez.
     const ymd = hoyISO();
     const desde = `${ymd.slice(0, 8)}01T00:00:00.000Z`;
     const hasta = new Date(Date.now() + 86_400_000).toISOString();
@@ -47,33 +49,33 @@ test.describe('Finanzas · liquidaciones', () => {
     const fila = filas.find((f) => f.especialistaId === espId)!;
     expect(fila, 'el especialista aparece en la liquidación').toBeTruthy();
     expect(fila.bruto).toBe(50000);
-    expect(fila.descuento).toBeCloseTo(1000, 2);
-    expect(fila.neto).toBeCloseTo(49000, 2);
+    expect(fila.descuento).toBe(0);
+    expect(fila.neto).toBe(50000);
 
     const s = await abrirRoles(browser, ['adminBarberia']);
     try {
       const page = s.adminBarberia.page;
-      const g = new GestionPage(page);
-      await g.abrir();
-      await g.subtab('Equipo');
-      await g.abrirLiquidacion();
-      await expect(page.getByText('Neto a pagar')).toBeVisible({ timeout: 15_000 });
+      const fin = new FinanzasPage(page);
+      await fin.abrir();
+      await fin.subtab('Liquidación');
+      await expect(page.getByRole('heading', { name: 'Liquidación del período' })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('Neto a pagar')).toBeVisible();
       const filaEsp = page.getByRole('row').filter({ hasText: nombre });
       await expect(filaEsp).toBeVisible({ timeout: 15_000 });
-      await expect(filaEsp).toContainText('−'); // descuento aplicado
+      await expect(filaEsp).toContainText('50.000');
     } finally {
       await cerrarRoles(s);
     }
   });
 
-  test('con partición desactivada, la liquidación no está disponible', async ({ browser }) => {
+  test('con partición desactivada, la pestaña Liquidación no existe en Finanzas', async ({ browser }) => {
     await setModuloApi(api, USERS.adminBarberia, negocioId, 'modulo.particion_por_especialista', false);
     const s = await abrirRoles(browser, ['adminBarberia']);
     try {
       const page = s.adminBarberia.page;
-      const g = new GestionPage(page);
-      await g.abrir();
-      await g.subtab('Equipo');
+      const fin = new FinanzasPage(page);
+      await fin.abrir();
+      await expect(page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
       await expect(page.getByRole('button', { name: 'Liquidación', exact: true })).toHaveCount(0);
     } finally {
       await cerrarRoles(s);

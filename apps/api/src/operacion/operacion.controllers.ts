@@ -174,10 +174,14 @@ export class LiquidacionesController {
   @Post('generar') @HttpCode(201) generar(@CurrentTenant() ctx: TenantContext, @Body() dto: LiquidacionDto) {
     return this.s.generar(ctx, { ...dto, desde: new Date(dto.desde), hasta: new Date(dto.hasta) });
   }
+  /**
+   * Exporta el PREVIEW en CSV. Antes llamaba a `generar()` — exportar dos veces
+   * duplicaba filas persistidas sin que nadie lo pidiera (Plan-Finanzas F5).
+   */
   @Post('csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  async csv(@CurrentTenant() ctx: TenantContext, @Body() dto: LiquidacionDto): Promise<string> {
-    const r = await this.s.generar(ctx, { ...dto, desde: new Date(dto.desde), hasta: new Date(dto.hasta) });
+  async csv(@CurrentTenant() ctx: TenantContext, @Body() dto: PreviewLiquidacionDto): Promise<string> {
+    const r = await this.s.preview(ctx, { sucursalId: dto.sucursalId, desde: new Date(dto.desde), hasta: new Date(dto.hasta) });
     return this.s.exportarCsv(r);
   }
 }
@@ -200,8 +204,11 @@ export class ReportesController {
     @Query('desde') desde: string,
     @Query('hasta') hasta: string,
     @Query('sucursalId') sucursalId?: string,
+    @Query('especialistaId') especialistaId?: string,
+    @Query('servicioId') servicioId?: string,
   ) {
-    return this.s.analisis(ctx, new Date(desde), new Date(hasta), sucursalId);
+    // Filtros de transparencia (Plan-Finanzas F4): por especialista y servicio.
+    return this.s.analisis(ctx, new Date(desde), new Date(hasta), sucursalId, { especialistaId, servicioId });
   }
 
   @Get('panel') panel(
@@ -221,6 +228,6 @@ export class CierreController {
     return this.s.listar(ctx);
   }
   @Post() @HttpCode(201) cerrar(@CurrentTenant() ctx: TenantContext, @Body() dto: CierreDto) {
-    return this.s.cerrar(ctx, { ...dto, desde: new Date(dto.desde), hasta: new Date(dto.hasta) });
+    return this.s.cerrar(ctx, dto);
   }
 }

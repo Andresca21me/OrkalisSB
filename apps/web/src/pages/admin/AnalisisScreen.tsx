@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { MetodoPago } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { useSucursal } from '../../lib/sucursal';
 import { money } from '../../lib/format';
-import { diasATimestamps, presetRango, useAnalisis, type RangoDias } from '../../lib/useReportes';
+import { useAnalisis } from '../../lib/useReportes';
 import { eliminarGasto, useGastos } from '../../lib/useGastos';
 import { useValoracion } from '../../lib/useInventario';
-import { Donut, type DonutDato } from '../../ui/Chart';
+import { useEquipo } from '../../lib/useEquipo';
+import { useServicios } from '../../lib/useServicios';
+import type { Periodo } from '../../ui/PeriodPicker';
+import { BarChart, Donut, type DonutDato } from '../../ui/Chart';
 import {
   Badge,
   Button,
@@ -15,11 +18,12 @@ import {
   EmptyState,
   ErrorState,
   Icon,
+  Select,
   Spinner,
   useToast,
 } from '../../ui/ui';
 import { GConfirm } from './gestion-ui';
-import { BreakdownBlock, FinTile, HBars, HealthBadge, RangePicker } from './finanzas-ui';
+import { BreakdownBlock, FinTile, HBars, HealthBadge } from './finanzas-ui';
 import { GastoModal } from './finanzas-modals';
 import { useVocabulario } from '../../lib/vocabulario';
 
@@ -27,13 +31,18 @@ interface Sucursal { id: string; nombre: string; activa: boolean }
 
 const PAGO_LABEL: Record<string, string> = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', nequi: 'Nequi', otro: 'Otro' };
 
-export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
+export function AnalisisScreen({ inventarioOn, periodo }: { inventarioOn: boolean; periodo: Periodo }) {
   const voc = useVocabulario();
   const { consolidado, sucursalActiva, sucursalActivaId } = useSucursal();
   const toast = useToast();
-  const [rango, setRango] = useState<RangoDias>(() => presetRango('mes'));
-  const { desde, hasta } = useMemo(() => diasATimestamps(rango), [rango]);
-  const a = useAnalisis(desde, hasta, sucursalActivaId);
+  // Filtros de transparencia (F4): acotan TODO el resumen a un especialista o
+  // servicio; los gastos no se filtran (son del negocio) y se avisa.
+  const [espId, setEspId] = useState('');
+  const [servId, setServId] = useState('');
+  const equipo = useEquipo();
+  const servicios = useServicios();
+  const filtroActivo = !!espId || !!servId;
+  const a = useAnalisis(periodo.desde, periodo.hasta, sucursalActivaId, { especialistaId: espId || undefined, servicioId: servId || undefined });
   const gastos = useGastos(sucursalActivaId);
   const valoracion = useValoracion(inventarioOn ? sucursalActivaId : undefined);
   const sucs = useApi<Sucursal[]>(() => api.get('/sucursales'));
@@ -67,7 +76,7 @@ export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
     const blob = new Blob(['﻿' + filas + '\n'], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url; link.download = `analisis-${rango.desde}_${rango.hasta}.csv`; link.click();
+    link.href = url; link.download = `analisis-${periodo.etiqueta.replace(/\s+/g, '-')}.csv`; link.click();
     URL.revokeObjectURL(url);
     toast('Análisis exportado (CSV)', 'success');
   }
@@ -79,10 +88,22 @@ export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
         <div>
           <div className="eyebrow" style={{ marginBottom: 8 }}>{scope}</div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em' }}>Análisis financiero</h1>
+          <h1 style={{ fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em' }}>Resumen financiero</h1>
+          {filtroActivo && (
+            <p style={{ margin: '6px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+              Filtro activo: los ingresos y desgloses están acotados; los gastos siguen siendo del negocio completo.
+            </p>
+          )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <RangePicker value={rango} onChange={setRango} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Select value={espId} onChange={(e) => setEspId(e.target.value)} aria-label="Filtrar por especialista" style={{ height: 38 }}>
+            <option value="">Todos los especialistas</option>
+            {(equipo.data ?? []).filter((x) => x.activo).map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+          </Select>
+          <Select value={servId} onChange={(e) => setServId(e.target.value)} aria-label="Filtrar por servicio" style={{ height: 38 }}>
+            <option value="">Todos los servicios</option>
+            {(servicios.data ?? []).filter((x) => x.activo).map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+          </Select>
           <Button variant="secondary" iconLeft="download" disabled={!d} onClick={exportarCsv}>CSV</Button>
         </div>
       </div>
@@ -140,6 +161,27 @@ export function AnalisisScreen({ inventarioOn }: { inventarioOn: boolean }) {
             <Card padding={18}>
               <div className="eyebrow" style={{ marginBottom: 16 }}>Ganancias por especialista</div>
               <HBars data={d.porEspecialista.map((e) => ({ nombre: e.nombre, valor: e.ingresos }))} />
+            </Card>
+          </div>
+
+          <Card padding={18} style={{ marginBottom: 24 }}>
+            <div className="eyebrow" style={{ marginBottom: 14 }}>Tendencia de ingresos del período</div>
+            {d.tendencia.length === 0 ? (
+              <div style={{ padding: '20px 8px', textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Sin datos para graficar.</div>
+            ) : (
+              <BarChart data={d.tendencia.map((t) => ({ label: t.etiqueta, value: t.total }))} />
+            )}
+          </Card>
+
+          <div className="ork-cols-2" style={{ marginBottom: 24 }}>
+            <Card padding={18}>
+              <div className="eyebrow" style={{ marginBottom: 14 }}>Ingresos por servicio</div>
+              {d.porServicio.length === 0 ? <div style={{ padding: '20px 8px', textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Sin servicios cobrados.</div> : <Donut data={d.porServicio.map((sv) => ({ label: sv.nombre, value: sv.total }))} />}
+            </Card>
+            <Card padding={18}>
+              <div className="eyebrow" style={{ marginBottom: 14 }}>Ventas de producto</div>
+              <div className="data" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--text-2xl)', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>{money(d.ventasProducto)}</div>
+              <p style={{ margin: '6px 0 0', fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Facturado en productos (en citas y mostrador). El detalle vive en Inventario y ventas.</p>
             </Card>
           </div>
 

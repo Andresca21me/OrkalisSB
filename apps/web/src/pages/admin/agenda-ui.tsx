@@ -5,7 +5,7 @@ import { useApi } from '../../lib/useApi';
 import { completarCita, crearCita, revertirCita, type EventoCita, type PagoLinea } from '../../lib/useCitas';
 import { hoyISO, money } from '../../lib/format';
 import { PagoSplit, pagoInicial, sumaPagos } from '../../ui/PagoSplit';
-import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, ProductosVenta, Select, Spinner, StatTile, type LineaProducto } from '../../ui';
+import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, ProductosVenta, Select, Spinner, StatTile, useToast, type LineaProducto } from '../../ui';
 
 const PALETA = ['#2563EB', '#059669', '#7C3AED', '#EA580C', '#0EA5E9', '#E11D48', '#64748B', '#D97706'];
 export function colorDe(id: string): string {
@@ -22,7 +22,9 @@ function durMin(c: CitaAgenda): number {
   return Math.round((new Date(c.fin).getTime() - new Date(c.inicio).getTime()) / 60000);
 }
 function totalCita(c: CitaAgenda): number {
-  return c.servicios.reduce((a, s) => a + Number(s.precio), 0) || Number(c.precioEst ?? 0);
+  // Completadas: el TICKET REAL (servicios + productos + tarifa), congelado en
+  // la atención. El estimado de catálogo queda solo para citas sin cobrar.
+  return c.cobro?.total ?? (c.servicios.reduce((a, s) => a + Number(s.precio), 0) || Number(c.precioEst ?? 0));
 }
 
 // ── Menú de acciones de una cita (transiciones reales) ───────────────────────
@@ -34,7 +36,7 @@ const TRANSICIONES: { estado: string; label: string; evento?: EventoCita; cobro?
   { estado: 'no_asistio', label: 'No asistió', evento: 'no-asistio' },
 ];
 
-export function ApptActionsMenu({ appt, onAccion, onCobrar, onReasignar, onRevertido }: { appt: CitaAgenda; onAccion: (ev: EventoCita) => void; onCobrar: () => void; onReasignar?: () => void; onRevertido?: () => void }) {
+export function ApptActionsMenu({ appt, onAccion, onCobrar, onReasignar, onRevertido, onDesglose }: { appt: CitaAgenda; onAccion: (ev: EventoCita) => void; onCobrar: () => void; onReasignar?: () => void; onRevertido?: () => void; onDesglose?: () => void }) {
   const [open, setOpen] = useState(false);
   const [confirmRev, setConfirmRev] = useState(false);
   const [reponer, setReponer] = useState(true);
@@ -45,12 +47,17 @@ export function ApptActionsMenu({ appt, onAccion, onCobrar, onReasignar, onRever
   // acción dedicada en lugar de las transiciones de estado (que fallarían).
   const completada = appt.estado === 'completada';
 
+  const toast = useToast();
+
   async function revertir() {
     setRevirtiendo(true);
     setErrRev(null);
     try {
-      await revertirCita(appt.id, reponer);
+      const r = (await revertirCita(appt.id, reponer)) as { advertencia?: string | null } | undefined;
       setConfirmRev(false);
+      // D6 (Plan-Finanzas): el cobro era de un período ya cerrado — se permite,
+      // pero el admin debe saber que el archivo del cierre quedó desfasado.
+      if (r?.advertencia) toast(r.advertencia, 'warning');
       onRevertido?.();
     } catch (e) {
       setErrRev((e as Error).message);
@@ -64,7 +71,10 @@ export function ApptActionsMenu({ appt, onAccion, onCobrar, onReasignar, onRever
       <IconButton name="more-vertical" title="Acciones" onClick={() => setOpen((o) => !o)} />
       <Popover open={open} onClose={() => setOpen(false)} align="right" width={220}>
         {completada ? (
-          <MenuItem icon="rotate-ccw" onClick={() => { setOpen(false); setConfirmRev(true); }}>Revertir cobro</MenuItem>
+          <>
+            {onDesglose && <MenuItem icon="bar-chart-2" onClick={() => { setOpen(false); onDesglose(); }}>Ver desglose</MenuItem>}
+            <MenuItem icon="rotate-ccw" onClick={() => { setOpen(false); setConfirmRev(true); }}>Revertir cobro</MenuItem>
+          </>
         ) : (
           <>
             <div className="eyebrow" style={{ padding: '6px 10px 4px' }}>Cambiar estado</div>
@@ -111,7 +121,7 @@ export function ApptActionsMenu({ appt, onAccion, onCobrar, onReasignar, onRever
 }
 
 // ── Fila de cita ─────────────────────────────────────────────────────────────
-export function AppointmentRow({ appt, showPrice, onAccion, onCobrar, onReasignar, onRevertido }: { appt: CitaAgenda; showPrice?: boolean; onAccion: (ev: EventoCita) => void; onCobrar: () => void; onReasignar?: () => void; onRevertido?: () => void }) {
+export function AppointmentRow({ appt, showPrice, onAccion, onCobrar, onReasignar, onRevertido, onDesglose }: { appt: CitaAgenda; showPrice?: boolean; onAccion: (ev: EventoCita) => void; onCobrar: () => void; onReasignar?: () => void; onRevertido?: () => void; onDesglose?: () => void }) {
   const dim = appt.estado === 'cancelada' || appt.estado === 'no_asistio';
   const color = colorDe(appt.especialistaId);
   return (
@@ -137,10 +147,19 @@ export function AppointmentRow({ appt, showPrice, onAccion, onCobrar, onReasigna
               </span>
             </div>
           </div>
-          {showPrice && <span className="data" style={{ flex: 'none', fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{money(totalCita(appt))}</span>}
+          {showPrice && (
+            <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {(appt.cobro?.numProductos ?? 0) > 0 && (
+                <span title={`Incluye ${appt.cobro!.numProductos} producto(s) por ${money(appt.cobro!.totalProductos)}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)' }}>
+                  <Icon name="package" size={13} color="var(--text-tertiary)" />{appt.cobro!.numProductos}
+                </span>
+              )}
+              <span className="data" style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{money(totalCita(appt))}</span>
+            </span>
+          )}
           <div className="ork-appt-estado" style={{ flex: 'none', width: 116, display: 'flex', justifyContent: 'flex-end' }}><EstadoBadge estado={appt.estado} /></div>
           <div style={{ flex: 'none' }}>
-            <ApptActionsMenu appt={appt} onAccion={onAccion} onCobrar={onCobrar} onReasignar={onReasignar} onRevertido={onRevertido} />
+            <ApptActionsMenu appt={appt} onAccion={onAccion} onCobrar={onCobrar} onReasignar={onReasignar} onRevertido={onRevertido} onDesglose={onDesglose} />
           </div>
         </div>
       </div>
@@ -259,7 +278,7 @@ export function CobroModal({ cita, onClose, onDone }: { cita: CitaAgenda; onClos
       </div>
       <ProductosVenta sucursalId={cita.sucursalId} lineas={productos} onChange={setProductos} onSubtotalChange={setSubtotalProd} />
       <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600, display: 'block', marginBottom: 8 }}>Método de pago <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>· puedes dividirlo</span></label>
-      <PagoSplit total={total} lineas={lineas} onChange={setLineas} />
+      <PagoSplit total={total} lineas={lineas} onChange={setLineas} sucursalId={cita.sucursalId} />
       {error && <p style={{ color: 'var(--error)', fontSize: 'var(--text-sm)', marginTop: 12 }}>{error}</p>}
       <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 12 }}>El pago es obligatorio para cerrar el turno (guard de pago).</p>
     </Dialog>

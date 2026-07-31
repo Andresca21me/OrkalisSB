@@ -8,12 +8,15 @@ import {
   RolUsuario,
   type BajaEspecialistaResp,
   type CitasFuturasResp,
+  type GananciasDetalle,
   type GananciasEspecialista,
+  type TransaccionEspecialista,
 } from '@orkalis/shared';
 import { adminDb } from '../db/admin-client';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
 import {
   atencion,
+  atencionServicio,
   cita,
   citaServicio,
   cliente,
@@ -22,6 +25,7 @@ import {
   especialistaFoto,
   especialistaServicio,
   especialistaSucursal,
+  producto,
   servicio,
   sucursal,
   suscripcion,
@@ -295,6 +299,11 @@ export class EquipoService {
     desde: Date,
     hasta: Date,
   ): Promise<GananciasEspecialista> {
+    // D2 (Plan-Finanzas): un especialista solo consulta las SUYAS. Antes bastaba
+    // cambiar el id de la URL para ver las de un compañero.
+    if (ctx.rol === RolUsuario.Especialista && (await this.miEspecialistaId(ctx)) !== id) {
+      throw new ForbiddenException('Solo puedes consultar tus propias ganancias.');
+    }
     return runInTenantTx(ctx, async (tx) => {
       const [a] = await tx
         .select({
@@ -324,6 +333,112 @@ export class EquipoService {
         total: round2(ganServicios + comisiones),
       };
     });
+  }
+
+  /**
+   * Detalle de ganancias por transacción (Plan-Finanzas F2): la tabla
+   * Fecha · Cliente · Concepto · Bruto · Regla · Neto que unifica citas
+   * cobradas y ventas directas de mostrador. Los agregados son los mismos de
+   * `ganancias` (misma fuente), así el detalle siempre cuadra con la cabecera.
+   */
+  async gananciasDetalle(ctx: TenantContext, id: string, desde: Date, hasta: Date): Promise<GananciasDetalle> {
+    const totales = await this.ganancias(ctx, id, desde, hasta); // incluye el candado D2
+
+    const transacciones = await runInTenantTx(ctx, async (tx) => {
+      const ats = await tx
+        .select({
+          atencionId: atencion.id,
+          citaId: atencion.citaId,
+          fecha: atencion.creadoEn,
+          ganProf: atencion.ganProf,
+          comisionProductos: atencion.comisionProductos,
+          snapshot: atencion.snapshotParam,
+          clienteNombre: cliente.nombre,
+        })
+        .from(atencion)
+        .innerJoin(cita, eq(cita.id, atencion.citaId))
+        .leftJoin(cliente, eq(cliente.id, cita.clienteId))
+        .where(and(eq(atencion.especialistaId, id), gte(atencion.creadoEn, desde), lte(atencion.creadoEn, hasta)));
+
+      // Líneas congeladas de servicio (concepto + regla). Atenciones previas al
+      // plan no las tienen: caen al nombre de cita_servicio y regla genérica.
+      const atIds = ats.map((a) => a.atencionId);
+      const lineasPorAtencion = new Map<string, { nombre: string; reglaTipo: string; reglaValor: string; precio: string }[]>();
+      const nombresViejos = new Map<string, string[]>();
+      if (atIds.length) {
+        const lineas = await tx
+          .select({
+            atencionId: atencionServicio.atencionId,
+            nombre: atencionServicio.nombre,
+            reglaTipo: atencionServicio.reglaTipo,
+            reglaValor: atencionServicio.reglaValor,
+            precio: atencionServicio.precio,
+          })
+          .from(atencionServicio)
+          .where(inArray(atencionServicio.atencionId, atIds));
+        for (const l of lineas) {
+          lineasPorAtencion.set(l.atencionId, [...(lineasPorAtencion.get(l.atencionId) ?? []), l]);
+        }
+        const sinLineas = ats.filter((a) => !lineasPorAtencion.has(a.atencionId));
+        if (sinLineas.length) {
+          const viejos = await tx
+            .select({ citaId: citaServicio.citaId, nombre: servicio.nombre })
+            .from(citaServicio)
+            .innerJoin(servicio, eq(servicio.id, citaServicio.servicioId))
+            .where(inArray(citaServicio.citaId, sinLineas.map((a) => a.citaId)));
+          for (const v of viejos) nombresViejos.set(v.citaId, [...(nombresViejos.get(v.citaId) ?? []), v.nombre]);
+        }
+      }
+
+      const ventas = await tx
+        .select({
+          ventaId: ventaProducto.id,
+          fecha: ventaProducto.creadoEn,
+          total: ventaProducto.total,
+          comision: ventaProducto.comisionProf,
+          cantidad: ventaProducto.cantidad,
+          nombre: producto.nombre,
+        })
+        .from(ventaProducto)
+        .innerJoin(producto, eq(producto.id, ventaProducto.productoId))
+        .where(and(eq(ventaProducto.especialistaId, id), gte(ventaProducto.creadoEn, desde), lte(ventaProducto.creadoEn, hasta)));
+
+      const filas: TransaccionEspecialista[] = [
+        ...ats.map((a) => {
+          const lineas = lineasPorAtencion.get(a.atencionId);
+          const snap = (a.snapshot ?? {}) as { totalServicios?: number };
+          const nombres = lineas?.map((l) => l.nombre) ?? nombresViejos.get(a.citaId) ?? [];
+          const comProd = Number(a.comisionProductos);
+          return {
+            tipo: 'cita' as const,
+            fecha: a.fecha.toISOString(),
+            citaId: a.citaId,
+            atencionId: a.atencionId,
+            ventaId: null,
+            clienteNombre: a.clienteNombre ?? null,
+            concepto: nombres.join(' + ') || 'Servicios',
+            bruto: Number(snap.totalServicios ?? lineas?.reduce((s, l) => s + Number(l.precio), 0) ?? 0),
+            reglaResumen: resumenRegla(lineas, comProd),
+            neto: Number(a.ganProf),
+          };
+        }),
+        ...ventas.map((v) => ({
+          tipo: 'venta_directa' as const,
+          fecha: v.fecha.toISOString(),
+          citaId: null,
+          atencionId: null,
+          ventaId: v.ventaId,
+          clienteNombre: null,
+          concepto: `${v.nombre} ×${v.cantidad}`,
+          bruto: Number(v.total),
+          reglaResumen: 'Comisión por producto',
+          neto: Number(v.comision),
+        })),
+      ];
+      return filas.sort((a, b) => b.fecha.localeCompare(a.fecha));
+    });
+
+    return { ...totales, transacciones };
   }
 
   /** Reemplaza el conjunto de sucursales del especialista. */
@@ -771,4 +886,16 @@ export class EquipoService {
       throw new BadRequestException('Alguna sucursal no pertenece al negocio.');
     }
   }
+}
+
+/** "60%" · "Fijo $20.000" · "60% · Fijo $20.000 + comisión productos". */
+function resumenRegla(
+  lineas: { reglaTipo: string; reglaValor: string }[] | undefined,
+  comisionProductos: number,
+): string {
+  const partes = lineas?.length
+    ? [...new Set(lineas.map((l) => (l.reglaTipo === 'valor_fijo' ? `Fijo $${Number(l.reglaValor).toLocaleString('es-CO')}` : `${Number(l.reglaValor)}%`)))]
+    : ['Reparto aplicado'];
+  const base = partes.join(' · ');
+  return comisionProductos > 0 ? `${base} + comisión productos` : base;
 }

@@ -56,7 +56,7 @@ test.describe('Especialista · ciclo del turno', () => {
     }
   });
 
-  test('no se puede completar sin método de pago', async ({ browser }) => {
+  test('no se puede completar si el pago no cuadra con el total', async ({ browser }) => {
     const reserva = await seedTurno();
     const s = await abrirRoles(browser, ['especialista']);
     try {
@@ -65,8 +65,11 @@ test.describe('Especialista · ciclo del turno', () => {
       await spec.abrirDetalle(reserva.citaId);
       await spec.iniciar();
       await spec.completar();
-      await spec.confirmarCobroSinPago();
-      await expect(s.especialista.page.getByText('Selecciona un método de pago para completar.')).toBeVisible({ timeout: 10_000 });
+      // PagoSplit exige que las líneas sumen el total: al vaciar el monto, el
+      // botón se deshabilita y se explica cuánto falta.
+      await spec.vaciarMontoPago();
+      await expect(s.especialista.page.getByText(/Los métodos deben sumar/)).toBeVisible({ timeout: 10_000 });
+      await expect(s.especialista.page.getByRole('button', { name: 'Confirmar cobro y completar' })).toBeDisabled();
     } finally {
       await cerrarRoles(s);
     }

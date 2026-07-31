@@ -1,8 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, gte, inArray, lte } from 'drizzle-orm';
-import { EstadoCita, MetodoPago, OrigenCita, type CitaAgenda } from '@orkalis/shared';
+import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { EstadoCita, MetodoPago, OrigenCita, RolUsuario, type CitaAgenda, type CobroCita } from '@orkalis/shared';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
-import { cita, citaServicio, cliente, especialista, servicio, sucursal } from '../db/schema';
+import { atencion, atencionPago, atencionProducto, cita, citaServicio, cliente, especialista, servicio, sucursal } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { sucursalScope } from '../common/scope';
 import { transicionar, type EventoCita } from './cita-state-machine';
@@ -10,6 +10,7 @@ import { ValidadorFactory } from './validators/validador.factory';
 import { validarEntidades } from './validators/validador-cita.port';
 import { AvisosEspecialistaService } from './avisos-especialista.service';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
+import { AtencionService } from '../finanzas/atencion.service';
 
 const EXCLUSION_VIOLATION = '23P01';
 
@@ -22,6 +23,7 @@ export class AgendamientoService {
     private readonly validadores: ValidadorFactory,
     private readonly avisos: AvisosEspecialistaService,
     private readonly notificaciones: NotificacionesService,
+    private readonly atencionService: AtencionService,
   ) {}
 
   /**
@@ -66,6 +68,61 @@ export class AgendamientoService {
 
       // Servicios de todas las citas listadas, en una sola consulta.
       const ids = filas.map((f) => f.id);
+
+      // Cobro real de las completadas (Plan-Finanzas F2): ticket, productos y
+      // métodos. `miGanancia` solo viaja para el admin y el PROPIO especialista
+      // (D2): recepción ve tickets, nunca reparto.
+      const idsCompletadas = filas.filter((f) => f.estado === EstadoCita.Completada).map((f) => f.id);
+      const cobros = new Map<string, CobroCita>();
+      if (idsCompletadas.length) {
+        const ats = await tx
+          .select({
+            citaId: atencion.citaId,
+            atencionId: atencion.id,
+            total: atencion.total,
+            ganProf: atencion.ganProf,
+            snapshot: atencion.snapshotParam,
+          })
+          .from(atencion)
+          .where(inArray(atencion.citaId, idsCompletadas));
+        const atIds = ats.map((a) => a.atencionId);
+        const numProd = new Map<string, number>();
+        const metodos = new Map<string, MetodoPago[]>();
+        if (atIds.length) {
+          const prods = await tx
+            .select({ atencionId: atencionProducto.atencionId, n: sql<number>`sum(${atencionProducto.cantidad})`.mapWith(Number) })
+            .from(atencionProducto)
+            .where(inArray(atencionProducto.atencionId, atIds))
+            .groupBy(atencionProducto.atencionId);
+          for (const p of prods) numProd.set(p.atencionId, p.n);
+          const pagos = await tx
+            .select({ atencionId: atencionPago.atencionId, metodo: atencionPago.metodo, monto: atencionPago.monto })
+            .from(atencionPago)
+            .where(inArray(atencionPago.atencionId, atIds))
+            .orderBy(desc(atencionPago.monto));
+          for (const p of pagos) {
+            const arr = metodos.get(p.atencionId) ?? [];
+            if (!arr.includes(p.metodo as MetodoPago)) arr.push(p.metodo as MetodoPago);
+            metodos.set(p.atencionId, arr);
+          }
+        }
+        const miEspecialistaId = ctx.rol === RolUsuario.Especialista && ctx.usuarioId ? await this.especialistaDe(tx, ctx.usuarioId) : null;
+        const filaDe = new Map(filas.map((f) => [f.id, f]));
+        for (const a of ats) {
+          const snap = (a.snapshot ?? {}) as { totalServicios?: number; totalProductos?: number };
+          const duenio = filaDe.get(a.citaId)?.especialistaId;
+          const veGanancia = ctx.rol === RolUsuario.Admin || (miEspecialistaId !== null && duenio === miEspecialistaId);
+          cobros.set(a.citaId, {
+            atencionId: a.atencionId,
+            total: Number(a.total),
+            totalServicios: Number(snap.totalServicios ?? 0),
+            totalProductos: Number(snap.totalProductos ?? 0),
+            numProductos: numProd.get(a.atencionId) ?? 0,
+            metodos: metodos.get(a.atencionId) ?? [],
+            miGanancia: veGanancia ? Number(a.ganProf) : null,
+          });
+        }
+      }
       const servs = await tx
         .select({
           citaId: citaServicio.citaId,
@@ -101,6 +158,7 @@ export class AgendamientoService {
         precioEst: f.precioEst,
         servicios: porCita.get(f.id) ?? [],
         servicioIds: idsPorCita.get(f.id) ?? [],
+        cobro: cobros.get(f.id) ?? null,
       }));
     });
   }
@@ -245,9 +303,15 @@ export class AgendamientoService {
 
   /**
    * Walk-in RETROACTIVO: horas en el pasado, entra directo en `completada`
-   * (HU-ESP-007, RF-028). Solo chequeos de sanidad; dispara FASE-09 al cerrar.
+   * (HU-ESP-007, RF-028). Solo chequeos de sanidad.
+   *
+   * Plan-Finanzas D7: antes creaba la cita `Completada` SIN atención — trabajo
+   * registrado que jamás entraba a reportes ni liquidaciones. Ahora se crea en
+   * curso y se CIERRA de verdad (atención + snapshot + pago por el total con el
+   * método capturado). Si el cierre falla (p. ej. candado de comisión bancaria
+   * con método electrónico), la cita se borra: nunca queda a medias.
    */
-  walkInRetroactivo(
+  async walkInRetroactivo(
     ctx: TenantContext,
     input: {
       sucursalId: string;
@@ -262,7 +326,14 @@ export class AgendamientoService {
     // `validarServicios: false` — la atención ya ocurrió; impedir registrarla
     // porque hoy el especialista no tenga ese servicio asignado solo dejaría el
     // trabajo sin cobrar ni liquidar.
-    return this.crearInterna(ctx, { ...input, estado: EstadoCita.Completada, validarServicios: false });
+    const nueva = await this.crearInterna(ctx, { ...input, estado: EstadoCita.EnProgreso, validarServicios: false });
+    try {
+      await this.atencionService.completar(ctx, nueva.id, { pagos: [], metodoUnico: input.metodoPago });
+    } catch (e) {
+      await runInTenantTx(ctx, (tx) => tx.delete(cita).where(eq(cita.id, nueva.id)));
+      throw e;
+    }
+    return { ...nueva, estado: EstadoCita.Completada };
   }
 
   private async crearInterna(
@@ -337,5 +408,15 @@ export class AgendamientoService {
     const [c] = await tx.select().from(cita).where(eq(cita.id, citaId)).limit(1);
     if (!c) throw new NotFoundException('Cita no encontrada.');
     return c;
+  }
+
+  /** Especialista enlazado al usuario en sesión (D2), o null si no tiene ficha. */
+  private async especialistaDe(tx: DrizzleTx, usuarioId: string): Promise<string | null> {
+    const [e] = await tx
+      .select({ id: especialista.id })
+      .from(especialista)
+      .where(and(eq(especialista.usuarioId, usuarioId), eq(especialista.activo, true)))
+      .limit(1);
+    return e?.id ?? null;
   }
 }

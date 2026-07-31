@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, numeric, pgTable, primaryKey, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { negocio, sucursal } from './tenant';
 import { especialista } from './team';
 import { cliente, servicio } from './catalog';
@@ -99,6 +99,36 @@ export const atencion = pgTable('atencion', {
   // Snapshot de porcentajes/valores aplicados al completar (ADR-006).
   snapshotParam: jsonb('snapshot_param').notNull(),
   creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Desglose por línea de SERVICIO de una atención (Plan-Finanzas F1).
+ *
+ * `cita_servicio` congela el precio, pero la REGLA de reparto (split % o valor
+ * fijo) se leía en vivo al cobrar y no quedaba en ninguna parte: imposible
+ * mostrar después "$40.000 × 60% = $24.000" con honestidad histórica. Aquí se
+ * congela la regla aplicada y la ganancia del profesional por línea (antes de
+ * la deducción administrativa, que es global y vive en el snapshot).
+ * Atenciones anteriores a esta tabla no tienen filas: su desglose se
+ * reconstruye con la regla actual y se marca `aproximado` en la API.
+ */
+export const atencionServicio = pgTable('atencion_servicio', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  atencionId: uuid('atencion_id')
+    .notNull()
+    .references(() => atencion.id, { onDelete: 'cascade' }),
+  servicioId: uuid('servicio_id')
+    .notNull()
+    .references(() => servicio.id, { onDelete: 'restrict' }),
+  /** Nombre congelado (el catálogo puede renombrarse después). */
+  nombre: text('nombre').notNull(),
+  precio: numeric('precio', { precision: 12, scale: 2 }).notNull(),
+  reglaTipo: text('regla_tipo').$type<'porcentaje' | 'valor_fijo'>().notNull(),
+  reglaValor: numeric('regla_valor', { precision: 12, scale: 2 }).notNull(),
+  /** 'servicio' = split propio del servicio; 'global' = % estándar de la sucursal. */
+  reglaOrigen: text('regla_origen').$type<'servicio' | 'global'>().notNull(),
+  /** Ganancia del profesional por esta línea (antes de deducción admin). */
+  ganProf: numeric('gan_prof', { precision: 12, scale: 2 }).notNull().default('0'),
 });
 
 export const atencionProducto = pgTable('atencion_producto', {

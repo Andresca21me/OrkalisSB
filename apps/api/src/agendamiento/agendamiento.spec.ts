@@ -14,10 +14,12 @@ import { and, eq } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, NivelConfig, OrigenCita, PerfilNegocio } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { cita, cliente, disponibilidad, especialista, especialistaSucursal, negocio, servicio, sucursal } from '../db/schema';
+import { atencion, cita, cliente, disponibilidad, especialista, especialistaSucursal, negocio, servicio, sucursal } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { runInTenantTx } from '../db/tx';
 import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
+import { AtencionService } from '../finanzas/atencion.service';
+import { ModuloGate } from '../operacion/modulo-gate.service';
 import { ConfigWriteService } from '../config-module/config-write.service';
 import { DisponibilidadService } from './disponibilidad.service';
 import { HorarioService } from './horario.service';
@@ -113,7 +115,9 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
       avisos,
       estadoMensajeria,
     );
-    agenda = new AgendamientoService(validadores, avisos, notificaciones);
+    // AtencionService real: el walk-in retroactivo ahora CIERRA la atención (D7).
+    const atencionSvc = new AtencionService(resolver, metrics, new ModuloGate(resolver, new PlanService()));
+    agenda = new AgendamientoService(validadores, avisos, notificaciones, atencionSvc);
   });
 
   afterAll(async () => {
@@ -253,6 +257,13 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
       metodoPago: MetodoPago.Efectivo,
     });
     expect(c.estado).toBe(EstadoCita.Completada);
+
+    // Plan-Finanzas D7: el retroactivo ahora CIERRA de verdad — la atención
+    // existe (antes no, y ese trabajo jamás entraba a reportes ni liquidación).
+    const [at] = await adminDb.select().from(atencion).where(eq(atencion.citaId, c.id));
+    expect(at).toBeDefined();
+    expect(Number(at.total)).toBe(25000);
+    expect(at.metodoPago).toBe(MetodoPago.Efectivo);
   });
 
   it('walk-in con fin < inicio es rechazado', async () => {

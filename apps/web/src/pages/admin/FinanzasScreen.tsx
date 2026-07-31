@@ -5,13 +5,15 @@ import { efectivoDe, moduloActivo, useConfig } from '../../lib/useConfig';
 import { useInventario } from '../../lib/useInventario';
 import { useEquipo } from '../../lib/useEquipo';
 import { Button, Icon, Spinner } from '../../ui/ui';
-import { QuincenalScreen } from './QuincenalScreen';
+import { CierreScreen } from './CierreScreen';
 import { VentaModal, type ComisionProductoConfig } from './finanzas-modals';
+import { PeriodPicker, periodoInicial } from '../../ui/PeriodPicker';
 
 // Las pantallas con gráficos (recharts, ~380 kB) se cargan bajo demanda al abrir
 // su pestaña — no al entrar al panel admin (FASE-14, lazy de gráficos).
 const AnalisisScreen = lazy(() => import('./AnalisisScreen').then((m) => ({ default: m.AnalisisScreen })));
-const ReportesFinScreen = lazy(() => import('./ReportesFinScreen').then((m) => ({ default: m.ReportesFinScreen })));
+const TransaccionesScreen = lazy(() => import('./TransaccionesScreen').then((m) => ({ default: m.TransaccionesScreen })));
+const LiquidacionScreen = lazy(() => import('./LiquidacionScreen').then((m) => ({ default: m.LiquidacionScreen })));
 const VentasInventarioScreen = lazy(() => import('./VentasInventarioScreen').then((m) => ({ default: m.VentasInventarioScreen })));
 
 function ChartFallback() {
@@ -31,14 +33,19 @@ export function FinanzasScreen() {
   const equipo = useEquipo();
   const [ventaOpen, setVentaOpen] = useState(false);
 
+  // Período GLOBAL de Finanzas (Plan-Finanzas F4, D4): quincena/mes/rango.
+  // Lo que se elige aquí manda en TODAS las pestañas — es la unidad del cierre.
+  const [periodo, setPeriodo] = useState(periodoInicial);
+
   const tabs = useMemo<TabDef[]>(
     () => [
-      { id: 'analisis', label: 'Análisis', icon: 'bar-chart-2' },
-      ...(cierreOn ? [{ id: 'quincenal', label: 'Control quincenal', icon: 'calendar' }] : []),
-      { id: 'reportes', label: 'Reportes', icon: 'pie-chart' },
+      { id: 'analisis', label: 'Resumen', icon: 'bar-chart-2' },
+      { id: 'transacciones', label: 'Transacciones', icon: 'list' },
+      ...(particion ? [{ id: 'liquidacion', label: 'Liquidación', icon: 'users' }] : []),
+      ...(cierreOn ? [{ id: 'cierres', label: 'Cierre de período', icon: 'lock' }] : []),
       ...(inventarioOn ? [{ id: 'inventario', label: 'Inventario y ventas', icon: 'package' }] : []),
     ],
-    [cierreOn, inventarioOn],
+    [cierreOn, inventarioOn, particion],
   );
 
   const [tab, setTab] = useState('analisis');
@@ -63,14 +70,18 @@ export function FinanzasScreen() {
             );
           })}
         </div>
-        {inventarioOn && <Button variant="secondary" size="sm" iconLeft="plus" onClick={() => setVentaOpen(true)} style={{ marginBottom: 8 }}>Registrar venta</Button>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+          <PeriodPicker value={periodo} onChange={setPeriodo} />
+          {inventarioOn && <Button variant="secondary" size="sm" iconLeft="plus" onClick={() => setVentaOpen(true)}>Registrar venta</Button>}
+        </div>
       </div>
 
       <Suspense fallback={<ChartFallback />}>
-        {tab === 'analisis' && <AnalisisScreen inventarioOn={inventarioOn} />}
-        {tab === 'quincenal' && cierreOn && <QuincenalScreen />}
-        {tab === 'reportes' && <ReportesFinScreen particion={particion} />}
-        {tab === 'inventario' && inventarioOn && <VentasInventarioScreen />}
+        {tab === 'analisis' && <AnalisisScreen inventarioOn={inventarioOn} periodo={periodo} />}
+        {tab === 'transacciones' && <TransaccionesScreen periodo={periodo} />}
+        {tab === 'liquidacion' && particion && <LiquidacionScreen periodo={periodo} />}
+        {tab === 'cierres' && cierreOn && <CierreScreen periodo={periodo} />}
+        {tab === 'inventario' && inventarioOn && <VentasInventarioScreen periodo={periodo} />}
       </Suspense>
 
       {ventaOpen && <VentaModal productos={ventaProductos} especialistas={equipo.data ?? []} comisionCfg={comisionCfg} onClose={() => setVentaOpen(false)} onSaved={async () => { setVentaOpen(false); await productos.recargar(); }} />}

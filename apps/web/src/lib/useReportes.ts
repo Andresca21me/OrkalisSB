@@ -70,6 +70,17 @@ export function useFinanciero(desde: string, hasta: string, sucursalId?: string 
   return useApi<ReporteFinanciero>(() => api.get(`/reportes/financiero?desde=${desde}&hasta=${hasta}${suc(sucursalId)}`), [desde, hasta, sucursalId]);
 }
 
-export function useAnalisis(desde: string, hasta: string, sucursalId?: string | null) {
-  return useApi<ReporteAnalisis>(() => api.get(`/reportes/analisis?desde=${desde}&hasta=${hasta}${suc(sucursalId)}`), [desde, hasta, sucursalId]);
+export function useAnalisis(
+  desde: string,
+  hasta: string,
+  sucursalId?: string | null,
+  filtros?: { especialistaId?: string; servicioId?: string },
+) {
+  const extra =
+    (filtros?.especialistaId ? `&especialistaId=${filtros.especialistaId}` : '') +
+    (filtros?.servicioId ? `&servicioId=${filtros.servicioId}` : '');
+  return useApi<ReporteAnalisis>(
+    () => api.get(`/reportes/analisis?desde=${desde}&hasta=${hasta}${suc(sucursalId)}${extra}`),
+    [desde, hasta, sucursalId, filtros?.especialistaId, filtros?.servicioId],
+  );
 }
