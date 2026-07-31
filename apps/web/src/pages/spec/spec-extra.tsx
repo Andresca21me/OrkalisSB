@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { EspecialistaEquipo } from '@orkalis/shared';
+import { useNavigate } from 'react-router-dom';
+import { RolUsuario, type EspecialistaEquipo } from '@orkalis/shared';
 import { api, ApiError } from '../../lib/api';
 import { hora, hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { useAuth, useMiFoto } from '../../lib/auth';
@@ -219,7 +220,11 @@ export function PerfilSpec({ disponible, onToggleDisp, sucursales, sucActivaId, 
 }) {
   const { usuario, logout } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const [confirm, setConfirm] = useState<Sucursal | null>(null);
+  // Un admin con ficha propia ("Yo también atiendo", E8) entra a este panel
+  // como especialista; desde aquí vuelve a su panel de administración.
+  const esAdmin = usuario?.rol === RolUsuario.Admin;
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -230,9 +235,17 @@ export function PerfilSpec({ disponible, onToggleDisp, sucursales, sucActivaId, 
             <MiFoto nombre={usuario?.nombre ?? ''} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{usuario?.nombre}</div>
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Especialista · {usuario?.negocio.nombre}</div>
+              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>{esAdmin ? 'Administrador · atiende agenda' : 'Especialista'} · {usuario?.negocio.nombre}</div>
             </div>
           </div>
+
+          {esAdmin && (
+            <Card padding={14} style={{ marginBottom: 18 }}>
+              <Button variant="secondary" fullWidth iconLeft="layout-grid" onClick={() => navigate('/admin')}>
+                Volver a administración
+              </Button>
+            </Card>
+          )}
 
           <VerificarCelularCard />
 

@@ -161,8 +161,11 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
 
     await outbox.drain();
 
-    expect(mock.enviados.length).toBeGreaterThanOrEqual(1);
-    expect(mock.enviados.at(-1)!.contenido).toContain('Carlos');
+    // Se filtra por el destino propio: el drain puede tragarse de paso filas
+    // pendientes de OTRA suite corriendo en paralelo contra la misma base.
+    const propios = mock.enviados.filter((e) => e.to === '3001234567');
+    expect(propios.length).toBeGreaterThanOrEqual(1);
+    expect(propios.at(-1)!.contenido).toContain('Carlos');
     const enviado = await ultimoMensaje();
     expect(enviado.estado).toBe('enviado');
     expect(enviado.proveedor).toBe('mock');
@@ -257,7 +260,7 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
 
     const [m] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
     expect(m.estado).toBe('enviado');
-    expect(mock.enviados.at(-1)!.contenido).toBe('Sobrevivo al reinicio');
+    expect(mock.enviados.filter((e) => e.to === '3009998888').at(-1)!.contenido).toBe('Sobrevivo al reinicio');
   });
 
   it('webhook: aplica la entrega real y es idempotente (mismo evento dos veces)', async () => {

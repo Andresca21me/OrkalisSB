@@ -6,12 +6,14 @@ import { useSucursal } from '../../lib/sucursal';
 import { money } from '../../lib/format';
 import { urlFotoEspecialista } from '../../lib/api';
 import { EditorFoto } from '../../ui/EditorFoto';
+import { useAuth } from '../../lib/auth';
 import {
   asignarServicios,
   asignarSucursales,
   borrarFotoEspecialista,
   subirFotoEspecialista,
   citasFuturasEspecialista,
+  crearMiFicha,
   darDeBajaEspecialista,
   editarEspecialista,
   invitacionesPendientes,
@@ -288,13 +290,17 @@ function SpecialistCard({ s, sucNombre, servNombre, invitacion, onToggle, onEdit
   const todos = s.servicioIds.length === 0;
   const visibles = s.servicioIds.slice(0, 3);
   const resto = s.servicioIds.length - visibles.length;
-  // Estado del acceso (Plan-Correo E5): con cuenta, con invitación en el aire o
-  // sin nada (los creados solo con nombre desde el asistente de alta).
-  const acceso = s.usuarioId
-    ? ({ tone: 'success', icon: 'check-circle', label: s.telefonoVerificadoEn ? 'Con acceso' : 'Con acceso · celular sin verificar' } as const)
-    : invitacion
-      ? ({ tone: 'info', icon: 'mail', label: 'Invitación enviada' } as const)
-      : ({ tone: 'neutral', icon: 'user-x', label: 'Sin acceso al panel' } as const);
+  // Estado del acceso (Plan-Correo E5/E8): tu propia ficha, con cuenta, con
+  // invitación en el aire o sin nada (los creados solo con nombre en el alta).
+  const { usuario } = useAuth();
+  const esMia = !!usuario && s.usuarioId === usuario.id;
+  const acceso = esMia
+    ? ({ tone: 'brand', icon: 'user', label: s.telefonoVerificadoEn ? 'Tú' : 'Tú · celular sin verificar' } as const)
+    : s.usuarioId
+      ? ({ tone: 'success', icon: 'check-circle', label: s.telefonoVerificadoEn ? 'Con acceso' : 'Con acceso · celular sin verificar' } as const)
+      : invitacion
+        ? ({ tone: 'info', icon: 'mail', label: 'Invitación enviada' } as const)
+        : ({ tone: 'neutral', icon: 'user-x', label: 'Sin acceso al panel' } as const);
   return (
     <Card padding={0} testId={`esp-row-${s.id}`} style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '16px 16px 0', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -374,14 +380,20 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
   const [touched, setTouched] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Correo de la invitación (Plan-Correo E5): obligatorio en el alta. La
+  // "Soy yo" (Plan-Correo E8): el admin crea SU propia ficha, enlazada a su
+  // cuenta — sin correo ni invitación. Solo se ofrece si aún no tiene una.
+  const { usuario, refrescar } = useAuth();
+  const [soyYo, setSoyYo] = useState(false);
+  const puedeSerYo = !especialista && !usuario?.especialistaId;
+
+  // Correo de la invitación (Plan-Correo E5): obligatorio en el alta ajena. La
   // contraseña y el celular los pone el propio especialista desde el enlace.
   const emailValid = /.+@.+\..+/.test(email.trim());
 
   const nombreErr = touched && nombre.trim().length < 2 ? 'Escribe un nombre' : undefined;
   const sucErr = touched && sel.length === 0 ? 'Asigna al menos una sucursal' : undefined;
-  const emailErr = touched && !especialista && !emailValid ? 'Escribe un correo válido' : undefined;
-  const valid = nombre.trim().length >= 2 && sel.length > 0 && (Boolean(especialista) || emailValid);
+  const emailErr = touched && !especialista && !soyYo && !emailValid ? 'Escribe un correo válido' : undefined;
+  const valid = nombre.trim().length >= 2 && sel.length > 0 && (Boolean(especialista) || soyYo || emailValid);
 
   /**
    * Aplica el cambio de foto tras existir el especialista. Un fallo aquí NO
@@ -420,6 +432,21 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
         await asignarServicios(especialista.id, selServ);
         await guardarFoto(especialista.id);
         toast('Especialista actualizado', 'success');
+      } else if (soyYo) {
+        // "Soy yo" (E8): ficha propia enlazada a la cuenta en sesión, sin
+        // invitación. Se refresca la sesión para que aparezca el conmutador
+        // "Mi panel de especialista".
+        const creado = await crearMiFicha({
+          nombre: nombre.trim(),
+          apellidos: apellidos.trim() || undefined,
+          especialidad: especialidad.trim() || undefined,
+          sucursalIds: sel,
+          servicioIds: selServ,
+          disponible,
+        });
+        await guardarFoto(creado.id);
+        await refrescar();
+        toast('Listo: tu ficha quedó enlazada a tu cuenta. Tienes "Mi panel de especialista" en tu menú.', 'success');
       } else {
         // Alta nueva (Plan-Correo E5): el especialista se crea YA y recibe la
         // invitación en su correo; contraseña y celular los pone él.
@@ -447,7 +474,7 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
     <Dialog open onClose={onClose} width={580} title={especialista ? 'Editar especialista' : 'Nuevo especialista'} subtitle={especialista ? especialista.nombre : 'Registra los datos básicos: el especialista recibirá una invitación por correo para crear su contraseña y confirmar su celular.'}
       footer={<>
         <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-        <Button variant="primary" loading={guardando} onClick={guardar}>{especialista ? 'Guardar cambios' : 'Crear y enviar invitación'}</Button>
+        <Button variant="primary" loading={guardando} onClick={guardar}>{especialista ? 'Guardar cambios' : soyYo ? 'Crear mi ficha' : 'Crear y enviar invitación'}</Button>
       </>}>
       <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
@@ -475,9 +502,18 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
               onConfirmar={(dataUrl) => { setFoto(dataUrl); setFotoQuitada(false); setEditandoFoto(null); }}
             />
           )}
+          {puedeSerYo && (
+            <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', border: '1px solid var(--border-subtle)' }}>
+              <Switch testId="soy-yo-switch" checked={soyYo} onChange={(v) => { setSoyYo(v); if (v && !nombre.trim()) setNombre(usuario?.nombre ?? ''); }} />
+              <div>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Soy yo (yo también atiendo)</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>La ficha se enlaza a tu cuenta actual: sin invitación ni otro correo.</div>
+              </div>
+            </label>
+          )}
           <GField label="Nombre" error={nombreErr}><Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Andrés" /></GField>
           <GField label="Apellidos" optional><Input value={apellidos} onChange={(e) => setApellidos(e.target.value)} placeholder="Ej.: Mejía" /></GField>
-          {!especialista && (
+          {!especialista && !soyYo && (
             <GField label="Correo" span={2} error={emailErr} hint="A este correo le llega la invitación: con ella crea su contraseña y confirma su celular por SMS.">
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nombre@negocio.co" />
             </GField>
@@ -535,7 +571,7 @@ function SpecialistModal({ especialista, sucursales, servicios, onClose, onSaved
           </div>
         </label>
 
-        {!especialista && (
+        {!especialista && !soyYo && (
           <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--info-tint)', border: '1px solid var(--border-subtle)' }}>
             <Icon name="mail" size={16} color="var(--info)" style={{ flex: 'none', marginTop: 2 }} />
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>

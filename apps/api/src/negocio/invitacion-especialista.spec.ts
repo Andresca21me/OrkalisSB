@@ -162,6 +162,10 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     await invitar({ email: destino });
     const token = await tokenDelCorreo(destino);
 
+    // Diagnóstico de flake (corridas paralelas): si esto falla, el token ya
+    // nació inválido — el problema está en crear/extraer, no en el doble uso.
+    expect((await servicio.info(token)).estado).toBe('valida');
+
     await servicio.activar(token, 'Password123');
     await expect(servicio.activar(token, 'OtraClave456')).rejects.toMatchObject({ status: 409 });
     expect(await servicio.info(token)).toEqual({ estado: 'usada' });
@@ -236,6 +240,34 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     await servicio.activar(token, 'Password123');
 
     await expect(servicio.invitarExistente(ctx, esp.id, email())).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('"Yo también atiendo" (E8): la ficha se enlaza al usuario en sesión, sin invitación', async () => {
+    const destino = email();
+    const [admin] = await adminDb
+      .insert(usuario)
+      .values({ negocioId, nombre: 'Dueña Que Atiende', email: destino, passwordHash: 'x', rol: RolUsuario.Admin })
+      .returning();
+    const ctxAdmin: TenantContext = { negocioId, sucursalIds: null, rol: RolUsuario.Admin, usuarioId: admin.id };
+    const equipo = new EquipoService(new PlanService(), notificacionesFalsas);
+
+    const ficha = await equipo.crearMiFicha(ctxAdmin, { especialidad: 'Colorista', sucursalIds: [sucursalId] });
+    expect(ficha.usuarioId).toBe(admin.id);
+    expect(ficha.nombre).toBe('Dueña Que Atiende'); // por defecto, el nombre de su cuenta
+
+    // No hubo correo: su cuenta ya existe (no hay nada que invitar).
+    const [correo] = await adminDb.select().from(mensaje).where(eq(mensaje.destino, destino));
+    expect(correo).toBeUndefined();
+
+    // Una segunda ficha para el mismo usuario no tiene sentido → 409.
+    await expect(equipo.crearMiFicha(ctxAdmin, { sucursalIds: [sucursalId] })).rejects.toMatchObject({ status: 409 });
+
+    // Y puede verificar SU celular con los endpoints `mi/*` siendo admin.
+    await servicio.miTelefonoIniciar(ctxAdmin, '3015556677');
+    await servicio.miTelefonoConfirmar(ctxAdmin, CODIGO_VERIFY_MOCK);
+    const [conTel] = await adminDb.select().from(especialista).where(eq(especialista.id, ficha.id));
+    expect(conTel.telefono).toBe('+573015556677');
+    expect(conTel.telefonoVerificadoEn).toBeInstanceOf(Date);
   });
 
   it('sin cupo del plan, invitar no crea ni envía nada', async () => {

@@ -73,6 +73,21 @@ export function invitarEspecialista(body: InvitarEspecialistaBody): Promise<Espe
   return api.post('/especialistas/invitar', body);
 }
 
+/**
+ * "Yo también atiendo" (Plan-Correo E8): crea la ficha de especialista del
+ * PROPIO usuario en sesión, enlazada a su cuenta. Sin correo ni invitación.
+ */
+export function crearMiFicha(body: {
+  nombre?: string;
+  apellidos?: string;
+  especialidad?: string;
+  sucursalIds: string[];
+  servicioIds?: string[];
+  disponible?: boolean;
+}): Promise<EspecialistaEquipo> {
+  return api.post('/especialistas/mi-ficha', body);
+}
+
 export interface InvitacionPendiente {
   especialistaId: string;
   email: string;

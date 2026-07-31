@@ -18,6 +18,7 @@ import {
   FotoEspecialistaDto,
   InvitarEspecialistaDto,
   InvitarExistenteDto,
+  MiFichaDto,
   MiTelefonoConfirmarDto,
   MiTelefonoIniciarDto,
 } from './dto/negocio.dto';
@@ -65,19 +66,26 @@ export class EquipoController {
     await this.invitacion.reenviar(ctx, id);
   }
 
+  /** "Yo también atiendo" (E8): la ficha de especialista del propio admin. */
+  @Post('mi-ficha')
+  miFicha(@CurrentTenant() ctx: TenantContext, @Body() dto: MiFichaDto) {
+    return this.equipoService.crearMiFicha(ctx, dto);
+  }
+
   // ── El propio especialista verifica su celular ──────────────────────────────
   // (Paso 2 de la invitación, o después desde su panel si la mensajería estaba
-  // pausada.) Throttle estricto: cada intento cuesta un SMS de Twilio Verify.
+  // pausada.) Admin incluido: con "Yo también atiendo" (E8) él también tiene
+  // ficha propia. Throttle estricto: cada intento cuesta un SMS de Verify.
 
   @Post('mi/telefono/iniciar')
-  @Roles(RolUsuario.Especialista)
+  @Roles(RolUsuario.Especialista, RolUsuario.Admin)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   miTelefonoIniciar(@CurrentTenant() ctx: TenantContext, @Body() dto: MiTelefonoIniciarDto) {
     return this.invitacion.miTelefonoIniciar(ctx, dto.celular);
   }
 
   @Post('mi/telefono/confirmar')
-  @Roles(RolUsuario.Especialista)
+  @Roles(RolUsuario.Especialista, RolUsuario.Admin)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   miTelefonoConfirmar(@CurrentTenant() ctx: TenantContext, @Body() dto: MiTelefonoConfirmarDto) {
     return this.invitacion.miTelefonoConfirmar(ctx, dto.codigo);

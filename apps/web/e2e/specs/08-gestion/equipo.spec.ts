@@ -75,6 +75,36 @@ test.describe('Gestión · equipo', () => {
     }
   });
 
+  test('"Soy yo" (E8): el admin crea su ficha sin correo y entra a su panel de especialista', async ({ browser }) => {
+    const s = await abrirRoles(browser, ['adminBarberia']);
+    try {
+      const page = s.adminBarberia.page;
+      const g = new GestionPage(page);
+      await g.abrir();
+      await g.subtab('Equipo');
+
+      await page.getByRole('button', { name: 'Nuevo especialista' }).first().click();
+      const dlg = page.getByRole('dialog');
+      await dlg.getByTestId('soy-yo-switch').click();
+      // Con "Soy yo" no hay campo de correo (no hay invitación que enviar) y
+      // el nombre se precarga con el de la cuenta.
+      await expect(dlg.getByPlaceholder('nombre@negocio.co')).toHaveCount(0);
+      await expect(dlg.getByLabel(/^Nombre/)).not.toHaveValue('');
+      await dlg.getByRole('button', { name: 'Crear mi ficha' }).click();
+      await expect(dlg).toBeHidden({ timeout: 15_000 });
+
+      // Su tarjeta sale con el badge "Tú" (ficha enlazada a su cuenta).
+      await expect(page.getByText(/^Tú/).first()).toBeVisible({ timeout: 15_000 });
+
+      // Y el panel de especialista lo deja entrar aunque su rol sea admin.
+      await page.goto('/especialista');
+      await expect(page).toHaveURL(/\/especialista/);
+      await expect(page.getByText('Mi día').first()).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await cerrarRoles(s);
+    }
+  });
+
   test('baja lógica retira al especialista del enlace público', async ({ browser }) => {
     const diana = (await equipoDe(api, USERS.adminBarberia)).find((e) => /diana/i.test(e.nombre))!;
     expect((await especialistasPublicos(api, centro.id)).some((p) => /diana/i.test(p.nombre))).toBeTruthy();

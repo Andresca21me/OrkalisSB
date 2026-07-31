@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Shell, type NavItem } from '../../ui/Shell';
 import { SucursalProvider } from '../../lib/sucursal';
 import { api } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { useApi } from '../../lib/useApi';
 import { Button, Icon } from '../../ui/ui';
 import { Tour, type TourStep } from '../../ui/Tour';
@@ -22,6 +24,8 @@ const NAV: NavItem[] = [
 
 // Configuración vive en el menú de perfil, no en el nav principal.
 const PERFIL_ITEMS: NavItem[] = [{ id: 'config', label: 'Configuración', icon: 'settings' }];
+/** Conmutador al panel de especialista ("Yo también atiendo", Plan-Correo E8). */
+const ITEM_MI_AGENDA: NavItem = { id: 'mi-panel-especialista', label: 'Mi panel de especialista', icon: 'scissors' };
 
 export function AdminApp() {
   return (
@@ -95,6 +99,8 @@ function pasosTour(setVista: (v: string) => void): TourStep[] {
 }
 
 function AdminShell() {
+  const navigate = useNavigate();
+  const { usuario } = useAuth();
   const [vista, setVista] = useState('panel');
   // Auto-inicia el tutorial en el primer ingreso de este navegador.
   const [tour, setTour] = useState(() => {
@@ -105,14 +111,25 @@ function AdminShell() {
     try { localStorage.setItem(TOUR_KEY, '1'); } catch { /* ignore */ }
   };
 
+  // Con ficha de especialista propia (E8), el menú de perfil ofrece saltar a
+  // su panel de especialista; el salto es de RUTA, no de vista interna.
+  const perfilItems = usuario?.especialistaId ? [ITEM_MI_AGENDA, ...PERFIL_ITEMS] : PERFIL_ITEMS;
+  const onNav = (id: string) => {
+    if (id === ITEM_MI_AGENDA.id) {
+      navigate('/especialista');
+      return;
+    }
+    setVista(id);
+  };
+
   return (
     <>
       <Shell
         nav={NAV}
         activo={vista}
-        onNav={setVista}
+        onNav={onNav}
         sucursalSelector
-        perfilItems={PERFIL_ITEMS}
+        perfilItems={perfilItems}
         acciones={
           <button
             type="button"

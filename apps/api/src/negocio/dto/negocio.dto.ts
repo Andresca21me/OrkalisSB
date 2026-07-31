@@ -72,6 +72,20 @@ export class InvitarEspecialistaDto {
   @IsOptional() @IsBoolean() disponible?: boolean;
 }
 
+/**
+ * "Yo también atiendo" (Plan-Correo E8): el usuario en sesión crea SU ficha de
+ * especialista. Sin correo: se enlaza a su propia cuenta.
+ */
+export class MiFichaDto {
+  /** Por defecto, el nombre del usuario en sesión. */
+  @IsOptional() @IsString() @MinLength(2) nombre?: string;
+  @IsOptional() @IsString() apellidos?: string;
+  @IsOptional() @IsString() especialidad?: string;
+  @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) sucursalIds!: string[];
+  @IsOptional() @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) servicioIds?: string[];
+  @IsOptional() @IsBoolean() disponible?: boolean;
+}
+
 /** Invitar (o re-invitar con otro correo) a un especialista ya existente sin acceso. */
 export class InvitarExistenteDto {
   @IsEmail({}, { message: 'Email inválido.' }) email!: string;

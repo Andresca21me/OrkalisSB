@@ -193,6 +193,43 @@ export class EquipoService {
   }
 
   /**
+   * "Yo también atiendo" (Plan-Correo E8): crea la ficha de especialista del
+   * PROPIO usuario en sesión y la enlaza a su cuenta. Sin invitación ni segundo
+   * correo: la cuenta ya existe con correo verificado y contraseña; solo faltaba
+   * el recurso de agenda. El cupo del plan se cobra igual que en cualquier alta.
+   */
+  async crearMiFicha(
+    ctx: TenantContext,
+    opts: { nombre?: string; apellidos?: string; especialidad?: string; sucursalIds: string[]; servicioIds?: string[]; disponible?: boolean },
+  ): Promise<Especialista> {
+    if (!ctx.usuarioId) throw new ForbiddenException('La sesión no identifica a un usuario.');
+
+    const { yaTiene, nombreUsuario } = await runInTenantTx(ctx, async (tx) => {
+      const [ya] = await tx
+        .select({ id: especialista.id })
+        .from(especialista)
+        .where(and(eq(especialista.usuarioId, ctx.usuarioId!), eq(especialista.activo, true)))
+        .limit(1);
+      const [u] = await tx.select({ nombre: usuario.nombre }).from(usuario).where(eq(usuario.id, ctx.usuarioId!)).limit(1);
+      return { yaTiene: !!ya, nombreUsuario: u?.nombre ?? '' };
+    });
+    if (yaTiene) throw new ConflictException('Tu cuenta ya está enlazada a una ficha de especialista.');
+
+    const e = await this.crear(ctx, opts.nombre?.trim() || nombreUsuario, opts.especialidad?.trim() || undefined, opts.sucursalIds, {
+      apellidos: opts.apellidos?.trim() || undefined,
+      servicioIds: opts.servicioIds,
+    });
+    const [enlazado] = await runInTenantTx(ctx, (tx) =>
+      tx
+        .update(especialista)
+        .set({ usuarioId: ctx.usuarioId!, ...(opts.disponible === false ? { disponible: false } : {}), actualizadoEn: new Date() })
+        .where(eq(especialista.id, e.id))
+        .returning(),
+    );
+    return enlazado;
+  }
+
+  /**
    * Crea el login del especialista (rol especialista) o, si el correo ya existe
    * como login de especialista de ESTE negocio sin recurso enlazado, lo enlaza
    * (rescata cuentas creadas antes por separado). Devuelve el id del usuario.

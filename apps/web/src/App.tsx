@@ -95,7 +95,9 @@ export function App() {
 
         {/* Paneles internos por rol. */}
         <Route path="/admin/*" element={<Protegido rol={[RolUsuario.Admin]}><AdminApp /></Protegido>} />
-        <Route path="/especialista/*" element={<Protegido rol={[RolUsuario.Especialista]}><SpecApp /></Protegido>} />
+        {/* El panel de especialista también lo abre quien tenga ficha propia
+            enlazada, sea cual sea su rol ("Yo también atiendo", Plan-Correo E8). */}
+        <Route path="/especialista/*" element={<Protegido rol={[RolUsuario.Especialista]} tambienConFicha><SpecApp /></Protegido>} />
         <Route path="/recepcion/*" element={<Protegido rol={[RolUsuario.Recepcionista]}><RecepcionApp /></Protegido>} />
         <Route path="/plataforma/*" element={<Protegido rol={[RolUsuario.OperadorPlataforma]}><PlataformaApp /></Protegido>} />
 
@@ -145,10 +147,12 @@ function Inicio() {
   return <Navigate to={destino[usuario.rol] ?? '/login'} replace />;
 }
 
-function Protegido({ rol, children }: { rol: RolUsuario[]; children: ReactNode }) {
+function Protegido({ rol, tambienConFicha, children }: { rol: RolUsuario[]; tambienConFicha?: boolean; children: ReactNode }) {
   const { usuario, cuentaSuspendida } = useAuth();
   if (cuentaSuspendida) return <Navigate to="/recuperar" replace />;
   if (!usuario) return <Navigate to="/login" replace />;
-  if (!rol.includes(usuario.rol)) return <Inicio />;
+  // `tambienConFicha`: además del rol, entra quien tenga ficha de especialista
+  // enlazada a su cuenta (el admin que también atiende, E8).
+  if (!rol.includes(usuario.rol) && !(tambienConFicha && usuario.especialistaId)) return <Inicio />;
   return <>{children}</>;
 }
