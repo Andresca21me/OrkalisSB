@@ -22,6 +22,7 @@ import {
   previewLiquidacion,
   reenviarInvitacion,
   useEquipo,
+  vincularMiCuenta,
   type InvitacionPendiente,
 } from '../../lib/useEquipo';
 import { PageHead } from '../../ui/Shell';
@@ -65,6 +66,11 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
   const [delSp, setDelSp] = useState<EspecialistaEquipo | null>(null);
   // Invitar al panel a un especialista que ya existe sin acceso (Plan-Correo E5).
   const [invitarSp, setInvitarSp] = useState<EspecialistaEquipo | null>(null);
+  // "Este soy yo" (E8): vincular una ficha existente a mi propia cuenta.
+  const [vincularSp, setVincularSp] = useState<EspecialistaEquipo | null>(null);
+  // Asignación de servicios sin pasar por el editor completo.
+  const [servSp, setServSp] = useState<EspecialistaEquipo | null>(null);
+  const { refrescar } = useAuth();
   // Invitaciones vigentes → badge "Invitación enviada" y botón de reenvío.
   const invitaciones = useApi<InvitacionPendiente[]>(invitacionesPendientes);
   const invPorEsp = useMemo(() => new Map((invitaciones.data ?? []).map((i) => [i.especialistaId, i])), [invitaciones.data]);
@@ -121,6 +127,19 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
       await reenviarInvitacion(e.id);
       toast(`Invitación reenviada a ${invPorEsp.get(e.id)?.email ?? 'su correo'}`, 'success');
       await invitaciones.recargar();
+    } catch (err) { toast((err as Error).message, 'error'); }
+  }
+
+  async function vincular() {
+    if (!vincularSp) return;
+    try {
+      await vincularMiCuenta(vincularSp.id);
+      setVincularSp(null);
+      // La sesión gana `especialistaId`: aparece "Mi panel de especialista".
+      await refrescar();
+      await recargar();
+      await invitaciones.recargar();
+      toast('Listo: esa ficha ahora es tuya. Tienes "Mi panel de especialista" en tu menú.', 'success');
     } catch (err) { toast((err as Error).message, 'error'); }
   }
 
@@ -204,9 +223,11 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
               invitacion={invPorEsp.get(e.id) ?? null}
               onToggle={() => toggleDisponible(e)}
               onEdit={() => { setEditSp(e); setFormOpen(true); }}
+              onServicios={() => setServSp(e)}
               onDelete={() => setDelSp(e)}
               onReenviar={() => void reenviar(e)}
               onInvitar={() => setInvitarSp(e)}
+              onVincular={() => setVincularSp(e)}
             />
           ))}
         </div>
@@ -220,6 +241,17 @@ export function EquipoScreen({ particion }: { particion: boolean }) {
           onSent={async () => { setInvitarSp(null); await invitaciones.recargar(); }}
         />
       )}
+      {servSp && (
+        <AsignarServiciosDialog
+          especialista={servSp}
+          servicios={serviciosActivos}
+          onClose={() => setServSp(null)}
+          onSaved={async () => { setServSp(null); await recargar(); }}
+        />
+      )}
+      <GConfirm open={!!vincularSp} title="Vincular esta ficha a tu cuenta" confirmLabel="Sí, este soy yo" confirmIcon="user"
+        desc={vincularSp ? <span>La ficha de <strong style={{ color: 'var(--text-primary)' }}>{vincularSp.nombre}</strong> quedará enlazada a TU cuenta: sus citas y ganancias serán las tuyas y tendrás acceso a tu panel de especialista. {invPorEsp.has(vincularSp.id) ? 'Su invitación pendiente se cancela.' : ''}</span> : ''}
+        onClose={() => setVincularSp(null)} onConfirm={() => void vincular()} />
       <GConfirm open={!!delSp} title="Dar de baja al especialista" danger confirmLabel="Dar de baja" confirmIcon="user-x"
         desc={delSp ? <span><strong style={{ color: 'var(--text-primary)' }}>{delSp.nombre}</strong> dejará de aparecer en el equipo, pero su historial de servicios y liquidaciones se conserva (borrado lógico).</span> : ''}
         onClose={() => setDelSp(null)} onConfirm={() => delSp && eliminar(delSp)} />
@@ -284,7 +316,7 @@ function Chip({ icon, children, tone }: { icon: string; children: React.ReactNod
   );
 }
 
-function SpecialistCard({ s, sucNombre, servNombre, invitacion, onToggle, onEdit, onDelete, onReenviar, onInvitar }: { s: EspecialistaEquipo; sucNombre: Map<string, string>; servNombre: Map<string, string>; invitacion: InvitacionPendiente | null; onToggle: () => void; onEdit: () => void; onDelete: () => void; onReenviar: () => void; onInvitar: () => void }) {
+function SpecialistCard({ s, sucNombre, servNombre, invitacion, onToggle, onEdit, onServicios, onDelete, onReenviar, onInvitar, onVincular }: { s: EspecialistaEquipo; sucNombre: Map<string, string>; servNombre: Map<string, string>; invitacion: InvitacionPendiente | null; onToggle: () => void; onEdit: () => void; onServicios: () => void; onDelete: () => void; onReenviar: () => void; onInvitar: () => void; onVincular: () => void }) {
   // Sin servicios declarados realiza todos: se dice en claro para que el admin no
   // lo lea como "no tiene ninguno asignado".
   const todos = s.servicioIds.length === 0;
@@ -311,9 +343,12 @@ function SpecialistCard({ s, sucNombre, servNombre, invitacion, onToggle, onEdit
         </div>
         <RowMenu items={[
           { icon: 'edit', label: 'Editar', onClick: onEdit },
-          { icon: 'scissors', label: 'Asignar servicios', onClick: onEdit },
+          { icon: 'scissors', label: 'Asignar servicios', onClick: onServicios },
           ...(!s.usuarioId && invitacion ? [{ icon: 'mail', label: 'Reenviar invitación', onClick: onReenviar }] : []),
           ...(!s.usuarioId && !invitacion ? [{ icon: 'mail', label: 'Invitar al panel', onClick: onInvitar }] : []),
+          // "Este soy yo" (E8): solo sobre fichas sin acceso y si mi cuenta aún
+          // no tiene la suya.
+          ...(!s.usuarioId && !usuario?.especialistaId ? [{ icon: 'user', label: 'Este soy yo (vincular a mi cuenta)', onClick: onVincular }] : []),
           { divider: true },
           { icon: 'trash-2', label: 'Eliminar', danger: true, onClick: onDelete },
         ]} />
@@ -734,6 +769,69 @@ function InvitarExistenteDialog({ especialista, onClose, onSent }: { especialist
         <GField label="Correo del especialista" error={err}>
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nombre@negocio.co" autoFocus />
         </GField>
+      </div>
+    </Dialog>
+  );
+}
+
+/**
+ * Asignación de servicios directa (sin pasar por el editor completo): las
+ * mismas píldoras del alta, pero solas. Vacío = realiza TODOS los servicios.
+ */
+function AsignarServiciosDialog({ especialista, servicios, onClose, onSaved }: { especialista: EspecialistaEquipo; servicios: { id: string; nombre: string }[]; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const [sel, setSel] = useState<string[]>(especialista.servicioIds);
+  const [guardando, setGuardando] = useState(false);
+
+  function toggle(id: string) {
+    setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  }
+
+  async function guardar() {
+    if (guardando) return;
+    setGuardando(true);
+    try {
+      await asignarServicios(especialista.id, sel);
+      toast(sel.length === 0 ? `${especialista.nombre} realizará todos los servicios` : `Servicios de ${especialista.nombre} actualizados`, 'success');
+      onSaved();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose} width={520} title="Asignar servicios" subtitle={especialista.nombre}
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+        <Button variant="primary" loading={guardando} onClick={() => void guardar()}>Guardar servicios</Button>
+      </>}>
+      <div style={{ padding: '8px 0 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+          {sel.length === 0
+            ? 'Sin selección: realiza TODOS los servicios del catálogo.'
+            : `Solo aparecerá en las reservas de estos ${sel.length} servicio(s).`}
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {servicios.map((sv) => {
+            const on = sel.includes(sv.id);
+            return (
+              <button key={sv.id} type="button" onClick={() => toggle(sv.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 12px', cursor: 'pointer', borderRadius: 'var(--radius-pill)', background: on ? 'var(--brand-tint)' : 'var(--surface-card)', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-primary)' }}>
+                {on && <Icon name="check" size={13} color="var(--brand)" />}
+                {sv.nombre}
+              </button>
+            );
+          })}
+          {servicios.length === 0 && (
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Aún no hay servicios en el catálogo.</span>
+          )}
+        </div>
+        {sel.length > 0 && (
+          <button type="button" onClick={() => setSel([])} style={{ alignSelf: 'flex-start', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)', color: 'var(--brand)', fontWeight: 600 }}>
+            Quitar selección (que realice todos)
+          </button>
+        )}
       </div>
     </Dialog>
   );

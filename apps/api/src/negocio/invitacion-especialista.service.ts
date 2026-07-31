@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { RolUsuario } from '@orkalis/shared';
 import { adminDb } from '../db/admin-client';
 import { runInTenantTx } from '../db/tx';
@@ -82,6 +82,34 @@ export class InvitacionEspecialistaService {
     const esp = await this.cargarEspecialista(ctx, especialistaId);
     if (esp.usuarioId) throw new ConflictException('Este especialista ya tiene acceso al panel.');
     await this.enviarInvitacion(ctx.negocioId, esp, limpio);
+  }
+
+  /**
+   * "Este soy yo" sobre un especialista YA creado (E8): lo enlaza a la cuenta
+   * del usuario en sesión. Cubre el caso de la ficha creada con solo el nombre
+   * (asistente de alta) que en realidad era el propio admin. Si tenía una
+   * invitación en el aire, se cancela: ya no hay nada que activar.
+   */
+  async vincularMiCuenta(ctx: TenantContext, especialistaId: string): Promise<void> {
+    if (!ctx.usuarioId) throw new BadRequestException('La sesión no identifica a un usuario.');
+
+    const esp = await this.cargarEspecialista(ctx, especialistaId);
+    if (esp.usuarioId) throw new ConflictException('Este especialista ya tiene acceso al panel.');
+
+    const [miFicha] = await runInTenantTx(ctx, (tx) =>
+      tx
+        .select({ id: especialista.id })
+        .from(especialista)
+        .where(and(eq(especialista.usuarioId, ctx.usuarioId!), eq(especialista.activo, true)))
+        .limit(1),
+    );
+    if (miFicha) throw new ConflictException('Tu cuenta ya está enlazada a otra ficha de especialista.');
+
+    await runInTenantTx(ctx, (tx) =>
+      tx.update(especialista).set({ usuarioId: ctx.usuarioId!, actualizadoEn: new Date() }).where(eq(especialista.id, especialistaId)),
+    );
+    await this.tokens.cancelarInvitacion(ctx.negocioId, especialistaId);
+    this.logger.log(`Especialista ${especialistaId} vinculado a la cuenta del usuario en sesión.`);
   }
 
   /** Reenvía la invitación vigente (cooldown y tope los valida el servicio de tokens). */

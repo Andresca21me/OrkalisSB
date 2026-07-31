@@ -198,6 +198,20 @@ export class TokenAccionService {
     return fila ?? null;
   }
 
+  /** Borra la invitación no usada de un especialista (p. ej. al vincularlo a otra cuenta). */
+  async cancelarInvitacion(negocioId: string, especialistaId: string): Promise<void> {
+    await adminDb
+      .delete(tokenAccion)
+      .where(
+        and(
+          eq(tokenAccion.tipo, 'invitacion_especialista'),
+          eq(tokenAccion.negocioId, negocioId),
+          sql`${tokenAccion.payload}->>'especialistaId' = ${especialistaId}`,
+          isNull(tokenAccion.usadoEn),
+        ),
+      );
+  }
+
   /** Invitaciones vigentes (ni usadas ni vencidas) de un negocio, para los badges del equipo. */
   async invitacionesPendientes(negocioId: string): Promise<FilaTokenAccion[]> {
     return adminDb

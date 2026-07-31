@@ -72,6 +72,13 @@ export class EquipoController {
     return this.equipoService.crearMiFicha(ctx, dto);
   }
 
+  /** "Este soy yo" (E8): enlaza un especialista YA creado a la cuenta en sesión. */
+  @Post(':id/vincular-mi-cuenta')
+  @HttpCode(204)
+  async vincularMiCuenta(@CurrentTenant() ctx: TenantContext, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.invitacion.vincularMiCuenta(ctx, id);
+  }
+
   // ── El propio especialista verifica su celular ──────────────────────────────
   // (Paso 2 de la invitación, o después desde su panel si la mensajería estaba
   // pausada.) Admin incluido: con "Yo también atiendo" (E8) él también tiene

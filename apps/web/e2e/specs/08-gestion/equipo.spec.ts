@@ -105,6 +105,32 @@ test.describe('Gestión · equipo', () => {
     }
   });
 
+  test('«Asignar servicios» abre su propio diálogo, no el editor completo', async ({ browser }) => {
+    const diana = (await equipoDe(api, USERS.adminBarberia)).find((e) => /diana/i.test(e.nombre))!;
+    const s = await abrirRoles(browser, ['adminBarberia']);
+    try {
+      const page = s.adminBarberia.page;
+      const g = new GestionPage(page);
+      await g.abrir();
+      await g.subtab('Equipo');
+
+      await g.filaEsp(diana.id).getByRole('button', { name: 'Acciones' }).click();
+      await page.getByRole('menuitem', { name: 'Asignar servicios' }).click();
+
+      const dlg = page.getByRole('dialog');
+      await expect(dlg.getByRole('heading', { name: 'Asignar servicios' })).toBeVisible({ timeout: 15_000 });
+      // Es el diálogo dedicado: sin campos del editor (nombre, foto, sedes).
+      await expect(dlg.getByLabel(/^Nombre/)).toHaveCount(0);
+
+      // Selecciona el primer servicio y guarda.
+      await dlg.getByRole('button', { name: /Corte|Barba|Color|Manicure/ }).first().click();
+      await dlg.getByRole('button', { name: 'Guardar servicios' }).click();
+      await expect(dlg).toBeHidden({ timeout: 15_000 });
+    } finally {
+      await cerrarRoles(s);
+    }
+  });
+
   test('baja lógica retira al especialista del enlace público', async ({ browser }) => {
     const diana = (await equipoDe(api, USERS.adminBarberia)).find((e) => /diana/i.test(e.nombre))!;
     expect((await especialistasPublicos(api, centro.id)).some((p) => /diana/i.test(p.nombre))).toBeTruthy();

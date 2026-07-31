@@ -79,7 +79,9 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     await adminDb.delete(negocio).where(eq(negocio.nombre, NOMBRE));
     const [neg] = await adminDb.insert(negocio).values({ nombre: NOMBRE, perfil: PerfilNegocio.Barberia }).returning();
     negocioId = neg.id;
-    await adminDb.insert(suscripcion).values({ negocioId, plan: PlanSuscripcion.Pro, numEspecialistas: 10 });
+    // Cupo holgado: estas pruebas crean bastantes fichas y ninguna quiere
+    // chocar con el límite del plan (eso se prueba aparte, con su propio negocio).
+    await adminDb.insert(suscripcion).values({ negocioId, plan: PlanSuscripcion.Pro, numEspecialistas: 30 });
     const [suc] = await adminDb.insert(sucursal).values({ negocioId, nombre: 'Sede' }).returning();
     sucursalId = suc.id;
     ctx = { negocioId, sucursalIds: null, rol: RolUsuario.Admin };
@@ -268,6 +270,33 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     const [conTel] = await adminDb.select().from(especialista).where(eq(especialista.id, ficha.id));
     expect(conTel.telefono).toBe('+573015556677');
     expect(conTel.telefonoVerificadoEn).toBeInstanceOf(Date);
+  });
+
+  it('"Este soy yo" (E8): vincula un especialista ya creado y cancela su invitación pendiente', async () => {
+    const destinoAdmin = email();
+    const [admin] = await adminDb
+      .insert(usuario)
+      .values({ negocioId, nombre: 'Dueño Tardío', email: destinoAdmin, passwordHash: 'x', rol: RolUsuario.Admin })
+      .returning();
+    const ctxAdmin: TenantContext = { negocioId, sucursalIds: null, rol: RolUsuario.Admin, usuarioId: admin.id };
+
+    // Ficha creada aparte, con una invitación en el aire.
+    const destinoInvitacion = email();
+    const esp = await servicio.invitar(ctx, { nombre: 'En Realidad Soy Yo', email: destinoInvitacion, sucursalIds: [sucursalId] });
+    const token = await tokenDelCorreo(destinoInvitacion);
+
+    await servicio.vincularMiCuenta(ctxAdmin, esp.id);
+    const [fila] = await adminDb.select().from(especialista).where(eq(especialista.id, esp.id));
+    expect(fila.usuarioId).toBe(admin.id);
+
+    // La invitación pendiente murió: activarla ya no crea nada.
+    expect(await servicio.info(token)).toEqual({ estado: 'invalida' });
+    await expect(servicio.activar(token, 'Password123')).rejects.toMatchObject({ status: 400 });
+
+    // Ni doble vínculo del especialista, ni segunda ficha para la misma cuenta.
+    await expect(servicio.vincularMiCuenta(ctxAdmin, esp.id)).rejects.toMatchObject({ status: 409 });
+    const otro = await servicio.invitar(ctx, { nombre: 'Otra Persona', email: email(), sucursalIds: [sucursalId] });
+    await expect(servicio.vincularMiCuenta(ctxAdmin, otro.id)).rejects.toMatchObject({ status: 409 });
   });
 
   it('sin cupo del plan, invitar no crea ni envía nada', async () => {

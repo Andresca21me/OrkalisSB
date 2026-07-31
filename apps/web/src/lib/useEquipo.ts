@@ -104,6 +104,14 @@ export function invitarExistente(id: string, email: string): Promise<unknown> {
   return api.post(`/especialistas/${id}/invitar`, { email });
 }
 
+/**
+ * "Este soy yo" (E8): enlaza un especialista YA creado a la cuenta en sesión
+ * (cancela su invitación pendiente si la tenía).
+ */
+export function vincularMiCuenta(id: string): Promise<unknown> {
+  return api.post(`/especialistas/${id}/vincular-mi-cuenta`);
+}
+
 /** Reenvía la invitación vigente (cooldown 60 s, máximo 5 reenvíos). */
 export function reenviarInvitacion(id: string): Promise<unknown> {
   return api.post(`/especialistas/${id}/invitacion/reenviar`);
