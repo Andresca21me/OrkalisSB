@@ -10,9 +10,11 @@ import {
   servicio,
 } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
+import { ConfigResolverService } from '../config-module/config-resolver.service';
 import { filtrarPorServicios, realizaServicios } from './validators/capacidades';
 import { HorarioService } from './horario.service';
 import { ventanasEfectivas } from './ventanas-efectivas';
+import { iniciosEnVentanas, type Ocupado } from './franjas.calculo';
 
 export interface Franja {
   inicio: string; // ISO
@@ -24,7 +26,12 @@ export interface FranjaPublica extends Franja {
   especialistaId: string;
 }
 
-const GRANULARIDAD_MIN = 15;
+/** Reglas de generación de franjas del negocio (Plan-Franjas), ya resueltas. */
+interface ReglasFranja {
+  paso: number;
+  bufferMin: number;
+  antelacionMin: number;
+}
 
 /** Instante UTC a partir de fecha local Bogotá (UTC-5) + minutos del día. */
 function instante(fechaIso: string, minutos: number): Date {
@@ -35,7 +42,10 @@ function instante(fechaIso: string, minutos: number): Date {
 /** Disponibilidad en tiempo real (FASE-08, RF-017): franjas libres por día. */
 @Injectable()
 export class DisponibilidadService {
-  constructor(private readonly horario: HorarioService) {}
+  constructor(
+    private readonly horario: HorarioService,
+    private readonly config: ConfigResolverService,
+  ) {}
 
   /**
    * Franjas libres para una fecha, compatibles con la duración TOTAL de los
@@ -51,6 +61,13 @@ export class DisponibilidadService {
     servicioIds: string[],
     fechaIso: string,
   ): Promise<FranjaPublica[]> {
+    // Reglas del negocio, UNA vez por petición (no por especialista).
+    const [paso, bufferMin, antelacionMin] = await Promise.all([
+      this.config.resolverNumero(ctx.negocioId, sucursalId, 'agendamiento.intervalo_franjas'),
+      this.config.resolverNumero(ctx.negocioId, sucursalId, 'agendamiento.buffer_min'),
+      this.config.resolverNumero(ctx.negocioId, sucursalId, 'agendamiento.antelacion_reserva_min'),
+    ]);
+    const reglas: ReglasFranja = { paso, bufferMin, antelacionMin };
     return runInTenantTx(ctx, async (tx) => {
       // Día cerrado por el negocio → sin franjas (el cliente no puede reservar).
       const [y0, m0, d0] = fechaIso.split('-').map(Number);
@@ -97,7 +114,7 @@ export class DisponibilidadService {
       // Agrega por hora de inicio: el primer especialista libre gana la franja.
       const porInicio = new Map<string, FranjaPublica>();
       for (const espId of especialistaIds) {
-        const slots = await this.slotsDeEspecialista(tx, sucursalId, espId, duracion, fechaIso);
+        const slots = await this.slotsDeEspecialista(tx, sucursalId, espId, duracion, fechaIso, reglas);
         for (const s of slots) {
           if (!porInicio.has(s.inicio)) porInicio.set(s.inicio, { ...s, especialistaId: espId });
         }
@@ -113,6 +130,7 @@ export class DisponibilidadService {
     especialistaId: string,
     duracion: number,
     fechaIso: string,
+    reglas: ReglasFranja,
   ): Promise<Franja[]> {
     const [y, m, d] = fechaIso.split('-').map(Number);
     const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
@@ -157,17 +175,22 @@ export class DisponibilidadService {
       ocupadas.push({ ini: new Date(r.ini).getTime(), fin: new Date(r.fin).getTime() });
     }
 
+    // A minutos del día: el motor puro trabaja en la misma unidad que las
+    // ventanas. Ocupados de otro día (p. ej. una retención vieja) caen fuera
+    // de las ventanas y no afectan.
+    const base = diaInicio.getTime();
+    const ocupados: Ocupado[] = ocupadas.map((o) => ({
+      ini: Math.floor((o.ini - base) / 60000),
+      fin: Math.ceil((o.fin - base) / 60000),
+    }));
+
+    const inicios = iniciosEnVentanas(ventanasDelDia, ocupados, duracion, reglas.paso, reglas.bufferMin);
+    const corte = Date.now() + reglas.antelacionMin * 60000; // solo futuro + antelación
     const libres: Franja[] = [];
-    const ahora = Date.now();
-    for (const v of ventanasDelDia) {
-      const { desde, hasta } = v;
-      for (let t = desde; t + duracion <= hasta; t += GRANULARIDAD_MIN) {
-        const ini = instante(fechaIso, t);
-        const fin = instante(fechaIso, t + duracion);
-        if (ini.getTime() <= ahora) continue; // solo futuro
-        const choca = ocupadas.some((o) => ini.getTime() < o.fin && fin.getTime() > o.ini);
-        if (!choca) libres.push({ inicio: ini.toISOString(), fin: fin.toISOString() });
-      }
+    for (const t of inicios) {
+      const ini = instante(fechaIso, t);
+      if (ini.getTime() <= corte) continue;
+      libres.push({ inicio: ini.toISOString(), fin: instante(fechaIso, t + duracion).toISOString() });
     }
     return libres;
   }

@@ -73,7 +73,7 @@ describe('Filtrado servicio↔especialista en la reserva', () => {
     const events = new EventEmitter2();
     const resolver = new ConfigResolverService();
     events.on(CONFIG_UPDATED, (p: ConfigUpdatedEvent) => resolver.invalidar(p.negocioId));
-    dispo = new DisponibilidadService(new HorarioService());
+    dispo = new DisponibilidadService(new HorarioService(), resolver);
   });
 
   afterAll(async () => {

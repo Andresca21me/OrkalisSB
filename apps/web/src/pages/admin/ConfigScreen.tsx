@@ -184,6 +184,14 @@ const AGENDA_NUM = [
   { clave: 'agendamiento.duracion_retencion_min', title: 'Retención de franja', hint: 'Minutos que se reserva la franja mientras el cliente confirma.', suffix: 'min', step: 5 },
 ];
 
+/** Opciones del intervalo de franjas (espejo del enum del registry). */
+const INTERVALOS_FRANJA = ['10', '15', '20', '30', '60'];
+
+const FRANJAS_NUM = [
+  { clave: 'agendamiento.buffer_min', title: 'Margen entre citas', hint: 'Minutos de limpieza o descanso que se reservan después de cada cita. Máximo 60.', suffix: 'min', step: 5 },
+  { clave: 'agendamiento.antelacion_reserva_min', title: 'Antelación para reservar', hint: 'Con cuánta anticipación mínima puede reservar un cliente. Máximo 1440 (24 h).', suffix: 'min', step: 15 },
+];
+
 function ConfigClaves({ seccion, scope, nivel, ambitoId, sucursalIdParam }: { seccion: 'modulos' | 'agenda'; scope: Scope; nivel: Procedencia; ambitoId: string; sucursalIdParam: string | null }) {
   const toast = useToast();
   const voc = useVocabulario();
@@ -192,11 +200,11 @@ function ConfigClaves({ seccion, scope, nivel, ambitoId, sucursalIdParam }: { se
   const susc = useApi<{ limites: { modulos: string[] } }>(() => api.get('/suscripcion'));
   const modulosPlan = susc.data?.limites.modulos ?? null;
 
-  async function guardarValor(clave: string, valor: boolean | number) {
+  async function guardarValor(clave: string, valor: boolean | number | string) {
     try { await setConfig(nivel, ambitoId, clave, valor); await recargar(); }
     catch (e) { toast((e as Error).message, 'error'); }
   }
-  async function override(clave: string, valorActual: boolean | number) {
+  async function override(clave: string, valorActual: boolean | number | string) {
     try { await setConfig('sucursal', ambitoId, clave, valorActual); toast('Ahora se define en esta sucursal', 'info'); await recargar(); }
     catch (e) { toast((e as Error).message, 'error'); }
   }
@@ -251,8 +259,54 @@ function ConfigClaves({ seccion, scope, nivel, ambitoId, sucursalIdParam }: { se
           <Switch checked={aprob?.valor === true} onChange={(v) => guardarValor('agendamiento.aprobacion_manual', v)} />
         </SettingRow>
       </ConfigCard>
+      <FranjasReserva data={data} scope={scope} onSave={guardarValor} onOverride={override} onInherit={inherit} />
       <AgendaNumeros data={data} scope={scope} onSave={guardarValor} onOverride={override} onInherit={inherit} />
     </>
+  );
+}
+
+/**
+ * Franjas de reserva (Plan-Franjas): intervalo entre horas de inicio, margen
+ * entre citas y antelación mínima para reservar. El intervalo se guarda al
+ * cambiarlo (como los switches); los números llevan su botón Guardar.
+ */
+function FranjasReserva({ data, scope, onSave, onOverride, onInherit }: { data: ConfigEfectivo[]; scope: Scope; onSave: (c: string, v: number | string) => void; onOverride: (c: string, v: number | string) => void; onInherit: (c: string) => void }) {
+  const [draft, setDraft] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const d: Record<string, number> = {};
+    for (const f of FRANJAS_NUM) d[f.clave] = Number(efectivoDe(data, f.clave)?.valor ?? 0);
+    setDraft(d);
+  }, [data]);
+
+  const intervalo = efectivoDe(data, 'agendamiento.intervalo_franjas');
+  const intervaloDim = scope === 'sucursal' && intervalo?.procedencia !== 'sucursal';
+
+  return (
+    <ConfigCard title="Franjas de reserva" desc="Cada cuántos minutos se ofrecen horas de inicio. Tras una cita, las franjas continúan desde el minuto exacto en que termina — sin huecos artificiales." pad={22}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '20px 28px' }}>
+        <ProvField label="Intervalo de franjas" hint="Las horas de inicio que ve el cliente al reservar."
+          prov={intervalo && <ProvControl scope={scope} procedencia={intervalo.procedencia} onOverride={() => onOverride('agendamiento.intervalo_franjas', String(intervalo.valor))} onInherit={() => onInherit('agendamiento.intervalo_franjas')} />}>
+          <div style={{ opacity: intervaloDim ? 0.5 : 1, pointerEvents: intervaloDim ? 'none' : 'auto' }}>
+            <Select data-testid="intervalo-franjas" value={String(intervalo?.valor ?? '15')} onChange={(e) => onSave('agendamiento.intervalo_franjas', e.target.value)} style={{ width: 180, height: 40 }}>
+              {INTERVALOS_FRANJA.map((v) => <option key={v} value={v}>Cada {v} minutos</option>)}
+            </Select>
+          </div>
+        </ProvField>
+        {FRANJAS_NUM.map((f) => {
+          const ef = efectivoDe(data, f.clave);
+          const dim = scope === 'sucursal' && ef?.procedencia !== 'sucursal';
+          return (
+            <ProvField key={f.clave} label={f.title} hint={f.hint}
+              prov={ef && <ProvControl scope={scope} procedencia={ef.procedencia} onOverride={() => onOverride(f.clave, Number(ef.valor))} onInherit={() => onInherit(f.clave)} />}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, opacity: dim ? 0.5 : 1, pointerEvents: dim ? 'none' : 'auto' }}>
+                <GNumber value={draft[f.clave] ?? 0} onChange={(v) => setDraft((d) => ({ ...d, [f.clave]: v }))} suffix={f.suffix} step={f.step} min={0} />
+                <Button variant="secondary" size="sm" onClick={() => onSave(f.clave, draft[f.clave] ?? 0)}>Guardar</Button>
+              </div>
+            </ProvField>
+          );
+        })}
+      </div>
+    </ConfigCard>
   );
 }
 

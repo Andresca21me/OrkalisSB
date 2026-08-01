@@ -13,9 +13,10 @@ export class ConfigPage {
     await this.page.getByRole('button', { name: new RegExp(this.adminNombre) }).click();
     await this.page.getByRole('menuitem', { name: 'Configuración' }).click();
   }
-  /** Selecciona una sección del nav lateral de Configuración. */
+  /** Selecciona una sección del nav lateral de Configuración. Acotado a `main`
+   *  porque nombres como «Agenda» también existen en el nav global de la app. */
   async seccion(nombre: string) {
-    await this.page.getByRole('button', { name: nombre, exact: true }).click();
+    await this.page.getByRole('main').getByRole('button', { name: nombre, exact: true }).click();
   }
 
   // ── Módulos ──

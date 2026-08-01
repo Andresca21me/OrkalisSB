@@ -81,7 +81,7 @@ export async function sembrarReserva(
   request: APIRequestContext,
   sucursalId: string,
   servicioId: string,
-  opts: { telefono?: string; nombre?: string; especialista?: string; maxDias?: number } = {},
+  opts: { telefono?: string; nombre?: string; especialista?: string; maxDias?: number; desdeDia?: number } = {},
 ): Promise<ReservaSembrada> {
   const telefono = opts.telefono ?? telefonoUnico();
   const nombre = opts.nombre ?? nombreUnico('Cliente');
@@ -91,6 +91,7 @@ export async function sembrarReserva(
     servicioId,
     opts.especialista ?? 'any',
     opts.maxDias ?? 10,
+    opts.desdeDia ?? 0,
   );
 
   const ret = await request.post(`/api/public/${sucursalId}/retener`, {
@@ -364,13 +365,13 @@ export async function negocioIdDe(request: APIRequestContext, email: string): Pr
   return (me.negocioId ?? me.negocio?.id) as string;
 }
 
-/** Fija un valor de config (booleano o numérico) a nivel de negocio. */
+/** Fija un valor de config (booleano, numérico o enum) a nivel de negocio. */
 export async function setConfigApi(
   request: APIRequestContext,
   email: string,
   negocioId: string,
   clave: string,
-  valor: boolean | number,
+  valor: boolean | number | string,
 ): Promise<void> {
   const token = await loginAPI(request, email);
   const res = await request.put(`/api/config/negocio/${negocioId}/${clave}`, { headers: authHeaders(token), data: { valor } });

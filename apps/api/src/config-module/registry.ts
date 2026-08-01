@@ -180,6 +180,31 @@ export const REGISTRY: Record<string, DefinicionClave> = {
     defaults: { [PerfilNegocio.Salon]: 10, [PerfilNegocio.Barberia]: 10 },
     descripcion: 'TTL (min) del bloqueo temporal de franja al reservar.',
   }),
+  // ── Franjas de reserva (Plan-Franjas) ──────────────────────────────────────
+  // Los defaults reproducen el comportamiento previo al plan (rejilla de 15,
+  // sin buffer ni antelación): un negocio que no toca nada no nota el cambio.
+  'agendamiento.intervalo_franjas': def({
+    clave: 'agendamiento.intervalo_franjas',
+    tipo: 'enum',
+    enumValores: ['10', '15', '20', '30', '60'],
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: '15', [PerfilNegocio.Barberia]: '15' },
+    descripcion: 'Cada cuántos minutos se ofrecen horas de inicio al reservar.',
+  }),
+  'agendamiento.buffer_min': def({
+    clave: 'agendamiento.buffer_min',
+    tipo: 'numero',
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: 0, [PerfilNegocio.Barberia]: 0 },
+    descripcion: 'Minutos de margen (limpieza/descanso) tras cada cita.',
+  }),
+  'agendamiento.antelacion_reserva_min': def({
+    clave: 'agendamiento.antelacion_reserva_min',
+    tipo: 'numero',
+    nivelMinimoEdicion: NivelConfig.Negocio,
+    defaults: { [PerfilNegocio.Salon]: 0, [PerfilNegocio.Barberia]: 0 },
+    descripcion: 'Minutos mínimos de antelación para reservar una franja.',
+  }),
 };
 
 /** Lista de todas las claves del registry. */

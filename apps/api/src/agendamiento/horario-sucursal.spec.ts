@@ -16,6 +16,7 @@ import {
 } from '../db/schema';
 import { runInTenantTx } from '../db/tx';
 import type { TenantContext } from '../db/tenant-context';
+import { ConfigResolverService } from '../config-module/config-resolver.service';
 import { DisponibilidadService } from './disponibilidad.service';
 import { HorarioService } from './horario.service';
 import { ValidadorPublico } from './validators/validador-publico';
@@ -110,7 +111,7 @@ describe('Horario de la sucursal ↔ franjas reservables', () => {
     );
 
     ctx = { negocioId, sucursalIds: null, rol: 'admin' };
-    dispo = new DisponibilidadService(new HorarioService());
+    dispo = new DisponibilidadService(new HorarioService(), new ConfigResolverService());
   });
 
   afterAll(async () => {

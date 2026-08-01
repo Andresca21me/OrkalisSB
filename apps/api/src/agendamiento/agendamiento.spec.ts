@@ -105,7 +105,7 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     const horario = new HorarioService();
     const avisos = new AvisosEspecialistaService(notificaciones);
     pub = new PublicAgendamientoService(
-      new DisponibilidadService(horario),
+      new DisponibilidadService(horario, resolver),
       new OtpService(estadoMensajeria),
       resolver,
       validadores,

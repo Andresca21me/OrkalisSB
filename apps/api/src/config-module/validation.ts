@@ -50,5 +50,16 @@ export function validacionesCruzadas(efectivos: Map<string, ValorConfig>): strin
   if (comTipo === 'porcentaje' && typeof comValor === 'number' && comValor > 100) {
     return 'La comisión por producto en porcentaje no puede superar el 100%.';
   }
+
+  // Topes de franjas (Plan-Franjas): un buffer mayor que una hora o una
+  // antelación mayor que un día dejarían la agenda inservible sin avisar.
+  const buffer = efectivos.get('agendamiento.buffer_min');
+  if (typeof buffer === 'number' && buffer > 60) {
+    return 'El margen entre citas no puede superar 60 minutos.';
+  }
+  const antelacion = efectivos.get('agendamiento.antelacion_reserva_min');
+  if (typeof antelacion === 'number' && antelacion > 1440) {
+    return 'La antelación para reservar no puede superar 1440 minutos (24 horas).';
+  }
   return null;
 }
