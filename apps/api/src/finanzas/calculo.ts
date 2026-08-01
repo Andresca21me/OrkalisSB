@@ -14,7 +14,8 @@ import { MetodoPago, SplitType } from '@orkalis/shared';
  *    que se configura como % de la venta o monto fijo por unidad. Con comisión 0 = todo al salón.
  *    La deducción administrativa y la tarifa NO aplican a productos, solo a servicios.
  *  - Tarifa cliente→profesional: % extra sobre servicios que paga el cliente y va al profesional.
- *  - Comisión bancaria: si el pago es electrónico, la absorbe el salón.
+ *  - Comisión bancaria: solo sobre la porción pagada con TARJETA (el datáfono
+ *    es lo que cobra comisión; transferencias y Nequi no), y la absorbe el salón.
  *  - `particion_por_especialista` OFF: no se calcula ganancia individual (todo al salón).
  *  - `inventario` OFF: el cálculo opera sin componente de productos.
  */
@@ -115,15 +116,15 @@ export function comisionProducto(
   return round2((totalLinea * valor) / 100);
 }
 
-const METODOS_ELECTRONICOS: ReadonlySet<MetodoPago> = new Set([
-  MetodoPago.Tarjeta,
-  MetodoPago.Transferencia,
-  MetodoPago.Nequi,
-]);
+/**
+ * Solo la TARJETA genera comisión bancaria (aclaración de EL USUARIO al
+ * Plan-Finanzas): transferencias y Nequi llegan sin descuento del banco.
+ */
+const METODOS_CON_COMISION: ReadonlySet<MetodoPago> = new Set([MetodoPago.Tarjeta]);
 
 /** ¿El método genera comisión bancaria? (Candado D9 del Plan-Finanzas.) */
-export function esMetodoElectronico(m: MetodoPago): boolean {
-  return METODOS_ELECTRONICOS.has(m);
+export function generaComisionBancaria(m: MetodoPago): boolean {
+  return METODOS_CON_COMISION.has(m);
 }
 
 export function calcularAtencion(
@@ -186,12 +187,12 @@ export function calcularAtencion(
   let ganSalon = round2(ganSalonServicios + totalProductos - comisionProductos);
   const total = round2(totalServicios + totalProductos + tarifa);
 
-  // Comisión bancaria: solo sobre la PORCIÓN electrónica del pago (soporta pago
+  // Comisión bancaria: solo sobre la PORCIÓN pagada con tarjeta (soporta pago
   // dividido en varios métodos). La absorbe el salón.
-  const montoElectronico = round2(
-    pagos.filter((x) => METODOS_ELECTRONICOS.has(x.metodo)).reduce((s, x) => s + x.monto, 0),
+  const montoTarjeta = round2(
+    pagos.filter((x) => METODOS_CON_COMISION.has(x.metodo)).reduce((s, x) => s + x.monto, 0),
   );
-  const comisionBancaria = round2((montoElectronico * p.comisionBancaria) / 100);
+  const comisionBancaria = round2((montoTarjeta * p.comisionBancaria) / 100);
   ganSalon = round2(ganSalon - comisionBancaria);
 
   // Sin partición por especialista: no hay ganancia individual.
@@ -215,7 +216,7 @@ export function calcularAtencion(
     snapshot: {
       parametros: p,
       pagos,
-      montoElectronico,
+      montoTarjeta,
       totalServicios,
       totalProductos,
       comisionProductos,

@@ -48,8 +48,8 @@ describe('calcularAtencion', () => {
     expect(r.ganSalon).toBe(16000);
   });
 
-  it('comisión bancaria 2% por transferencia la absorbe el salón', () => {
-    const r = calcularAtencion([pct(100000)], [], pago(MetodoPago.Transferencia, 100000), { ...base, comisionBancaria: 2 });
+  it('comisión bancaria 2% por tarjeta la absorbe el salón', () => {
+    const r = calcularAtencion([pct(100000)], [], pago(MetodoPago.Tarjeta, 100000), { ...base, comisionBancaria: 2 });
     expect(r.total).toBe(100000);
     expect(r.comisionBancaria).toBe(2000);
     expect(r.ganProf).toBe(50000);
@@ -84,20 +84,34 @@ describe('calcularAtencion', () => {
     expect(r.total).toBe(50000);
   });
 
-  it('pago dividido: la comisión bancaria solo aplica a la porción electrónica', () => {
-    // Total 100000 = 40000 efectivo + 60000 transferencia; comisión 2%.
+  it('pago dividido: la comisión bancaria solo grava la porción con TARJETA', () => {
+    // Total 100000 = 40000 efectivo + 60000 tarjeta; comisión 2%.
     const r = calcularAtencion(
       [pct(100000)],
       [],
       [
         { metodo: MetodoPago.Efectivo, monto: 40000 },
-        { metodo: MetodoPago.Transferencia, monto: 60000 },
+        { metodo: MetodoPago.Tarjeta, monto: 60000 },
       ],
       { ...base, comisionBancaria: 2 },
     );
     expect(r.total).toBe(100000);
-    expect(r.comisionBancaria).toBe(1200); // 2% de 60000 (solo la parte electrónica)
+    expect(r.comisionBancaria).toBe(1200); // 2% de 60000 (solo la tarjeta)
     expect(r.ganSalon).toBe(48800); // 50000 − 1200
+  });
+
+  it('transferencia y Nequi NO generan comisión bancaria (aclaración del usuario)', () => {
+    const r = calcularAtencion(
+      [pct(100000)],
+      [],
+      [
+        { metodo: MetodoPago.Transferencia, monto: 60000 },
+        { metodo: MetodoPago.Nequi, monto: 40000 },
+      ],
+      { ...base, comisionBancaria: 2 },
+    );
+    expect(r.comisionBancaria).toBe(0);
+    expect(r.ganSalon).toBe(50000); // intacto: el banco no descuenta nada
   });
 
   // ── Comisión por venta de producto (Plan-Inventario, D2/D4) ─────────────────

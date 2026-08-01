@@ -96,7 +96,7 @@ export function DesgloseAtencionView({ datos }: { datos: DesgloseAtencion }) {
           <div className="eyebrow" style={{ margin: '16px 0 6px' }}>Ajustes</div>
           {datos.tarifaCliente > 0 && <GSummaryRow first label="Tarifa cliente → profesional" sub="La paga el cliente; va al especialista" value={`+${money(datos.tarifaCliente)}`} />}
           {datos.deduccionAdmin > 0 && <GSummaryRow first={datos.tarifaCliente <= 0} label="Deducción administrativa" sub="Retención del negocio sobre la parte del especialista" value={money(datos.deduccionAdmin)} />}
-          {datos.comisionBancaria > 0 && <GSummaryRow first={datos.tarifaCliente <= 0 && datos.deduccionAdmin <= 0} label="Comisión bancaria" sub="La absorbe el negocio (porción electrónica del pago)" value={`−${money(datos.comisionBancaria)}`} tone="neg" />}
+          {datos.comisionBancaria > 0 && <GSummaryRow first={datos.tarifaCliente <= 0 && datos.deduccionAdmin <= 0} label="Comisión bancaria" sub="La absorbe el negocio (porción pagada con tarjeta)" value={`−${money(datos.comisionBancaria)}`} tone="neg" />}
           {datos.tarifaCliente <= 0 && datos.deduccionAdmin <= 0 && datos.comisionBancaria <= 0 && (
             <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Sin ajustes en esta transacción.</p>
           )}

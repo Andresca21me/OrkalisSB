@@ -287,7 +287,7 @@ function AgendaNumeros({ data, scope, onSave, onOverride, onInherit }: { data: C
 
 const FIN_PCT = [
   { clave: 'finanzas.deduccion_administrativa', label: 'Deducción administrativa', hint: '% que retiene el negocio antes de repartir.' },
-  { clave: 'finanzas.comision_bancaria', label: 'Comisión bancaria', hint: '% por pago electrónico (transferencia/tarjeta).' },
+  { clave: 'finanzas.comision_bancaria', label: 'Comisión bancaria', hint: '% que cobra el banco por pago con tarjeta (transferencia y Nequi no la generan).' },
   { clave: 'finanzas.tarifa_cliente_profesional', label: 'Tarifa cliente→profesional', hint: '% adicional que el cliente paga al profesional.' },
 ];
 
@@ -374,7 +374,7 @@ function ConfigFinancieros({ scope, nivel, ambitoId, sucursalIdParam }: { scope:
           <div role="alert" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', marginTop: 16, borderRadius: 'var(--radius-md)', background: 'var(--warning-tint)', border: '1px solid rgba(180,83,9,0.3)' }}>
             <Icon name="alert-circle" size={16} color="#B45309" style={{ flex: 'none', marginTop: 2 }} />
             <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-              <strong>Aún no has asignado la comisión bancaria.</strong> Hasta que guardes este formulario, los cobros con tarjeta, transferencia o Nequi están bloqueados: sin ese dato, el cierre del período no reflejaría lo que el banco descuenta. Si tu negocio no paga comisión, guarda 0%.
+              <strong>Aún no has asignado la comisión bancaria.</strong> Hasta que guardes este formulario, los cobros con tarjeta están bloqueados: sin ese dato, el cierre del período no reflejaría lo que el datáfono descuenta. Si tu negocio no paga comisión, guarda 0%.
             </span>
           </div>
         )}

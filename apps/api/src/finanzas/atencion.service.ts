@@ -15,7 +15,7 @@ import { transicionar } from '../agendamiento/cita-state-machine';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 import {
   calcularAtencion,
-  esMetodoElectronico,
+  generaComisionBancaria,
   type ComisionProductoTipo,
   type ParametrosFinancieros,
   type ProductoReal,
@@ -80,18 +80,17 @@ export class AtencionService {
     if (input.productos?.length && !params.inventarioActivo) {
       throw new BadRequestException('El módulo de inventario no está activo.');
     }
-    // Candado D9 (Plan-Finanzas): no se cobra con métodos electrónicos hasta
-    // que el negocio ASIGNE su comisión bancaria (asignar 0 explícito cuenta).
-    // Sin esto, el cálculo aplicaría el default en silencio y el cierre del
-    // período no reflejaría lo que el banco de verdad descuenta.
+    // Candado D9 (Plan-Finanzas): no se cobra con TARJETA hasta que el negocio
+    // ASIGNE su comisión bancaria (asignar 0 explícito cuenta). Solo la tarjeta
+    // genera comisión —transferencia y Nequi no—, así que solo ella se bloquea.
     const metodosDelCobro = input.metodoUnico ? [input.metodoUnico] : (input.pagos ?? []).map((p) => p.metodo);
-    if (metodosDelCobro.some((m) => esMetodoElectronico(m))) {
+    if (metodosDelCobro.some((m) => generaComisionBancaria(m))) {
       const cb = await this.config.resolver(ctx.negocioId, c.sucursalId, 'finanzas.comision_bancaria');
       if (cb.procedencia === NivelConfig.Sistema) {
         throw new ConflictException({
           codigo: 'COMISION_BANCARIA_SIN_CONFIGURAR',
           message:
-            'Antes de cobrar con tarjeta, transferencia o Nequi, asigna la comisión bancaria en Configuración → Financieros (puede ser 0%).',
+            'Antes de cobrar con tarjeta, asigna la comisión bancaria en Configuración → Financieros (puede ser 0%).',
         });
       }
     }
@@ -137,7 +136,7 @@ export class AtencionService {
 
       // `metodoUnico` (D7): el monto es el total calculado — se resuelve en dos
       // pasadas porque el total depende del cálculo y el cálculo de los pagos
-      // (comisión bancaria sobre la porción electrónica).
+      // (comisión bancaria sobre la porción pagada con tarjeta).
       let pagos = input.pagos ?? [];
       if (input.metodoUnico) {
         const prev = calcularAtencion(servicios, productosReales, [], params);

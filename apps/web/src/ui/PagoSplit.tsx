@@ -39,8 +39,8 @@ function metodoLibre(lineas: PagoLinea[]): MetodoPago {
   return (METODOS.find((m) => !usados.has(m.id))?.id ?? 'efectivo') as MetodoPago;
 }
 
-/** Métodos que generan comisión bancaria (candado D9 del Plan-Finanzas). */
-const ELECTRONICOS = new Set<string>(['tarjeta', 'transferencia', 'nequi']);
+/** Solo la TARJETA genera comisión bancaria (candado D9 del Plan-Finanzas). */
+const ELECTRONICOS = new Set<string>(['tarjeta']);
 
 export function PagoSplit({ total, lineas, onChange, sucursalId }: { total: number; lineas: PagoLinea[]; onChange: (l: PagoLinea[]) => void; sucursalId?: string }) {
   const suma = sumaPagos(lineas);
@@ -74,7 +74,7 @@ export function PagoSplit({ total, lineas, onChange, sucursalId }: { total: numb
         <div role="alert" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', marginBottom: 10, borderRadius: 'var(--radius-sm)', background: 'var(--warning-tint)', border: '1px solid rgba(180,83,9,0.3)' }}>
           <Icon name="alert-circle" size={15} color="#B45309" style={{ flex: 'none', marginTop: 2 }} />
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-            <strong>Tarjeta, transferencia y Nequi están bloqueados</strong>: el administrador debe asignar la comisión bancaria en <strong>Configuración → Financieros</strong> (puede ser 0%). Así el cierre refleja lo que el banco descuenta de verdad.
+            <strong>El pago con tarjeta está bloqueado</strong>: el administrador debe asignar la comisión bancaria en <strong>Configuración → Financieros</strong> (puede ser 0%). Así el cierre refleja lo que el datáfono descuenta de verdad.
           </span>
         </div>
       )}

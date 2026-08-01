@@ -71,7 +71,7 @@ export const REGISTRY: Record<string, DefinicionClave> = {
     tipo: 'porcentaje',
     nivelMinimoEdicion: NivelConfig.Negocio,
     defaults: { [PerfilNegocio.Salon]: 0, [PerfilNegocio.Barberia]: 0 },
-    descripcion: '% de comisión por pago electrónico (p. ej. transferencia).',
+    descripcion: '% de comisión del banco por pago con TARJETA (transferencia y Nequi no la generan).',
   }),
   'finanzas.tarifa_cliente_profesional': def({
     clave: 'finanzas.tarifa_cliente_profesional',

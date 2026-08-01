@@ -437,7 +437,7 @@ export interface GananciasDetalle extends GananciasEspecialista {
 
 /** `GET /finanzas/contexto-cobro` — lo que la pantalla de cobro debe saber (D9). */
 export interface ContextoCobro {
-  /** false = los métodos electrónicos están bloqueados hasta asignarla. */
+  /** false = el pago con tarjeta está bloqueado hasta asignarla. */
   comisionBancariaConfigurada: boolean;
   /** % vigente (0 si no está configurada). */
   comisionBancaria: number;
