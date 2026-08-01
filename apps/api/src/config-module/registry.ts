@@ -183,13 +183,14 @@ export const REGISTRY: Record<string, DefinicionClave> = {
   // ── Franjas de reserva (Plan-Franjas) ──────────────────────────────────────
   // Los defaults reproducen el comportamiento previo al plan (rejilla de 15,
   // sin buffer ni antelación): un negocio que no toca nada no nota el cambio.
+  // Valor LIBRE en minutos (la UI ofrece atajos 10/15/20/30/60, pero el admin
+  // puede escribir cualquier intervalo): los topes viven en `validation.ts`.
   'agendamiento.intervalo_franjas': def({
     clave: 'agendamiento.intervalo_franjas',
-    tipo: 'enum',
-    enumValores: ['10', '15', '20', '30', '60'],
+    tipo: 'duracion',
     nivelMinimoEdicion: NivelConfig.Negocio,
-    defaults: { [PerfilNegocio.Salon]: '15', [PerfilNegocio.Barberia]: '15' },
-    descripcion: 'Cada cuántos minutos se ofrecen horas de inicio al reservar.',
+    defaults: { [PerfilNegocio.Salon]: 15, [PerfilNegocio.Barberia]: 15 },
+    descripcion: 'Cada cuántos minutos se ofrecen horas de inicio al reservar (5–120).',
   }),
   'agendamiento.buffer_min': def({
     clave: 'agendamiento.buffer_min',

@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  INTERVALOS_FRANJA_PRESET,
+  INTERVALO_FRANJA_MAX,
+  INTERVALO_FRANJA_MIN,
+  validarIntervaloFranjas,
+} from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { useAuth } from '../../lib/auth';
@@ -184,9 +190,6 @@ const AGENDA_NUM = [
   { clave: 'agendamiento.duracion_retencion_min', title: 'Retención de franja', hint: 'Minutos que se reserva la franja mientras el cliente confirma.', suffix: 'min', step: 5 },
 ];
 
-/** Opciones del intervalo de franjas (espejo del enum del registry). */
-const INTERVALOS_FRANJA = ['10', '15', '20', '30', '60'];
-
 const FRANJAS_NUM = [
   { clave: 'agendamiento.buffer_min', title: 'Margen entre citas', hint: 'Minutos de limpieza o descanso que se reservan después de cada cita. Máximo 60.', suffix: 'min', step: 5 },
   { clave: 'agendamiento.antelacion_reserva_min', title: 'Antelación para reservar', hint: 'Con cuánta anticipación mínima puede reservar un cliente. Máximo 1440 (24 h).', suffix: 'min', step: 15 },
@@ -280,18 +283,20 @@ function FranjasReserva({ data, scope, onSave, onOverride, onInherit }: { data: 
 
   const intervalo = efectivoDe(data, 'agendamiento.intervalo_franjas');
   const intervaloDim = scope === 'sucursal' && intervalo?.procedencia !== 'sucursal';
+  const intervaloValor = Number(intervalo?.valor ?? 15);
 
   return (
     <ConfigCard title="Franjas de reserva" desc="Cada cuántos minutos se ofrecen horas de inicio. Tras una cita, las franjas continúan desde el minuto exacto en que termina — sin huecos artificiales." pad={22}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '20px 28px' }}>
-        <ProvField label="Intervalo de franjas" hint="Las horas de inicio que ve el cliente al reservar."
-          prov={intervalo && <ProvControl scope={scope} procedencia={intervalo.procedencia} onOverride={() => onOverride('agendamiento.intervalo_franjas', String(intervalo.valor))} onInherit={() => onInherit('agendamiento.intervalo_franjas')} />}>
-          <div style={{ opacity: intervaloDim ? 0.5 : 1, pointerEvents: intervaloDim ? 'none' : 'auto' }}>
-            <Select data-testid="intervalo-franjas" value={String(intervalo?.valor ?? '15')} onChange={(e) => onSave('agendamiento.intervalo_franjas', e.target.value)} style={{ width: 180, height: 40 }}>
-              {INTERVALOS_FRANJA.map((v) => <option key={v} value={v}>Cada {v} minutos</option>)}
-            </Select>
-          </div>
-        </ProvField>
+        {/* Fila completa: los atajos + el campo manual no caben en una columna. */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <ProvField label="Intervalo de franjas" hint="Las horas de inicio que ve el cliente al reservar."
+            prov={intervalo && <ProvControl scope={scope} procedencia={intervalo.procedencia} onOverride={() => onOverride('agendamiento.intervalo_franjas', intervaloValor)} onInherit={() => onInherit('agendamiento.intervalo_franjas')} />}>
+            <div style={{ opacity: intervaloDim ? 0.5 : 1, pointerEvents: intervaloDim ? 'none' : 'auto' }}>
+              <IntervaloFranjas valor={intervaloValor} onSave={(v) => onSave('agendamiento.intervalo_franjas', v)} />
+            </div>
+          </ProvField>
+        </div>
         {FRANJAS_NUM.map((f) => {
           const ef = efectivoDe(data, f.clave);
           const dim = scope === 'sucursal' && ef?.procedencia !== 'sucursal';
@@ -336,6 +341,51 @@ function AgendaNumeros({ data, scope, onSave, onOverride, onInherit }: { data: C
         })}
       </div>
     </ConfigCard>
+  );
+}
+
+/**
+ * Intervalo de franjas: atajos frecuentes + valor escrito a mano. El manual se
+ * valida con la MISMA regla que el servidor (`validarIntervaloFranjas` vive en
+ * `@orkalis/shared`), así el admin ve el error antes de guardar y no depende
+ * del rechazo del backend — que sigue siendo la autoridad.
+ */
+function IntervaloFranjas({ valor, onSave }: { valor: number; onSave: (v: number) => void }) {
+  const [manual, setManual] = useState(valor);
+  useEffect(() => { setManual(valor); }, [valor]);
+  const error = validarIntervaloFranjas(manual);
+  const cambiado = manual !== valor;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {INTERVALOS_FRANJA_PRESET.map((v) => {
+          const on = valor === v;
+          return (
+            <button
+              key={v}
+              type="button"
+              data-testid={`intervalo-preset-${v}`}
+              aria-pressed={on}
+              onClick={() => onSave(v)}
+              style={{ minWidth: 54, height: 34, padding: '0 12px', borderRadius: 999, cursor: 'pointer', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, background: on ? 'var(--brand-tint)' : 'var(--surface-card)', color: on ? 'var(--brand)' : 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 'var(--text-xs)' }}
+            >
+              {v} min
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>O escribe el tuyo:</span>
+        <span data-testid="intervalo-manual" style={{ width: 132 }}>
+          <GNumber value={manual} onChange={setManual} suffix="min" step={5} min={0} invalid={!!error} />
+        </span>
+        <Button variant="secondary" size="sm" disabled={!!error || !cambiado} onClick={() => onSave(manual)}>Guardar</Button>
+      </div>
+      <p role={error ? 'alert' : undefined} style={{ margin: 0, fontSize: 'var(--text-xs)', color: error ? 'var(--error)' : 'var(--text-tertiary)' }}>
+        {error ?? `Ahora: cada ${valor} minutos. Puedes escribir cualquier valor entre ${INTERVALO_FRANJA_MIN} y ${INTERVALO_FRANJA_MAX}.`}
+      </p>
+    </div>
   );
 }
 

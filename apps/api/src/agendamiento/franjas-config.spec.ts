@@ -130,7 +130,7 @@ describe('Franjas configurables y ancladas a citas (Plan-Franjas)', () => {
   });
 
   it('el intervalo configurado cambia la rejilla (20 min) y sigue re-anclando', async () => {
-    await setClave('agendamiento.intervalo_franjas', '20');
+    await setClave('agendamiento.intervalo_franjas', 20);
     expect(await franjasDe(JUEVES)).toEqual([
       min('09:00'), min('09:20'), min('09:40'), min('10:00'), min('10:20'),
       min('10:40'), min('11:00'), min('11:20'), min('11:30'), // 11:30 = encaje de cola al cierre
@@ -142,8 +142,16 @@ describe('Franjas configurables y ancladas a citas (Plan-Franjas)', () => {
     expect(conCita).not.toContain(min('10:30'));
   });
 
+  it('un intervalo escrito a mano (25 min, fuera de los atajos) también rige', async () => {
+    await setClave('agendamiento.intervalo_franjas', 25);
+    expect(await franjasDe(JUEVES)).toEqual([
+      min('09:00'), min('09:25'), min('09:50'), min('10:15'), min('10:40'),
+      min('11:05'), min('11:30'), // 11:30 = último inicio que cabe antes del cierre
+    ]);
+  });
+
   it('el buffer separa las franjas de las citas por ambos lados', async () => {
-    await setClave('agendamiento.intervalo_franjas', '15');
+    await setClave('agendamiento.intervalo_franjas', 15);
     await setClave('agendamiento.buffer_min', 10);
     const r = await franjasDe(MIERCOLES); // cita 09:45–10:20 → bloqueado 09:35–10:30
     expect(r).toEqual([

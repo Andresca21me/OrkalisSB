@@ -40,15 +40,17 @@ test.describe('Config · franjas de reserva', () => {
   test('el intervalo elegido en la UI rige la rejilla y las franjas se anclan al fin de cada cita', async ({ browser }) => {
     const s = await abrirRoles(browser, ['adminBarberia']);
     try {
-      // 1) UI: Config → Agenda → intervalo "Cada 30 minutos".
-      const cfg = new ConfigPage(s.adminBarberia.page);
+      // 1) UI: Config → Agenda → atajo de 30 min.
+      const page = s.adminBarberia.page;
+      const cfg = new ConfigPage(page);
       await cfg.abrir();
       await cfg.seccion('Agenda');
-      const guardado = s.adminBarberia.page.waitForResponse(
+      const guardado = page.waitForResponse(
         (r) => r.url().includes('/api/config/') && r.request().method() === 'PUT' && r.ok(),
       );
-      await s.adminBarberia.page.getByTestId('intervalo-franjas').selectOption('30');
+      await page.getByTestId('intervalo-preset-30').click();
       await guardado;
+      await expect(page.getByTestId('intervalo-preset-30')).toHaveAttribute('aria-pressed', 'true');
 
       // 2) La reserva pública ofrece la rejilla nueva: mañana, sin citas, las
       //    primeras franjas van de 30 en 30.
@@ -80,6 +82,41 @@ test.describe('Config · franjas de reserva', () => {
       for (const f of trasCita) {
         expect(new Date(f.inicio).getTime() < fin && new Date(f.fin).getTime() > ini).toBe(false);
       }
+    } finally {
+      await cerrarRoles(s);
+    }
+  });
+
+  test('el admin puede escribir un intervalo propio; uno inválido no se puede guardar', async ({ browser }) => {
+    const s = await abrirRoles(browser, ['adminBarberia']);
+    try {
+      const page = s.adminBarberia.page;
+      const cfg = new ConfigPage(page);
+      await cfg.abrir();
+      await cfg.seccion('Agenda');
+
+      const campo = page.getByTestId('intervalo-manual').locator('input');
+      const guardar = page.getByTestId('intervalo-manual').locator('..').getByRole('button', { name: 'Guardar' });
+
+      // Inválido (por encima del máximo): el sistema lo señala y bloquea el guardado.
+      await campo.fill('200');
+      await expect(page.getByText('El intervalo de franjas debe estar entre 5 y 120 minutos.')).toBeVisible();
+      await expect(guardar).toBeDisabled();
+
+      // Válido pero fuera de los atajos: se guarda y rige la reserva pública.
+      const guardado = page.waitForResponse(
+        (r) => r.url().includes('/api/config/') && r.request().method() === 'PUT' && r.ok(),
+      );
+      await campo.fill('25');
+      await guardar.click();
+      await guardado;
+
+      const servicios = await serviciosPublicos(api, centro.id);
+      const s30 = servicios.find((x) => x.duracionMin === 30)!;
+      const carlos = (await especialistasPublicos(api, centro.id)).find((e) => /carlos/i.test(e.nombre))!;
+      const { fecha } = await franjaLibre(api, centro.id, s30.id, carlos.id, 10, 1);
+      const rejilla = await franjasDe(fecha, s30.id, carlos.id);
+      expect(new Date(rejilla[1].inicio).getTime() - new Date(rejilla[0].inicio).getTime()).toBe(25 * 60000);
     } finally {
       await cerrarRoles(s);
     }

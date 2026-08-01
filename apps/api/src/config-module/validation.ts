@@ -1,3 +1,4 @@
+import { validarIntervaloFranjas } from '@orkalis/shared';
 import type { DefinicionClave, ValorConfig } from './config.types';
 
 /**
@@ -51,8 +52,20 @@ export function validacionesCruzadas(efectivos: Map<string, ValorConfig>): strin
     return 'La comisión por producto en porcentaje no puede superar el 100%.';
   }
 
-  // Topes de franjas (Plan-Franjas): un buffer mayor que una hora o una
-  // antelación mayor que un día dejarían la agenda inservible sin avisar.
+  // Franjas (Plan-Franjas). El intervalo es un valor LIBRE en minutos: la UI
+  // ofrece atajos, pero el admin puede escribirlo, así que la regla que decide
+  // si es correcto vive aquí (y en `@orkalis/shared`, que también usa la UI).
+  const intervalo = efectivos.get('agendamiento.intervalo_franjas');
+  if (intervalo !== undefined) {
+    // Overrides antiguos guardados como texto ('15'): se toleran al LEER, pero
+    // cualquier escritura los normaliza a número.
+    const n = typeof intervalo === 'string' ? Number(intervalo) : intervalo;
+    const err = validarIntervaloFranjas(n);
+    if (err) return err;
+  }
+
+  // Un buffer mayor que una hora o una antelación mayor que un día dejarían la
+  // agenda inservible sin avisar.
   const buffer = efectivos.get('agendamiento.buffer_min');
   if (typeof buffer === 'number' && buffer > 60) {
     return 'El margen entre citas no puede superar 60 minutos.';

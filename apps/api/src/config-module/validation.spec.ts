@@ -41,6 +41,22 @@ describe('validacionesCruzadas', () => {
     expect(validacionesCruzadas(mapa(40, 40))).not.toBeNull();
   });
 
+  it('acepta cualquier intervalo de franjas entero entre 5 y 120, no solo los atajos', () => {
+    const conIntervalo = (valor: ValorConfig): Map<string, ValorConfig> =>
+      new Map<string, ValorConfig>([['agendamiento.intervalo_franjas', valor]]);
+    // Atajos de la UI y valores escritos a mano.
+    expect(validacionesCruzadas(conIntervalo(15))).toBeNull();
+    expect(validacionesCruzadas(conIntervalo(25))).toBeNull();
+    expect(validacionesCruzadas(conIntervalo(5))).toBeNull();
+    expect(validacionesCruzadas(conIntervalo(120))).toBeNull();
+    // Fuera de rango o no entero.
+    expect(validacionesCruzadas(conIntervalo(4))).not.toBeNull();
+    expect(validacionesCruzadas(conIntervalo(121))).not.toBeNull();
+    expect(validacionesCruzadas(conIntervalo(12.5))).not.toBeNull();
+    // Override antiguo guardado como texto: se tolera al leer.
+    expect(validacionesCruzadas(conIntervalo('30'))).toBeNull();
+  });
+
   it('rechaza comisión de producto en porcentaje > 100; acepta valor fijo grande', () => {
     const conComision = (tipo: string, valor: number): Map<string, ValorConfig> =>
       new Map<string, ValorConfig>([

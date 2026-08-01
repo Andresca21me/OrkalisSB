@@ -12,7 +12,8 @@
 
 | # | Decisión | Propuesta |
 |---|----------|-----------|
-| D1 | **Intervalo configurable** | Nueva clave `agendamiento.intervalo_franjas` (enum: 10, 15, 20, 30, 60 min; default **15** en ambos verticales → cero cambio de comportamiento hasta que el admin lo toque). Vive en el registry de configuración como todas las demás y se edita en **Configuración → Reservas** con un selector. Nivel Negocio (aplica a todas las sedes). |
+| D1 | **Intervalo configurable** | Nueva clave `agendamiento.intervalo_franjas` (minutos; default **15** en ambos verticales → cero cambio de comportamiento hasta que el admin lo toque). Vive en el registry de configuración como todas las demás y se edita en **Configuración → Agenda**. Nivel Negocio (aplica a todas las sedes). |
+| D1-bis | **Intervalo escrito a mano** *(enmienda de EL USUARIO, 1 ago 2026)* | El enum cerrado se queda corto: la UI ofrece los atajos 10/15/20/30/60 **y** un campo donde el admin escribe el suyo (p. ej. 25 o 40). "Correcto" = entero de 5 a 120 minutos. La regla vive UNA vez en `@orkalis/shared` (`validarIntervaloFranjas`) y la usan las dos barreras: la UI la aplica en vivo (mensaje bajo el campo + botón Guardar deshabilitado) y el servidor la revalida al escribir, que es quien manda. |
 | D2 | **Anclaje a segmentos libres (el corazón del cambio)** | Hoy la rejilla arranca en la apertura y avanza de 15 en 15 **ignorando dónde terminan las citas**: una cita que termina 10:20 bloquea la franja de 10:15 y la siguiente oferta es 10:30 → 10 min muertos. Propuesta: calcular los **segmentos libres** del día (ventanas − citas − retenciones) y, dentro de cada segmento, generar franjas desde su inicio exacto avanzando por el intervalo configurado. El inicio de un segmento es la apertura **o el minuto exacto en que termina la cita anterior** — exactamente lo que pide EL USUARIO. |
 | D3 | **Encaje de cola** | Además de la rejilla, ofrecer siempre el **último inicio posible** de cada segmento (`fin − duración`) cuando no coincide con la rejilla. Ejemplo: hueco de 50 min entre dos citas, servicio de 50 min, intervalo 30 → la rejilla solo ofrecería el inicio; sin esta regla un hueco de 50 min no aceptaría un servicio de 45 que arranque a los 5 min… con ella, el hueco se puede llenar por completo. Es la regla que convierte los "espacios muertos" en vendibles. |
 | D4 | **Buffer entre citas** | Nueva clave `agendamiento.buffer_min` (número, default **0** = comportamiento actual). Minutos de limpieza/descanso que se suman al final de cada cita al calcular ocupación. Con buffer 5, una cita que termina 10:20 hace que el siguiente segmento arranque 10:25. Solo afecta la **generación** de franjas (la validación anti-solape de confirmación no cambia: el EXCLUDE de BD sigue protegiendo solo el solape real). |
@@ -85,7 +86,7 @@ Detalles del algoritmo:
 
 | Clave | Tipo | Default | Descripción |
 |---|---|---|---|
-| `agendamiento.intervalo_franjas` | enum `['10','15','20','30','60']` | `'15'` | Cada cuántos minutos se ofrecen horas de inicio. |
+| `agendamiento.intervalo_franjas` | duracion (entero 5–120) | `15` | Cada cuántos minutos se ofrecen horas de inicio. |
 | `agendamiento.buffer_min` | numero (0–60) | `0` | Minutos de margen tras cada cita antes de la siguiente. |
 | `agendamiento.antelacion_reserva_min` | numero (0–1440) | `0` | Minutos mínimos de antelación para reservar. |
 
@@ -95,8 +96,8 @@ La lectura se hace **una vez por petición de disponibilidad** (no por especiali
 
 ## 2.3 UI de Configuración → Reservas
 
-En `ConfigReservas` (donde ya viven antelación de cancelación y retención de franja):
-- **Intervalo de franjas**: `Select` con «Cada 10/15/20/30/60 minutos» + hint «Las horas de inicio que se ofrecen al reservar. Tras una cita, las franjas continúan desde el minuto exacto en que termina.»
+En la sección **Agenda** (donde ya viven antelación de cancelación y retención de franja), tarjeta «Franjas de reserva»:
+- **Intervalo de franjas**: fila de atajos (10/15/20/30/60 min) + campo numérico para escribir cualquier valor, con validación en vivo bajo el campo y Guardar deshabilitado mientras sea inválido (D1-bis).
 - **Margen entre citas**: número con sufijo `min` + hint «Tiempo de limpieza o descanso que se reserva después de cada cita.»
 - **Antelación para reservar**: número con sufijo `min` + hint «Con cuánta anticipación mínima puede reservar un cliente.»
 

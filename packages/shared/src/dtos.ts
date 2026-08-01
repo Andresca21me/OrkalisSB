@@ -709,3 +709,26 @@ export interface ResumenMensajes {
   /** Fracción 0..1 de mensajes fallidos o sin cupo. */
   tasaFallo: number;
 }
+
+// ── Franjas de reserva (Plan-Franjas) ────────────────────────────────────────
+
+/** Atajos que ofrece la UI para `agendamiento.intervalo_franjas` (min). */
+export const INTERVALOS_FRANJA_PRESET = [10, 15, 20, 30, 60] as const;
+/** Topes del intervalo escrito a mano: por debajo la agenda es ruido, por
+ *  encima deja de ofrecer horas útiles. */
+export const INTERVALO_FRANJA_MIN = 5;
+export const INTERVALO_FRANJA_MAX = 120;
+
+/**
+ * Valida un intervalo de franjas. Devuelve el mensaje de error o `null`.
+ * ÚNICA definición de la regla: la usan la validación del servidor y la UI.
+ */
+export function validarIntervaloFranjas(valor: unknown): string | null {
+  if (typeof valor !== 'number' || !Number.isInteger(valor)) {
+    return 'El intervalo de franjas debe ser un número entero de minutos.';
+  }
+  if (valor < INTERVALO_FRANJA_MIN || valor > INTERVALO_FRANJA_MAX) {
+    return `El intervalo de franjas debe estar entre ${INTERVALO_FRANJA_MIN} y ${INTERVALO_FRANJA_MAX} minutos.`;
+  }
+  return null;
+}

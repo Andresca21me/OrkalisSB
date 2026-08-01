@@ -87,6 +87,20 @@ describe('Configuración (ConfigResolver + escritura)', () => {
     ).rejects.toThrow();
   });
 
+  it('el intervalo de franjas admite valores propios y el SERVIDOR rechaza los inválidos', async () => {
+    // Escrito a mano, fuera de los atajos de la UI.
+    await writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'agendamiento.intervalo_franjas', 25);
+    expect((await resolver.resolver(negocioId, null, 'agendamiento.intervalo_franjas')).valor).toBe(25);
+    // La UI ya lo bloquea, pero la regla vive en el servidor: fuera de rango,
+    // no entero o de otro tipo se rechazan aunque alguien llame a la API.
+    for (const malo of [200, 3, 12.5, '30']) {
+      await expect(
+        writer.upsert(ctx, NivelConfig.Negocio, negocioId, 'agendamiento.intervalo_franjas', malo),
+      ).rejects.toThrow();
+    }
+    expect((await resolver.resolver(negocioId, null, 'agendamiento.intervalo_franjas')).valor).toBe(25);
+  });
+
   it('setReparticion atómico (70/30) se acepta y resuelve correctamente', async () => {
     await writer.setReparticion(ctx, NivelConfig.Negocio, negocioId, 70, 30);
     const prof = await resolver.resolver(negocioId, null, 'finanzas.reparticion_profesional');
