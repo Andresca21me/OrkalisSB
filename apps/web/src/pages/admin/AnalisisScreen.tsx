@@ -1,18 +1,14 @@
 import { useState } from 'react';
 import type { MetodoPago } from '@orkalis/shared';
-import { api } from '../../lib/api';
-import { useApi } from '../../lib/useApi';
 import { useSucursal } from '../../lib/sucursal';
 import { money } from '../../lib/format';
 import { useAnalisis } from '../../lib/useReportes';
-import { eliminarGasto, useGastos } from '../../lib/useGastos';
 import { useValoracion } from '../../lib/useInventario';
 import { useEquipo } from '../../lib/useEquipo';
 import { useServicios } from '../../lib/useServicios';
 import type { Periodo } from '../../ui/PeriodPicker';
 import { BarChart, Donut, type DonutDato } from '../../ui/Chart';
 import {
-  Badge,
   Button,
   Card,
   EmptyState,
@@ -22,12 +18,8 @@ import {
   Spinner,
   useToast,
 } from '../../ui/ui';
-import { GConfirm } from './gestion-ui';
 import { BreakdownBlock, FinTile, HBars, HealthBadge } from './finanzas-ui';
-import { GastoModal } from './finanzas-modals';
 import { useVocabulario } from '../../lib/vocabulario';
-
-interface Sucursal { id: string; nombre: string; activa: boolean }
 
 const PAGO_LABEL: Record<string, string> = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', nequi: 'Nequi', otro: 'Otro' };
 
@@ -43,24 +35,11 @@ export function AnalisisScreen({ inventarioOn, periodo }: { inventarioOn: boolea
   const servicios = useServicios();
   const filtroActivo = !!espId || !!servId;
   const a = useAnalisis(periodo.desde, periodo.hasta, sucursalActivaId, { especialistaId: espId || undefined, servicioId: servId || undefined });
-  const gastos = useGastos(sucursalActivaId);
   const valoracion = useValoracion(inventarioOn ? sucursalActivaId : undefined);
-  const sucs = useApi<Sucursal[]>(() => api.get('/sucursales'));
-
-  const [gastoModal, setGastoModal] = useState<'fijo' | 'variable' | null>(null);
-  const [delGasto, setDelGasto] = useState<{ id: string; categoria: string | null } | null>(null);
 
   const scope = consolidado ? 'Todo el negocio' : (sucursalActiva?.nombre ?? 'Sucursal');
   const d = a.data;
   const empty = !!d && d.salud === 'sin_datos';
-
-  const fijos = (gastos.data ?? []).filter((g) => g.tipo === 'fijo' && g.activo);
-  const variables = (gastos.data ?? []).filter((g) => g.tipo === 'variable' && g.activo);
-
-  async function eliminar(id: string) {
-    try { await eliminarGasto(id); setDelGasto(null); toast('Gasto eliminado', 'info'); await Promise.all([gastos.recargar(), a.recargar()]); }
-    catch (e) { toast((e as Error).message, 'error'); }
-  }
 
   function exportarCsv() {
     if (!d) return;
@@ -133,7 +112,8 @@ export function AnalisisScreen({ inventarioOn, periodo }: { inventarioOn: boolea
               rows={[
                 { label: 'Gastos fijos', value: `− ${money(d.gastosFijos)}`, tone: 'neg' },
                 { label: 'Gastos variables', value: `− ${money(d.gastosVariables)}`, tone: 'neg' },
-              ]} total={`− ${money(d.egresos)}`} totalLabel="Total egresos" totalTone="neg" />
+              ]} total={`− ${money(d.egresos)}`} totalLabel="Total egresos" totalTone="neg"
+              foot="El desglose gasto a gasto vive en la pestaña Gastos." />
           </div>
 
           <div className="ork-cols-2" style={{ marginBottom: 24, alignItems: 'stretch' }}>
@@ -185,42 +165,8 @@ export function AnalisisScreen({ inventarioOn, periodo }: { inventarioOn: boolea
             </Card>
           </div>
 
-          <h2 style={{ fontSize: 'var(--text-lg)', letterSpacing: '-0.01em', marginBottom: 14 }}>Gestión de gastos</h2>
-          <div className="ork-cols-2">
-            <ExpenseCard titulo="Gastos fijos" items={fijos} onAdd={() => setGastoModal('fijo')} onDelete={(g) => setDelGasto(g)} />
-            <ExpenseCard titulo="Gastos variables" items={variables} onAdd={() => setGastoModal('variable')} onDelete={(g) => setDelGasto(g)} />
-          </div>
         </>
       ) : null}
-
-      {gastoModal && <GastoModal kind={gastoModal} sucursales={sucs.data ?? []} defaultSucursalId={sucursalActivaId} onClose={() => setGastoModal(null)} onSaved={async () => { setGastoModal(null); await Promise.all([gastos.recargar(), a.recargar()]); }} />}
-      <GConfirm open={!!delGasto} danger title="Eliminar gasto" confirmLabel="Eliminar" confirmIcon="trash-2"
-        desc={delGasto ? <span><strong style={{ color: 'var(--text-primary)' }}>{delGasto.categoria || 'Gasto'}</strong> se eliminará del período (borrado lógico, se conserva el historial).</span> : ''}
-        onClose={() => setDelGasto(null)} onConfirm={() => delGasto && eliminar(delGasto.id)} />
     </div>
-  );
-}
-
-function ExpenseCard({ titulo, items, onAdd, onDelete }: { titulo: string; items: { id: string; categoria: string | null; monto: string }[]; onAdd: () => void; onDelete: (g: { id: string; categoria: string | null }) => void }) {
-  return (
-    <Card padding={18}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-        <span style={{ minWidth: 0, fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--text-primary)' }}>{titulo}</span>
-        <Button variant="secondary" size="sm" iconLeft="plus" onClick={onAdd}>Agregar gasto</Button>
-      </div>
-      {items.length === 0 ? (
-        <div style={{ padding: '16px 4px', fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Sin gastos registrados.</div>
-      ) : (
-        <div>
-          {items.map((g, i) => (
-            <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderTop: i ? '1px solid var(--border-subtle)' : 'none' }}>
-              <Badge tone="neutral">{g.categoria || 'Gasto'}</Badge>
-              <span className="data" style={{ marginLeft: 'auto', fontWeight: 600 }}>{money(g.monto)}</span>
-              <button type="button" onClick={() => onDelete(g)} aria-label="Eliminar" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'inline-flex', padding: 4 }}><Icon name="trash-2" size={15} color="var(--text-tertiary)" /></button>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
   );
 }

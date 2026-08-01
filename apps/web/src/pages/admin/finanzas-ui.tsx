@@ -225,7 +225,7 @@ export function FinTile({ label, value, icon, tone, sub, loading, big }: { label
 }
 
 export interface BreakdownRow { label: string; sub?: string; value: ReactNode; tone?: 'pos' | 'neg' }
-export function BreakdownBlock({ title, icon, iconColor, rows, total, totalLabel, totalTone }: { title: string; icon: string; iconColor: string; rows: BreakdownRow[]; total: ReactNode; totalLabel: string; totalTone?: 'pos' | 'neg' }) {
+export function BreakdownBlock({ title, icon, iconColor, rows, total, totalLabel, totalTone, foot }: { title: string; icon: string; iconColor: string; rows: BreakdownRow[]; total: ReactNode; totalLabel: string; totalTone?: 'pos' | 'neg'; foot?: string }) {
   return (
     <Card padding={18}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
@@ -236,6 +236,7 @@ export function BreakdownBlock({ title, icon, iconColor, rows, total, totalLabel
         {rows.map((r, i) => <GSummaryRow key={i} first={i === 0} label={r.label} sub={r.sub} value={r.value} tone={r.tone} />)}
         <GSummaryRow strong label={totalLabel} value={total} tone={totalTone} />
       </div>
+      {foot && <p style={{ margin: '8px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{foot}</p>}
     </Card>
   );
 }

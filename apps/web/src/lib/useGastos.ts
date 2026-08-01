@@ -1,4 +1,4 @@
-import type { Gasto } from '@orkalis/shared';
+import type { Gasto, GastosDetalle } from '@orkalis/shared';
 import { api } from './api';
 import { useApi } from './useApi';
 
@@ -6,7 +6,24 @@ export function useGastos(sucursalId?: string | null) {
   return useApi<Gasto[]>(() => api.get(`/gastos${sucursalId ? `?sucursalId=${sucursalId}` : ''}`), [sucursalId]);
 }
 
-export function crearGasto(body: { sucursalId: string; tipo: 'fijo' | 'variable'; categoria?: string; monto: number }): Promise<Gasto> {
+/** Desglose del período (Plan-Gastos): cada ocurrencia con su fecha + totales. */
+export function useGastosDetalle(desde: string, hasta: string, sucursalId?: string | null) {
+  return useApi<GastosDetalle>(
+    () => api.get(`/gastos/detalle?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}${sucursalId ? `&sucursalId=${sucursalId}` : ''}`),
+    [desde, hasta, sucursalId],
+  );
+}
+
+export function crearGasto(body: {
+  sucursalId: string;
+  tipo: 'fijo' | 'variable';
+  categoria?: string;
+  monto: number;
+  /** Variables: día (Bogotá) en que se hizo el gasto. */
+  fecha?: string;
+  /** Fijos: día del mes en que se cobra, cada mes. */
+  diaCobro?: number;
+}): Promise<Gasto> {
   return api.post('/gastos', body);
 }
 

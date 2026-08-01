@@ -12,12 +12,12 @@ import {
   cliente,
   especialista,
   especialistaSucursal,
-  gasto,
   servicio,
   ventaProducto,
 } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { round2 } from '../finanzas/calculo';
+import { ocurrenciasDelPeriodo } from './gastos.service';
 
 /** Clave de día/mes en zona Bogotá (UTC-5) para agrupar series temporales. */
 function bogotaKey(d: Date, porDia: boolean): string {
@@ -75,20 +75,12 @@ export class ReportesService {
           ),
         );
 
-      const [{ gas }] = await tx
-        .select({ gas: sumNum(gasto.monto) })
-        .from(gasto)
-        .where(
-          and(
-            eq(gasto.activo, true),
-            gte(gasto.creadoEn, desde),
-            lte(gasto.creadoEn, hasta),
-            sucursalId ? eq(gasto.sucursalId, sucursalId) : undefined,
-          ),
-        );
+      // Gastos con su semántica real (Plan-Gastos): variables por su fecha y
+      // fijos recurriendo cada mes en su día de cobro.
+      const ocurrencias = await ocurrenciasDelPeriodo(tx, desde, hasta, sucursalId);
 
       const ingresos = round2((ingAt ?? 0) + (ingVenta ?? 0));
-      const gastos = round2(gas ?? 0);
+      const gastos = round2(ocurrencias.reduce((s, o) => s + o.monto, 0));
       const gananciaNeta = round2(ingresos - gastos);
       const margen = ingresos > 0 ? round2(gananciaNeta / ingresos) : 0;
 
@@ -180,10 +172,9 @@ export class ReportesService {
         .innerJoin(atencion, eq(atencion.id, atencionProducto.atencionId))
         .where(condAtencion);
 
-      const gastos = await tx
-        .select({ tipo: gasto.tipo, monto: gasto.monto })
-        .from(gasto)
-        .where(and(eq(gasto.activo, true), gte(gasto.creadoEn, desde), lte(gasto.creadoEn, hasta), sucursalId ? eq(gasto.sucursalId, sucursalId) : undefined));
+      // Ocurrencias reales del período (Plan-Gastos): fijos mensuales por su
+      // día de cobro + variables por su fecha. Misma fuente que la pestaña Gastos.
+      const gastos = await ocurrenciasDelPeriodo(tx, desde, hasta, sucursalId);
 
       let ingAten = 0;
       let ganProf = 0;
@@ -210,8 +201,8 @@ export class ReportesService {
       let gastosFijos = 0;
       let gastosVariables = 0;
       for (const g of gastos) {
-        if (g.tipo === 'fijo') gastosFijos += Number(g.monto);
-        else gastosVariables += Number(g.monto);
+        if (g.tipo === 'fijo') gastosFijos += g.monto;
+        else gastosVariables += g.monto;
       }
 
       const ingresosTotales = round2(ingAten + ventasTotal);

@@ -211,6 +211,54 @@ describe('Operación interna (FASE-10)', () => {
     expect(activos.some((x) => x.id === g.id)).toBe(false);
     const [persiste] = await adminDb.select().from(gasto).where(eq(gasto.id, g.id));
     expect(persiste.activo).toBe(false); // sigue existiendo (histórico intacto)
+    expect(persiste.desactivadoEn).not.toBeNull(); // corta los cobros futuros del fijo
+  });
+
+  it('gasto fijo recurre cada mes en su día de cobro y coincide con los reportes', async () => {
+    const g = await gastos.crear(ctx, { sucursalId, tipo: TipoGasto.Fijo, categoria: 'Internet', monto: 100000, diaCobro: 10 });
+    // Rango lejano (mar–may 2035) para no chocar con otros datos de la suite.
+    const desde = new Date('2035-03-01T05:00:00.000Z'); // 1 mar 00:00 Bogotá
+    const hasta = new Date('2035-06-01T04:59:59.999Z'); // 31 may 23:59 Bogotá
+    const det = await gastos.detalle(ctx, desde, hasta, sucursalId);
+    const mias = det.filas.filter((f) => f.gastoId === g.id);
+    expect(mias.map((f) => f.fecha)).toEqual(['2035-05-10', '2035-04-10', '2035-03-10']); // una por mes, desc
+    expect(mias.every((f) => f.monto === 100000 && f.tipo === 'fijo' && f.diaCobro === 10)).toBe(true);
+
+    // El reporte financiero usa la MISMA expansión (una sola semántica).
+    const r = await reportes.financiero(ctx, desde, hasta, sucursalId);
+    expect(r.gastos).toBe(det.total);
+
+    // Día 31 se recorta al último día del mes (feb 2035 → 28).
+    const g31 = await gastos.crear(ctx, { sucursalId, tipo: TipoGasto.Fijo, categoria: 'Nómina aux', monto: 5000, diaCobro: 31 });
+    const feb = await gastos.detalle(ctx, new Date('2035-02-01T05:00:00.000Z'), new Date('2035-03-01T04:59:59.999Z'), sucursalId);
+    expect(feb.filas.some((f) => f.gastoId === g31.id && f.fecha === '2035-02-28')).toBe(true);
+
+    // Borde (Plan-Gastos): un `hasta` EXCLUSIVO (medianoche Bogotá del día
+    // siguiente) no debe capturar el cobro de ese día siguiente — la quincena
+    // 16–31 may no incluye el fijo del 1 de junio.
+    const g1 = await gastos.crear(ctx, { sucursalId, tipo: TipoGasto.Fijo, categoria: 'Seguro', monto: 7000, diaCobro: 1 });
+    const q2mayo = await gastos.detalle(ctx, new Date('2035-05-16T05:00:00.000Z'), new Date('2035-06-01T05:00:00.000Z'), sucursalId);
+    expect(q2mayo.filas.some((f) => f.gastoId === g1.id)).toBe(false);
+    await gastos.desactivar(ctx, g1.id);
+
+    await gastos.desactivar(ctx, g.id);
+    await gastos.desactivar(ctx, g31.id);
+    // Desactivado: los meses posteriores a la desactivación ya no cobran.
+    const despues = await gastos.detalle(ctx, desde, hasta, sucursalId);
+    expect(despues.filas.some((f) => f.gastoId === g.id)).toBe(false);
+  });
+
+  it('gasto variable cuenta por su fecha, no por el momento de registro', async () => {
+    const g = await gastos.crear(ctx, { sucursalId, tipo: TipoGasto.Variable, categoria: 'Decoración', monto: 50000, fecha: '2035-07-04' });
+    const jul = await gastos.detalle(ctx, new Date('2035-07-01T05:00:00.000Z'), new Date('2035-08-01T04:59:59.999Z'), sucursalId);
+    expect(jul.filas.some((f) => f.gastoId === g.id && f.fecha === '2035-07-04' && f.monto === 50000)).toBe(true);
+    // Fuera de su mes no aparece (antes contaba por fecha de creación).
+    const ago = await gastos.detalle(ctx, new Date('2035-08-01T05:00:00.000Z'), new Date('2035-09-01T04:59:59.999Z'), sucursalId);
+    expect(ago.filas.some((f) => f.gastoId === g.id)).toBe(false);
+    // Validación cruzada: un variable no acepta día de cobro, ni un fijo fecha.
+    await expect(gastos.crear(ctx, { sucursalId, tipo: TipoGasto.Variable, monto: 1000, diaCobro: 5 })).rejects.toThrow();
+    await expect(gastos.crear(ctx, { sucursalId, tipo: TipoGasto.Fijo, monto: 1000, fecha: '2035-07-04' })).rejects.toThrow();
+    await gastos.desactivar(ctx, g.id);
   });
 
   it('liquidación: no disponible con partición OFF', async () => {

@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  date,
+  integer,
   jsonb,
   numeric,
   pgTable,
@@ -29,7 +31,15 @@ export const gasto = pgTable('gasto', {
   monto: numeric('monto', { precision: 12, scale: 2 }).notNull(),
   // Para gastos fijos, p. ej. "mensual".
   frecuencia: text('frecuencia'),
+  // Variables: día (Bogotá) en que se hizo el gasto. Null en fijos.
+  fecha: date('fecha'),
+  // Fijos: día del mes en que se cobra (1–31, recortado al fin de mes). El
+  // gasto se repite CADA MES en ese día mientras siga activo. Null en variables.
+  diaCobro: integer('dia_cobro'),
   activo: boolean('activo').notNull().default(true),
+  // Fijos: al desactivar se conservan las ocurrencias YA cobradas; esta marca
+  // dice hasta cuándo. Las variables inactivas desaparecen de los reportes.
+  desactivadoEn: timestamp('desactivado_en', { withTimezone: true }),
   creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -554,8 +554,37 @@ export interface Gasto {
   tipo: 'fijo' | 'variable';
   categoria: string | null;
   monto: string;
+  /** Variables: día (Bogotá) en que se hizo el gasto. Null en fijos. */
+  fecha: string | null;
+  /** Fijos: día del mes en que se cobra, recurrente. Null en variables. */
+  diaCobro: number | null;
   activo: boolean;
   creadoEn: string;
+}
+
+/**
+ * Una ocurrencia de gasto dentro del período (Plan-Gastos): los fijos generan
+ * una POR MES en su día de cobro; las variables, una en su fecha.
+ */
+export interface GastoOcurrencia {
+  gastoId: string;
+  sucursalId: string;
+  tipo: 'fijo' | 'variable';
+  categoria: string | null;
+  monto: number;
+  /** Día (Bogotá, YYYY-MM-DD) en que el gasto golpea las finanzas. */
+  fecha: string;
+  diaCobro: number | null;
+  /** false = fijo ya desactivado (se muestran sus cobros pasados). */
+  activo: boolean;
+}
+
+/** Respuesta de `GET /gastos/detalle?desde&hasta&sucursalId`. */
+export interface GastosDetalle {
+  filas: GastoOcurrencia[];
+  totalFijos: number;
+  totalVariables: number;
+  total: number;
 }
 
 // ── Configuración (FASE-09) ──────────────────────────────────────────────────

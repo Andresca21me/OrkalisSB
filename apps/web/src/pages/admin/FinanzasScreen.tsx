@@ -13,6 +13,7 @@ import { PeriodPicker, periodoInicial } from '../../ui/PeriodPicker';
 // su pestaña — no al entrar al panel admin (FASE-14, lazy de gráficos).
 const AnalisisScreen = lazy(() => import('./AnalisisScreen').then((m) => ({ default: m.AnalisisScreen })));
 const TransaccionesScreen = lazy(() => import('./TransaccionesScreen').then((m) => ({ default: m.TransaccionesScreen })));
+const GastosScreen = lazy(() => import('./GastosScreen').then((m) => ({ default: m.GastosScreen })));
 const LiquidacionScreen = lazy(() => import('./LiquidacionScreen').then((m) => ({ default: m.LiquidacionScreen })));
 const VentasInventarioScreen = lazy(() => import('./VentasInventarioScreen').then((m) => ({ default: m.VentasInventarioScreen })));
 
@@ -41,6 +42,7 @@ export function FinanzasScreen() {
     () => [
       { id: 'analisis', label: 'Resumen', icon: 'bar-chart-2' },
       { id: 'transacciones', label: 'Transacciones', icon: 'list' },
+      { id: 'gastos', label: 'Gastos', icon: 'arrow-down-circle' },
       ...(particion ? [{ id: 'liquidacion', label: 'Liquidación', icon: 'users' }] : []),
       ...(cierreOn ? [{ id: 'cierres', label: 'Cierre de período', icon: 'lock' }] : []),
       ...(inventarioOn ? [{ id: 'inventario', label: 'Inventario y ventas', icon: 'package' }] : []),
@@ -79,6 +81,7 @@ export function FinanzasScreen() {
       <Suspense fallback={<ChartFallback />}>
         {tab === 'analisis' && <AnalisisScreen inventarioOn={inventarioOn} periodo={periodo} />}
         {tab === 'transacciones' && <TransaccionesScreen periodo={periodo} />}
+        {tab === 'gastos' && <GastosScreen periodo={periodo} />}
         {tab === 'liquidacion' && particion && <LiquidacionScreen periodo={periodo} />}
         {tab === 'cierres' && cierreOn && <CierreScreen periodo={periodo} />}
         {tab === 'inventario' && inventarioOn && <VentasInventarioScreen periodo={periodo} />}

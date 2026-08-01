@@ -131,7 +131,7 @@ interface TenantCfg {
   servicios: ServicioCfg[];
   clientes: { nombre: string; telefono: string }[];
   productos: ProductoCfg[];
-  gastos: { tipo: TipoGasto; categoria: string; monto: number; frecuencia?: string }[];
+  gastos: { tipo: TipoGasto; categoria: string; monto: number; frecuencia?: string; diaCobro?: number }[];
 }
 
 const BARBERIA: TenantCfg = {
@@ -221,8 +221,8 @@ const BARBERIA: TenantCfg = {
     },
   ],
   gastos: [
-    { tipo: TipoGasto.Fijo, categoria: 'Arriendo', monto: 1800000, frecuencia: 'mensual' },
-    { tipo: TipoGasto.Fijo, categoria: 'Servicios públicos', monto: 350000, frecuencia: 'mensual' },
+    { tipo: TipoGasto.Fijo, categoria: 'Arriendo', monto: 1800000, frecuencia: 'mensual', diaCobro: 1 },
+    { tipo: TipoGasto.Fijo, categoria: 'Servicios públicos', monto: 350000, frecuencia: 'mensual', diaCobro: 20 },
     { tipo: TipoGasto.Variable, categoria: 'Insumos', monto: 220000 },
   ],
 };
@@ -477,6 +477,7 @@ async function crearTenant(tx: Tx, cfg: TenantCfg, hash: string): Promise<void> 
   );
 
   // Gastos.
+  const hoyBog = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
   await tx.insert(gasto).values(
     cfg.gastos.map((g) => ({
       negocioId: neg.id,
@@ -485,6 +486,9 @@ async function crearTenant(tx: Tx, cfg: TenantCfg, hash: string): Promise<void> 
       categoria: g.categoria,
       monto: cop(g.monto),
       frecuencia: g.frecuencia,
+      // Fijos: día de cobro configurado; variables: gastadas hoy (Bogotá).
+      fecha: g.tipo === TipoGasto.Variable ? hoyBog : null,
+      diaCobro: g.tipo === TipoGasto.Fijo ? (g.diaCobro ?? 1) : null,
     })),
   );
 

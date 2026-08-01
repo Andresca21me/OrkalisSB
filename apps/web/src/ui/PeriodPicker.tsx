@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Icon, Popover, Segmented } from './ui';
+import { Icon, Popover } from './ui';
 import { RangeCalendar } from './RangeCalendar';
 import { diasATimestamps, type RangoDias } from '../lib/useReportes';
 import { rangoDiaBogota } from '../lib/useCitas';
@@ -14,6 +14,8 @@ export interface Periodo {
   desde: string; // ISO UTC inclusive
   hasta: string; // ISO UTC exclusivo-ish (fin del último día Bogotá)
   etiqueta: string;
+  /** Solo `rango`: los días Bogotá elegidos, para poder navegar con flechas. */
+  dias?: RangoDias;
 }
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -60,63 +62,150 @@ function moverMes(ancla: string, delta: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
 }
 
+/** Suma días a un 'YYYY-MM-DD' (aritmética UTC, sin huso del navegador). */
+function sumarDias(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+function difDias(desde: string, hasta: string): number {
+  return Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86400_000);
+}
+
+function etiquetaRango(r: RangoDias): string {
+  const f = (iso: string) => `${Number(iso.slice(8, 10))} ${MESES[Number(iso.slice(5, 7)) - 1]}`;
+  const anio = r.desde.slice(0, 4) === r.hasta.slice(0, 4) ? ` ${r.hasta.slice(0, 4)}` : '';
+  return `${f(r.desde)} – ${f(r.hasta)}${anio}`;
+}
+
+function periodoDeRango(r: RangoDias): Periodo {
+  const { desde, hasta } = diasATimestamps(r);
+  return { tipo: 'rango', ancla: '', desde, hasta, etiqueta: etiquetaRango(r), dias: r };
+}
+
 /**
- * Selector de período de Finanzas (Plan-Finanzas F4, D4): Quincena 1 · Quincena
- * 2 · Mes · Rango libre, con flechas para navegar a períodos anteriores. Es el
- * reflejo del pago quincenal/mensual de los salones: lo que se elige aquí
- * aplica a TODAS las pestañas de Finanzas (el cierre se genera sobre esto).
+ * Selector de período de Finanzas (Plan-Finanzas F4, D4). Un solo control:
+ * `◀ [período ▾] ▶`. El centro abre las opciones (Quincena 1 · Quincena 2 ·
+ * Mes · Rango personalizado) y las flechas navegan SIEMPRE: las quincenas y el
+ * mes saltan de mes en mes; un rango libre se desplaza por su propia duración.
+ * Es el reflejo del pago quincenal/mensual de los salones: lo que se elige
+ * aquí aplica a TODAS las pestañas de Finanzas (el cierre se genera sobre esto).
  */
 export function PeriodPicker({ value, onChange }: { value: Periodo; onChange: (p: Periodo) => void }) {
-  const [calAbierto, setCalAbierto] = useState(false);
+  const [abierto, setAbierto] = useState(false);
+  const [vistaCal, setVistaCal] = useState(false);
 
-  const cambiarTipo = (tipo: string) => {
-    if (tipo === 'rango') {
-      setCalAbierto(true);
-      return;
-    }
-    const ancla = value.ancla || `${hoyBogota().slice(0, 7)}-01`;
-    onChange(periodoDe(tipo as Exclude<TipoPeriodo, 'rango'>, ancla));
-  };
+  const anclaActual = value.ancla || `${hoyBogota().slice(0, 7)}-01`;
+  const [ay, am] = anclaActual.split('-').map(Number);
+  const mesAncla = `${MESES[am - 1]} ${ay}`;
 
-  const navegar = (delta: number) => {
-    if (value.tipo === 'rango') return;
-    onChange(periodoDe(value.tipo, moverMes(value.ancla, delta)));
+  const cerrar = () => { setAbierto(false); setVistaCal(false); };
+
+  const elegir = (tipo: Exclude<TipoPeriodo, 'rango'>) => {
+    onChange(periodoDe(tipo, anclaActual));
+    cerrar();
   };
 
   const aplicarRango = (r: RangoDias) => {
-    const { desde, hasta } = diasATimestamps(r);
-    onChange({ tipo: 'rango', ancla: '', desde, hasta, etiqueta: `${r.desde.slice(8, 10)} ${MESES[Number(r.desde.slice(5, 7)) - 1]} – ${r.hasta.slice(8, 10)} ${MESES[Number(r.hasta.slice(5, 7)) - 1]}` });
-    setCalAbierto(false);
+    onChange(periodoDeRango(r));
+    cerrar();
+  };
+
+  const navegar = (delta: number) => {
+    if (value.tipo === 'rango') {
+      // El rango se desplaza por su propia duración (p. ej. una semana → la
+      // semana anterior/siguiente): las flechas nunca quedan muertas.
+      const r = value.dias ?? { desde: hoyBogota(), hasta: hoyBogota() };
+      const len = difDias(r.desde, r.hasta) + 1;
+      aplicarRango({ desde: sumarDias(r.desde, delta * len), hasta: sumarDias(r.hasta, delta * len) });
+      return;
+    }
+    onChange(periodoDe(value.tipo, moverMes(value.ancla, delta)));
+  };
+
+  const flecha: React.CSSProperties = {
+    width: 34, height: 36, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    border: 'none', background: 'transparent', cursor: 'pointer', flex: 'none',
+  };
+
+  const opciones: { tipo: Exclude<TipoPeriodo, 'rango'>; label: string; sub: string }[] = [
+    { tipo: 'q1', label: 'Quincena 1', sub: `1–15 de ${mesAncla}` },
+    { tipo: 'q2', label: 'Quincena 2', sub: `16–${ultimoDiaDelMes(ay, am)} de ${mesAncla}` },
+    { tipo: 'mes', label: 'Mes', sub: `${mesAncla} completo` },
+  ];
+
+  const filaCss: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px',
+    border: 'none', borderRadius: 'var(--radius-xs)', background: 'transparent', cursor: 'pointer',
+    textAlign: 'left', fontFamily: 'var(--font-body)',
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-testid="period-picker">
-      <Segmented
-        options={[
-          { value: 'q1', label: 'Quincena 1' },
-          { value: 'q2', label: 'Quincena 2' },
-          { value: 'mes', label: 'Mes' },
-          { value: 'rango', label: 'Rango' },
-        ]}
-        value={value.tipo}
-        onChange={cambiarTipo}
-      />
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-        <button type="button" aria-label="Período anterior" disabled={value.tipo === 'rango'} onClick={() => navegar(-1)} style={{ width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-xs)', background: 'var(--surface-card)', cursor: value.tipo === 'rango' ? 'not-allowed' : 'pointer', opacity: value.tipo === 'rango' ? 0.5 : 1 }}>
-          <Icon name="chevron-left" size={15} color="var(--text-secondary)" />
+    <div data-testid="period-picker" style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-card)', maxWidth: '100%' }}>
+      <button type="button" aria-label="Período anterior" onClick={() => navegar(-1)} style={flecha}>
+        <Icon name="chevron-left" size={16} color="var(--text-secondary)" />
+      </button>
+
+      <span style={{ position: 'relative', minWidth: 0 }}>
+        <button
+          type="button"
+          data-testid="period-label"
+          aria-haspopup="true"
+          aria-expanded={abierto}
+          onClick={() => { setVistaCal(false); setAbierto((v) => !v); }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: '100%', height: 36, padding: '0 10px', border: 'none', borderInline: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+        >
+          <Icon name="calendar" size={15} color="var(--text-tertiary)" style={{ flex: 'none' }} />
+          <span className="data" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>
+            {value.tipo !== 'rango' && value.tipo !== 'mes' ? `${value.tipo === 'q1' ? 'Q1' : 'Q2'} · ` : ''}{value.etiqueta}
+          </span>
+          <Icon name="chevron-down" size={14} color="var(--text-tertiary)" style={{ flex: 'none' }} />
         </button>
-        <span className="data" data-testid="period-label" style={{ minWidth: 118, textAlign: 'center', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>
-          {value.etiqueta}
-        </span>
-        <button type="button" aria-label="Período siguiente" disabled={value.tipo === 'rango'} onClick={() => navegar(1)} style={{ width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-xs)', background: 'var(--surface-card)', cursor: value.tipo === 'rango' ? 'not-allowed' : 'pointer', opacity: value.tipo === 'rango' ? 0.5 : 1 }}>
-          <Icon name="chevron-right" size={15} color="var(--text-secondary)" />
-        </button>
-      </div>
-      <div style={{ position: 'relative' }}>
-        <Popover open={calAbierto} onClose={() => setCalAbierto(false)} align="right" width={320}>
-          <RangeCalendar value={{ desde: hoyBogota(), hasta: hoyBogota() }} onApply={aplicarRango} />
+
+        <Popover open={abierto} onClose={cerrar} align="left" width={vistaCal ? 320 : 268}>
+          {vistaCal ? (
+            <div style={{ padding: 4 }}>
+              <button type="button" onClick={() => setVistaCal(false)} style={{ ...filaCss, padding: '8px 10px', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="arrow-left" size={14} color="var(--text-tertiary)" /> Quincenas y mes
+              </button>
+              <RangeCalendar value={value.dias ?? { desde: hoyBogota(), hasta: hoyBogota() }} onApply={aplicarRango} />
+            </div>
+          ) : (
+            <div style={{ padding: 6 }}>
+              {opciones.map((o) => {
+                const on = value.tipo === o.tipo;
+                return (
+                  <button key={o.tipo} type="button" onClick={() => elegir(o.tipo)} style={filaCss}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-sunken)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{o.label}</span>
+                      <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 1 }}>{o.sub}</span>
+                    </span>
+                    {on && <Icon name="check" size={15} color="var(--brand)" style={{ flex: 'none' }} />}
+                  </button>
+                );
+              })}
+              <div style={{ height: 1, background: 'var(--border-subtle)', margin: '6px 4px' }} />
+              <button type="button" onClick={() => setVistaCal(true)} style={filaCss}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-sunken)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Rango personalizado</span>
+                  <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginTop: 1 }}>
+                    {value.tipo === 'rango' ? value.etiqueta : 'Elige las fechas en el calendario'}
+                  </span>
+                </span>
+                {value.tipo === 'rango' ? <Icon name="check" size={15} color="var(--brand)" style={{ flex: 'none' }} /> : <Icon name="chevron-right" size={15} color="var(--text-tertiary)" style={{ flex: 'none' }} />}
+              </button>
+            </div>
+          )}
         </Popover>
-      </div>
+      </span>
+
+      <button type="button" aria-label="Período siguiente" onClick={() => navegar(1)} style={flecha}>
+        <Icon name="chevron-right" size={16} color="var(--text-secondary)" />
+      </button>
     </div>
   );
 }

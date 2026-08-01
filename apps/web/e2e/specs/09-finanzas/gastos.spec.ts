@@ -35,8 +35,10 @@ test.describe('Finanzas · gastos', () => {
       await expect(page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
       await fin.agregarGasto('fijo', 90000, categoria);
 
-      // Aparece en la lista de gastos fijos.
-      await expect(page.getByText(categoria)).toBeVisible({ timeout: 15_000 });
+      // Aparece en el desglose del período y en los fijos programados.
+      await expect(page.getByText(categoria).first()).toBeVisible({ timeout: 15_000 });
+      const diaBogota = Number(new Date(Date.now() - 5 * 3600_000).toISOString().slice(8, 10));
+      await expect(page.getByText(`Cada mes, el día ${diaBogota}`).first()).toBeVisible();
       // Cruzado: el análisis refleja más gasto fijo y menos ganancia neta.
       const despues = await analisisApi(api, USERS.adminBarberia, desde, hasta);
       expect(despues.gastosFijos).toBeGreaterThanOrEqual(antes.gastosFijos + 90000);
@@ -55,7 +57,7 @@ test.describe('Finanzas · gastos', () => {
       await fin.abrir();
       await expect(page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
       await fin.agregarGasto('variable', 30000, categoria);
-      await expect(page.getByText(categoria)).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(categoria).first()).toBeVisible({ timeout: 15_000 });
     } finally {
       await cerrarRoles(s);
     }
@@ -70,13 +72,14 @@ test.describe('Finanzas · gastos', () => {
       await fin.abrir();
       await expect(page.getByRole('heading', { name: 'Resumen financiero' })).toBeVisible({ timeout: 15_000 });
       await fin.agregarGasto('fijo', 40000, categoria);
-      await expect(page.getByText(categoria)).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(categoria).first()).toBeVisible({ timeout: 15_000 });
 
-      // Botón de papelera de la fila del gasto.
-      await page.getByText(categoria).locator('..').getByRole('button', { name: 'Eliminar' }).click();
+      // Papelera del fijo programado (accesible por su categoría).
+      await page.getByRole('button', { name: `Eliminar ${categoria}` }).click();
       const dlg = page.getByRole('dialog');
       await dlg.getByRole('button', { name: 'Eliminar', exact: true }).click();
       await expect(dlg).toBeHidden({ timeout: 15_000 });
+      // Recién creado y borrado el mismo día: desaparece también del desglose.
       await expect(page.getByText(categoria)).toHaveCount(0);
     } finally {
       await cerrarRoles(s);

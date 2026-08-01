@@ -23,22 +23,36 @@ function comisionPreview(cantidad: number, precioUnit: number, cfg: ComisionProd
 
 export function GastoModal({ kind, sucursales, defaultSucursalId, onClose, onSaved }: { kind: 'fijo' | 'variable'; sucursales: Sucursal[]; defaultSucursalId: string | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const hoy = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10); // día Bogotá
   const [sucId, setSucId] = useState(defaultSucursalId ?? sucursales[0]?.id ?? '');
   const [categoria, setCategoria] = useState('');
   const [monto, setMonto] = useState<MoneyValue>('');
+  // Fijos: día del mes en que el negocio paga este gasto (arriendo → día 1…).
+  const [diaCobro, setDiaCobro] = useState(Number(hoy.slice(8, 10)));
+  // Variables: día en que se hizo el gasto (por defecto, hoy).
+  const [fecha, setFecha] = useState(hoy);
   const [touched, setTouched] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   const montoErr = touched && (monto === '' || monto == null) ? 'Indica el monto' : undefined;
   const sucErr = touched && !sucId ? 'Elige una sucursal' : undefined;
-  const valid = monto !== '' && monto != null && !!sucId;
+  const fechaErr = touched && kind === 'variable' && !/^\d{4}-\d{2}-\d{2}$/.test(fecha) ? 'Indica la fecha' : undefined;
+  const valid = monto !== '' && monto != null && !!sucId && (kind === 'fijo' || /^\d{4}-\d{2}-\d{2}$/.test(fecha));
+
+  const inputCss: React.CSSProperties = { height: 42, padding: '0 12px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--border-default)', outline: 'none', width: '100%', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-primary)', background: 'var(--surface-card)' };
 
   async function guardar() {
     setTouched(true);
     if (!valid) return;
     setGuardando(true);
     try {
-      await crearGasto({ sucursalId: sucId, tipo: kind, categoria: categoria.trim() || undefined, monto: Number(monto) });
+      await crearGasto({
+        sucursalId: sucId,
+        tipo: kind,
+        categoria: categoria.trim() || undefined,
+        monto: Number(monto),
+        ...(kind === 'fijo' ? { diaCobro } : { fecha }),
+      });
       toast('Gasto registrado', 'success');
       onSaved();
     } catch (e) {
@@ -49,7 +63,8 @@ export function GastoModal({ kind, sucursales, defaultSucursalId, onClose, onSav
   }
 
   return (
-    <Dialog open onClose={onClose} width={480} title={kind === 'fijo' ? 'Nuevo gasto fijo' : 'Nuevo gasto variable'} subtitle={kind === 'fijo' ? 'Gasto recurrente (arriendo, servicios…).' : 'Gasto puntual del período.'}
+    <Dialog open onClose={onClose} width={480} title={kind === 'fijo' ? 'Nuevo gasto fijo' : 'Nuevo gasto variable'}
+      subtitle={kind === 'fijo' ? 'Recurrente (arriendo, servicios…): se cobra solo cada mes, el día que elijas.' : 'Gasto puntual: cuenta en el período de su fecha.'}
       footer={<>
         <Button variant="ghost" onClick={onClose}>Cancelar</Button>
         <Button variant="primary" loading={guardando} onClick={guardar}>Registrar gasto</Button>
@@ -58,8 +73,19 @@ export function GastoModal({ kind, sucursales, defaultSucursalId, onClose, onSav
         {sucursales.length > 1 && (
           <GField label="Sucursal" error={sucErr}><Select value={sucId} onChange={(e) => setSucId(e.target.value)}>{sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}</Select></GField>
         )}
-        <GField label="Categoría" optional><input value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Arriendo, servicios públicos…" style={{ height: 42, padding: '0 12px', borderRadius: 'var(--radius-xs)', border: '1px solid var(--border-default)', outline: 'none', width: '100%', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)', color: 'var(--text-primary)', background: 'var(--surface-card)' }} /></GField>
+        <GField label="Categoría" optional><input value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Arriendo, servicios públicos…" style={inputCss} /></GField>
         <GField label="Monto" error={montoErr}><GMoney value={monto} onChange={setMonto} invalid={!!montoErr} /></GField>
+        {kind === 'fijo' ? (
+          <GField label="Día de cobro" hint="Cada mes se registra en ese día (en meses más cortos, el último día).">
+            <Select value={String(diaCobro)} onChange={(e) => setDiaCobro(Number(e.target.value))} aria-label="Día de cobro">
+              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>El día {d} de cada mes</option>)}
+            </Select>
+          </GField>
+        ) : (
+          <GField label="Fecha del gasto" error={fechaErr}>
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} aria-label="Fecha del gasto" style={inputCss} />
+          </GField>
+        )}
       </div>
     </Dialog>
   );

@@ -26,11 +26,11 @@ export class FinanzasPage {
     return this.page.locator('div').filter({ hasText: new RegExp(`^${label}`) }).first();
   }
 
-  // ── Gastos (en Análisis) ──
-  /** Abre el modal de gasto: kind 'fijo' (1ª tarjeta) o 'variable' (2ª). */
+  // ── Gastos (pestaña propia desde Plan-Gastos) ──
+  /** Va a la pestaña Gastos y registra uno: 'fijo' (recurrente) o 'variable'. */
   async agregarGasto(kind: 'fijo' | 'variable', monto: number, categoria: string) {
-    const idx = kind === 'fijo' ? 0 : 1;
-    await this.page.getByRole('button', { name: 'Agregar gasto' }).nth(idx).click();
+    await this.subtab('Gastos');
+    await this.page.getByRole('button', { name: kind === 'fijo' ? 'Gasto fijo' : 'Gasto variable', exact: true }).click();
     const dlg = this.page.getByRole('dialog');
     await dlg.getByLabel('Categoría').fill(categoria);
     await dlg.getByLabel('Monto').fill(String(monto));
@@ -49,7 +49,10 @@ export class FinanzasPage {
   // ── Período global (Plan-Finanzas F4) ──
   /** Cambia el período de TODAS las pestañas: 'Quincena 1' | 'Quincena 2' | 'Mes'. */
   async elegirPeriodo(nombre: string) {
-    await this.page.getByTestId('period-picker').getByText(nombre, { exact: true }).click();
+    // El selector es un único control: el centro abre un popover (portal con
+    // role=menu) con las opciones Quincena 1 · Quincena 2 · Mes · Rango.
+    await this.page.getByTestId('period-label').click();
+    await this.page.getByRole('menu').getByText(nombre, { exact: true }).click();
   }
 
   // ── Cierre de período (Plan-Finanzas F6) ──

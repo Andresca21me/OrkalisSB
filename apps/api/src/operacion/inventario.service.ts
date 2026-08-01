@@ -15,6 +15,7 @@ import {
   ventaProducto,
 } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
+import { diaBogota } from './gastos.calculo';
 import { ConfigResolverService } from '../config-module/config-resolver.service';
 import { comisionProducto, round2, type ComisionProductoTipo } from '../finanzas/calculo';
 import { ModuloGate } from './modulo-gate.service';
@@ -107,6 +108,7 @@ export class InventarioService {
               tipo: TipoGasto.Variable,
               categoria: 'Compra de inventario',
               monto: costoTotal.toFixed(2),
+              fecha: diaBogota(new Date()),
             })
             .returning({ id: gasto.id });
           gastoId = g.id;
@@ -212,6 +214,7 @@ export class InventarioService {
             tipo: TipoGasto.Variable,
             categoria: 'Compra de inventario',
             monto: input.costoTotal.toFixed(2),
+            fecha: diaBogota(new Date()),
           })
           .returning({ id: gasto.id });
         gastoId = g.id;

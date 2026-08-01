@@ -11,6 +11,7 @@ import {
   Matches,
   Min,
   MinLength,
+  Max,
 } from 'class-validator';
 import { SplitType, TipoGasto, TipoProducto } from '@orkalis/shared';
 
@@ -86,6 +87,10 @@ export class GastoDto {
   @IsOptional() @IsString() categoria?: string;
   @IsNumber() @Min(0) monto!: number;
   @IsOptional() @IsString() frecuencia?: string;
+  /** Variables: día (Bogotá) en que se hizo el gasto. */
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) fecha?: string;
+  /** Fijos: día del mes en que se cobra (recortado al fin de mes). */
+  @IsOptional() @IsInt() @Min(1) @Max(31) diaCobro?: number;
 }
 
 export class LiquidacionDto {

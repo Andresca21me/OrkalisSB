@@ -156,6 +156,15 @@ export class GastosController {
   @Get() listar(@CurrentTenant() ctx: TenantContext, @Query('sucursalId') suc?: string) {
     return this.s.listar(ctx, suc);
   }
+  /** Desglose del período (Plan-Gastos): cada ocurrencia con fecha + totales. */
+  @Get('detalle') detalle(
+    @CurrentTenant() ctx: TenantContext,
+    @Query('desde') desde: string,
+    @Query('hasta') hasta: string,
+    @Query('sucursalId') suc?: string,
+  ) {
+    return this.s.detalle(ctx, new Date(desde), new Date(hasta), suc);
+  }
   @Post() crear(@CurrentTenant() ctx: TenantContext, @Body() dto: GastoDto) {
     return this.s.crear(ctx, dto);
   }
