@@ -54,7 +54,9 @@ export class AdminAgendaPage {
     const chips = dlg.locator('[data-testid^="franja-"]');
     await expect(chips.first()).toBeVisible({ timeout: 15_000 });
     const chip = hora ? dlg.getByTestId(`franja-${hora}`) : chips.last();
-    const elegida = (await chip.innerText()).trim();
+    // La hora se lee del TESTID (24 h, estable): el texto visible es 12 h
+    // ("1:00 p. m.") y los specs comparan contra el HH:mm que devuelve la API.
+    const elegida = (await chip.getAttribute('data-testid'))!.replace('franja-', '');
     await chip.click();
     return elegida;
   }
@@ -153,7 +155,8 @@ export class RecepcionPage {
     const chips = dlg.locator('[data-testid^="franja-"]');
     await expect(chips.first()).toBeVisible({ timeout: 15_000 });
     const chip = opts.hora ? dlg.getByTestId(`franja-${opts.hora}`) : chips.last();
-    const hora = (await chip.innerText()).trim();
+    // Igual que en `elegirFranja`: la clave 24 h vive en el testid.
+    const hora = (await chip.getAttribute('data-testid'))!.replace('franja-', '');
     await chip.click();
     await dlg.getByRole('button', { name: /Crear cita/ }).click();
     await expect(dlg).toBeHidden({ timeout: 15_000 });

@@ -14,7 +14,7 @@ import { api, ApiError, urlFotoEspecialista, urlLogoNegocio } from '../../lib/ap
 import { estilosDeMarca } from '../../lib/marca';
 import { useApi } from '../../lib/useApi';
 import { applyVertical, normalizeVertical } from '../../lib/theme';
-import { hoyISO, money, sumarDiasISO } from '../../lib/format';
+import { hora, horaDesdeHHMM, horaSimple, hoyISO, money, sumarDiasISO } from '../../lib/format';
 import {
   AppHeader,
   Avatar,
@@ -51,10 +51,8 @@ function etiquetaDia(iso: string) {
   const dt = new Date(Date.UTC(y, m - 1, d, 12));
   return `${p.isToday ? 'Hoy · ' : ''}${DOWL[dt.getUTCDay()]} ${d} de ${MON[m - 1]}`;
 }
-const fmtHora = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false });
-function horaCorta(iso: string) {
-  return fmtHora.format(new Date(iso));
-}
+/** Hora del cliente: 12 h con meridiano ("1:05 p. m."). */
+const horaCorta = hora;
 function horaBogota(iso: string) {
   return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hour12: false }).format(new Date(iso)));
 }
@@ -595,8 +593,11 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
     [sucursalId, especialistaId, servicios.join(','), activo],
   );
   const franjas = disp.data ?? [];
-  const am = franjas.filter((f) => horaBogota(f.inicio) < 13);
-  const pm = franjas.filter((f) => horaBogota(f.inicio) >= 13);
+  // Tres franjas del día: los chips se muestran sin meridiano ("1:00"), así que
+  // el grupo es quien dice si esa hora es de la tarde o de la noche.
+  const am = franjas.filter((f) => horaBogota(f.inicio) < 12);
+  const pm = franjas.filter((f) => horaBogota(f.inicio) >= 12 && horaBogota(f.inicio) < 19);
+  const noche = franjas.filter((f) => horaBogota(f.inicio) >= 19);
   const franjaDelDia = horario?.[new Date(`${activo}T00:00:00Z`).getUTCDay()] ?? null;
 
   return (
@@ -626,7 +627,7 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
         {franjaDelDia && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 16px 0', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
             <Icon name="clock" size={13} color="var(--text-tertiary)" />
-            Atendemos de <span className="data" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{franjaDelDia.apertura}</span> a <span className="data" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{franjaDelDia.cierre}</span>
+            Atendemos de <span className="data" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{horaDesdeHHMM(franjaDelDia.apertura)}</span> a <span className="data" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{horaDesdeHHMM(franjaDelDia.cierre)}</span>
           </div>
         )}
         {disp.cargando ? (
@@ -647,6 +648,7 @@ function Horario({ sucursalId, negocio, servicios, especialistaId, fecha, slot, 
           <div style={{ padding: 16 }}>
             <SlotGroup label="Mañana" slots={am} slot={slot} onPick={onPickSlot} />
             <SlotGroup label="Tarde" slots={pm} slot={slot} onPick={onPickSlot} />
+            <SlotGroup label="Noche" slots={noche} slot={slot} onPick={onPickSlot} />
           </div>
         )}
       </ScrollArea>
@@ -669,8 +671,8 @@ function SlotGroup({ label, slots, slot, onPick }: { label: string; slots: Franj
         {slots.map((s) => {
           const on = slot?.inicio === s.inicio;
           return (
-            <button key={s.inicio} type="button" data-testid="booking-slot" onClick={() => onPick(s)} className="data" style={{ height: 44, borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-subtle)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', color: on ? '#fff' : 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-              {horaCorta(s.inicio)}
+            <button key={s.inicio} type="button" data-testid="booking-slot" title={horaCorta(s.inicio)} onClick={() => onPick(s)} className="data" style={{ height: 44, borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-subtle)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', color: on ? '#fff' : 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+              {horaSimple(s.inicio)}
             </button>
           );
         })}

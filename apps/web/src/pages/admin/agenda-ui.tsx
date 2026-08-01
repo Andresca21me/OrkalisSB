@@ -3,7 +3,7 @@ import type { CitaAgenda } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
 import { completarCita, crearCita, revertirCita, type EventoCita, type PagoLinea } from '../../lib/useCitas';
-import { hoyISO, money } from '../../lib/format';
+import { hora, hora24, horaSimple, hoyISO, meridiano, money } from '../../lib/format';
 import { PagoSplit, pagoInicial, sumaPagos } from '../../ui/PagoSplit';
 import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, ProductosVenta, Select, Spinner, StatTile, useToast, type LineaProducto } from '../../ui';
 
@@ -14,9 +14,13 @@ export function colorDe(id: string): string {
   return PALETA[Math.abs(h) % PALETA.length];
 }
 
-const fmtHora = new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false });
+/**
+ * Hora que se MUESTRA: 12 h con meridiano ("1:05 p. m."), igual que en el panel
+ * del especialista y en la reserva pública. Para claves estables (testids) va
+ * `hora24`, que no cambia con el formato de lectura.
+ */
 export function horaCorta(iso: string): string {
-  return fmtHora.format(new Date(iso));
+  return hora(iso);
 }
 function durMin(c: CitaAgenda): number {
   return Math.round((new Date(c.fin).getTime() - new Date(c.inicio).getTime()) / 60000);
@@ -129,9 +133,12 @@ export function AppointmentRow({ appt, showPrice, onAccion, onCobrar, onReasigna
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         <div style={{ width: 4, flex: 'none', background: color }} />
         <div className="ork-appt-row" style={{ flex: 1, minWidth: 0, padding: '14px 14px 14px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ flex: 'none', width: 58 }}>
-            <div className="data" style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--text-primary)', lineHeight: 1.1 }}>{horaCorta(appt.inicio)}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{durMin(appt)} min</div>
+          {/* La hora va en dos alturas: el número grande y, debajo, el
+              meridiano junto a la duración — así se lee en 12 h sin robarle
+              ancho al nombre del cliente. */}
+          <div style={{ flex: 'none', width: 76 }}>
+            <div className="data" style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--text-primary)', lineHeight: 1.1, whiteSpace: 'nowrap' }}>{horaSimple(appt.inicio)}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{meridiano(appt.inicio)} · {durMin(appt)} min</div>
           </div>
           <div className="ork-appt-main" style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -502,11 +509,11 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
           ) : franjas.length === 0 ? (
             <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>El especialista no tiene horas libres ese día. Prueba otra fecha u otro especialista.</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))', gap: 8, maxHeight: 176, overflowY: 'auto', paddingRight: 2 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 8, maxHeight: 176, overflowY: 'auto', paddingRight: 2 }}>
               {franjas.map((f) => {
                 const on = franja === f.inicio;
                 return (
-                  <button key={f.inicio} type="button" data-testid={`franja-${horaCorta(f.inicio)}`} onClick={() => setFranja(f.inicio)} className="data" style={{ height: 42, borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', color: on ? '#fff' : 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                  <button key={f.inicio} type="button" data-testid={`franja-${hora24(f.inicio)}`} onClick={() => setFranja(f.inicio)} className="data" style={{ height: 42, borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: `1px solid ${on ? 'var(--brand)' : 'var(--border-default)'}`, background: on ? 'var(--brand)' : 'var(--surface-card)', color: on ? '#fff' : 'var(--text-primary)', fontSize: 'var(--text-xs)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     {horaCorta(f.inicio)}
                   </button>
                 );

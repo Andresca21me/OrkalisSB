@@ -34,6 +34,12 @@ const HORA = new Intl.DateTimeFormat('es-CO', {
   minute: '2-digit',
   hour12: true,
 });
+const HORA_24 = new Intl.DateTimeFormat('es-CO', {
+  timeZone: 'America/Bogota',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
 const FECHA_HORA = new Intl.DateTimeFormat('es-CO', {
   timeZone: 'America/Bogota',
   day: 'numeric',
@@ -57,8 +63,38 @@ export function fechaLarga(d: Date | string): string {
 export function fechaCorta(d: Date | string): string {
   return FECHA_CORTA.format(new Date(d));
 }
+/** Hora legible con meridiano: "1:05 p. m.". */
 export function hora(d: Date | string): string {
   return HORA.format(new Date(d));
+}
+
+/**
+ * Hora sin meridiano: "1:05". SOLO donde el contexto ya dice si es mañana,
+ * tarde o noche (los grupos de franjas); en cualquier otro sitio usa `hora`,
+ * porque una hora suelta sin meridiano se puede leer con 12 h de diferencia.
+ */
+export function horaSimple(d: Date | string): string {
+  const partes = HORA.formatToParts(new Date(d));
+  const hh = partes.find((p) => p.type === 'hour')?.value ?? '';
+  const mm = partes.find((p) => p.type === 'minute')?.value ?? '';
+  return `${hh}:${mm}`;
+}
+
+/** Solo el meridiano: "a. m." / "p. m." (para separarlo de la hora en filas estrechas). */
+export function meridiano(d: Date | string): string {
+  return HORA.formatToParts(new Date(d)).find((p) => p.type === 'dayPeriod')?.value ?? '';
+}
+
+/** Hora de reloj del negocio ('18:00' → "6:00 p. m."). */
+export function horaDesdeHHMM(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  // Instante UTC que cae en esa hora de pared en Bogotá (UTC−5).
+  return HORA.format(new Date(Date.UTC(2000, 0, 1, h + 5, m)));
+}
+
+/** Hora en 24 h ("13:05"): claves estables (testids), NUNCA para mostrar. */
+export function hora24(d: Date | string): string {
+  return HORA_24.format(new Date(d));
 }
 export function fechaHora(d: Date | string): string {
   return FECHA_HORA.format(new Date(d));
