@@ -4,7 +4,7 @@ loadEnv();
 import { sql } from 'drizzle-orm';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { esErrorDeSaldo, MensajeriaEstadoService } from './mensajeria-estado.service';
+import { esErrorDeSaldo, esErrorDeWhatsapp, MensajeriaEstadoService } from './mensajeria-estado.service';
 
 /**
  * Interruptor de saldo de la mensajería.
@@ -123,5 +123,25 @@ describe('esErrorDeSaldo', () => {
     expect(esErrorDeSaldo(new Error('ETIMEDOUT'))).toBe(false);
     expect(esErrorDeSaldo({ status: 500 })).toBe(false);
     expect(esErrorDeSaldo(undefined)).toBe(false);
+  });
+});
+
+describe('esErrorDeWhatsapp', () => {
+  it('reconoce los fallos propios del canal WhatsApp (63xxx y afines)', () => {
+    expect(esErrorDeWhatsapp({ code: 63016 })).toBe(true); // fuera de ventana 24h
+    expect(esErrorDeWhatsapp({ code: 63024 })).toBe(true);
+    expect(esErrorDeWhatsapp({ code: '63003' })).toBe(true); // Twilio a veces lo da como string
+    expect(esErrorDeWhatsapp({ code: 21910 })).toBe(true); // par From/To de canales distintos
+    expect(esErrorDeWhatsapp({ code: 21655 })).toBe(true); // ContentSid inválido
+  });
+
+  it('NO clasifica como WhatsApp los errores de saldo, red o número inválido', () => {
+    // Degradar a SMS por un error de saldo escondería que la cuenta está seca;
+    // degradarlo por un timeout perdería el reintento por el mismo canal.
+    expect(esErrorDeWhatsapp({ code: 30002 })).toBe(false);
+    expect(esErrorDeWhatsapp({ code: 21211 })).toBe(false);
+    expect(esErrorDeWhatsapp(new Error('ETIMEDOUT'))).toBe(false);
+    expect(esErrorDeWhatsapp({ status: 500 })).toBe(false);
+    expect(esErrorDeWhatsapp(undefined)).toBe(false);
   });
 });

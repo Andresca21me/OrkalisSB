@@ -47,6 +47,7 @@ export const envSchema = z.object({
   TWILIO_WA_TPL_AVISO: z.string().optional(),
   TWILIO_WA_TPL_AVISO_ESPECIALISTA: z.string().optional(),
   TWILIO_WA_TPL_MARKETING: z.string().optional(),
+  TWILIO_WA_TPL_OTP: z.string().optional(),
 
   // Email (FASE-11 / Plan-Correo) — SendGrid (opcional).
   SENDGRID_API_KEY: z.string().optional(),

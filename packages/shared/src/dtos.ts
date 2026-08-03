@@ -679,6 +679,10 @@ export interface UsuarioInterno {
 export interface MensajeRegistro {
   id: string;
   canal: 'sms' | 'whatsapp' | 'email';
+  /** Canal que se quería usar, cuando hubo que degradar (p. ej. whatsapp→sms). */
+  canalPreferido: 'sms' | 'whatsapp' | 'email' | null;
+  /** Por qué se degradó de canal (auditoría; responde "¿y esto por qué salió por SMS?"). */
+  motivoFallback: string | null;
   tipo: string;
   estado: 'pendiente' | 'enviando' | 'enviado' | 'entregado' | 'fallido' | 'sin_cupo';
   destino: string;

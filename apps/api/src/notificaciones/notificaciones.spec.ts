@@ -5,7 +5,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { EstadoCita, NivelConfig, OrigenCita, PerfilNegocio, PlanSuscripcion } from '@orkalis/shared';
 import { adminClient, adminDb } from '../db/admin-client';
 import { client } from '../db/client';
-import { alertaAdmin, cita, citaRecordatorio, cliente, consumoMensajeria, especialista, especialistaSucursal, mensaje, negocio, sucursal, suscripcion } from '../db/schema';
+import { alertaAdmin, cita, citaRecordatorio, cliente, consumoMensajeria, especialista, especialistaSucursal, mensaje, negocio, plantillaMensaje, sucursal, suscripcion } from '../db/schema';
 import { CONFIG_UPDATED, ConfigResolverService, type ConfigUpdatedEvent } from '../config-module/config-resolver.service';
 import { PlanService } from '../plans/plan.service';
 import { JobQueue } from './job-queue';
@@ -548,6 +548,153 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       expect(ruta.canal).toBe('sms');
       expect(ruta.canalPreferido).toBeUndefined();
       expect(ruta.motivoFallback).toBeUndefined();
+    });
+  });
+
+  describe('WhatsApp-first y fallback de canal (Plan-WhatsApp)', () => {
+    // Perfil de plataforma COMPLETO: sender + Content SIDs por env (AM-3 hecho).
+    const ENV_WA: Record<string, string> = {
+      TWILIO_WHATSAPP_FROM: '+573155909339',
+      TWILIO_WA_TPL_CONFIRMACION: 'HXconf',
+      TWILIO_WA_TPL_RECORDATORIO: 'HXrec',
+      TWILIO_WA_TPL_AVISO: 'HXavi',
+      TWILIO_WA_TPL_AVISO_ESPECIALISTA: 'HXesp',
+      TWILIO_WA_TPL_MARKETING: 'HXmkt',
+      TWILIO_WA_TPL_OTP: 'HXotp',
+    };
+    const configWa = { get: (k: string) => ENV_WA[k] } as unknown as ConstructorParameters<typeof RemitenteResolver>[0];
+    let remitenteWa: RemitenteResolver;
+    let routerWa: RouterCanalService;
+    let notifWa: NotificacionesService;
+
+    /**
+     * Adaptador que simula el rechazo de Meta: WhatsApp lanza 63016 (fuera de la
+     * ventana de 24 h), el SMS sale bien. `proveedor: 'mock'` a propósito, para
+     * no descontar el saldo de plataforma real de otras suites.
+     */
+    class RechazaWhatsappAdapter implements NotificationSender {
+      readonly proveedor = 'mock';
+      enviosSms: MensajeSalida[] = [];
+      private n = 0;
+      soporta(_canal: Canal): boolean {
+        return true;
+      }
+      async enviar(m: MensajeSalida, _p: PerfilRemitente): Promise<ResultadoEnvio> {
+        if (m.canal === 'whatsapp') {
+          throw Object.assign(new Error('Twilio 63016: fuera de la ventana de 24 h'), { code: 63016, status: 400 });
+        }
+        this.enviosSms.push(m);
+        return { proveedorId: `SM_fb_${++this.n}` };
+      }
+    }
+
+    beforeAll(async () => {
+      if (estadoMensajeria.pausada()) await estadoMensajeria.reanudar();
+      remitenteWa = new RemitenteResolver(configWa);
+      routerWa = new RouterCanalService(new ConfigResolverService(), remitenteWa, cupos);
+      notifWa = new NotificacionesService(new JobQueue(), cupos, plantillasSvc, routerWa, new MetricsService(), estadoMensajeria);
+    });
+
+    it('con sender y plantillas de plataforma, la confirmación sale por WhatsApp', async () => {
+      const ruta = await routerWa.resolver(negocioId, sucursalId, 'confirmacion', true);
+      expect(ruta.canal).toBe('whatsapp');
+      expect(ruta.cupoCanal).toBe('whatsapp_utility');
+      expect(ruta.plantillaContentSid).toBe('HXconf');
+      expect(ruta.motivoFallback).toBeUndefined();
+    });
+
+    it('la plantilla del negocio (plantilla_mensaje) prevalece sobre la de plataforma', async () => {
+      await adminDb.insert(plantillaMensaje).values({
+        negocioId,
+        evento: 'recordatorio',
+        canal: 'whatsapp',
+        whatsappContentSid: 'HXnegocio_propio',
+        activo: true,
+      });
+      try {
+        const ruta = await routerWa.resolver(negocioId, sucursalId, 'recordatorio', true);
+        expect(ruta.canal).toBe('whatsapp');
+        expect(ruta.plantillaContentSid).toBe('HXnegocio_propio');
+      } finally {
+        await adminDb.delete(plantillaMensaje).where(eq(plantillaMensaje.negocioId, negocioId));
+      }
+    });
+
+    it('el OTP se enruta por WhatsApp con variables POSICIONALES ({"1": código})', async () => {
+      await notifWa.encolarOtp(negocioId, '3117770001', '482913', { sucursalId });
+      const m = await ultimoMensajeDe('otp');
+      expect(m.canal).toBe('whatsapp');
+      expect(m.plantillaClave).toBe('HXotp');
+      expect(m.variables).toEqual({ '1': '482913' });
+      expect(m.cuerpo).toContain('482913'); // el cuerpo SMS viaja como respaldo
+    });
+
+    it('63016 al enviar → degrada a SMS en el acto, se entrega y NO pausa la plataforma', async () => {
+      const adapter = new RechazaWhatsappAdapter();
+      const worker = new OutboxWorker([adapter], remitenteWa, cupos, alertas, new MetricsService(), estadoMensajeria);
+      await notifWa.encolarConfirmacion(negocioId, '3117770002', {
+        sucursalNombre: 'Sede',
+        especialistaNombre: 'Carlos',
+        inicio: new Date(Date.now() + 3600_000),
+      }, { sucursalId });
+
+      await worker.drain();
+
+      const m = await (async () => {
+        const [fila] = await adminDb
+          .select()
+          .from(mensaje)
+          .where(and(eq(mensaje.negocioId, negocioId), eq(mensaje.destino, '3117770002')))
+          .limit(1);
+        return fila;
+      })();
+      expect(m.estado).toBe('enviado');
+      expect(m.canal).toBe('sms');
+      expect(m.cupoCanal).toBe('sms'); // el consumo se imputa al canal real
+      expect(m.canalPreferido).toBe('whatsapp');
+      expect(m.motivoFallback).toMatch(/63016/);
+      expect(m.plantillaClave).toBeNull();
+      expect(adapter.enviosSms.some((s) => s.to === '3117770002')).toBe(true);
+      expect(estadoMensajeria.pausada()).toBe(false); // un 63xxx no es un problema de saldo
+    });
+
+    it('rechazo asíncrono por webhook (undelivered) → el reenvío es por SMS', async () => {
+      const adapter = new MockAdapter();
+      const worker = new OutboxWorker([adapter], remitenteWa, cupos, alertas, new MetricsService(), estadoMensajeria);
+      await notifWa.encolarConfirmacion(negocioId, '3117770003', {
+        sucursalNombre: 'Sede',
+        especialistaNombre: 'Carlos',
+        inicio: new Date(Date.now() + 3600_000),
+      }, { sucursalId });
+      await worker.drain();
+
+      const [enviado] = await adminDb
+        .select()
+        .from(mensaje)
+        .where(and(eq(mensaje.negocioId, negocioId), eq(mensaje.destino, '3117770003')))
+        .limit(1);
+      expect(enviado.canal).toBe('whatsapp');
+      expect(enviado.estado).toBe('enviado');
+
+      // El `proveedorId` del mock ('mock-1') se repite entre instancias y el
+      // webhook busca por él: se estampa uno único, como los SID reales de Twilio.
+      const sidUnico = `WA_TEST_${enviado.id}`;
+      await adminDb.update(mensaje).set({ proveedorId: sidUnico }).where(eq(mensaje.id, enviado.id));
+
+      // Meta lo tira después de aceptarlo (p. ej. destinatario sin WhatsApp).
+      const res = await worker.aplicarEstadoProveedor(sidUnico, 'fallido', 'Twilio 63024: destinatario inválido', 63024);
+      expect(res).toBe('aplicado');
+
+      const [degradado] = await adminDb.select().from(mensaje).where(eq(mensaje.id, enviado.id)).limit(1);
+      expect(degradado.estado).toBe('pendiente'); // vuelve a la cola…
+      expect(degradado.canal).toBe('sms'); // …pero por SMS
+      expect(degradado.canalPreferido).toBe('whatsapp');
+      expect(degradado.motivoFallback).toMatch(/63024/);
+
+      await worker.drain();
+      const [final] = await adminDb.select().from(mensaje).where(eq(mensaje.id, enviado.id)).limit(1);
+      expect(final.estado).toBe('enviado');
+      expect(final.canal).toBe('sms');
     });
   });
 

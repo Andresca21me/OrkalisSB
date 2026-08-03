@@ -252,3 +252,22 @@ export function esErrorDeSaldo(e: unknown): boolean {
     (e as Error)?.message ?? '',
   );
 }
+
+/**
+ * ¿El fallo es propio del CANAL WhatsApp (no del mensaje ni de la cuenta)?
+ *
+ * Twilio reserva los códigos 63xxx para los canales de mensajería social:
+ * destinatario sin WhatsApp, fuera de la ventana de 24 h sin plantilla (63016),
+ * plantilla/variables inválidas, sender degradado por Meta… Ninguno se arregla
+ * reintentando por el mismo canal; la respuesta correcta es **degradar a SMS**
+ * (el mensaje ya viaja con su cuerpo de texto listo). Se incluyen también
+ * `21910` (par From/To de canales incompatibles) y `21655` (ContentSid
+ * inválido), que en la práctica solo aparecen enviando WhatsApp.
+ */
+export function esErrorDeWhatsapp(e: unknown): boolean {
+  if (e == null) return false;
+  const code = (e as { code?: unknown }).code;
+  const n = typeof code === 'number' ? code : typeof code === 'string' ? Number(code) : NaN;
+  if (Number.isInteger(n) && ((n >= 63000 && n <= 63999) || n === 21910 || n === 21655)) return true;
+  return /whatsapp/i.test((e as Error)?.message ?? '') && /template|window|channel/i.test((e as Error)?.message ?? '');
+}

@@ -72,4 +72,6 @@ export const METRICAS = {
   mensajesFallidos: 'mensajes_fallidos',
   mensajesSinCupo: 'mensajes_sin_cupo',
   mensajesReintentados: 'mensajes_reintentados',
+  /** WhatsApp falló y el mensaje se reenvió por SMS (fallback de canal). */
+  mensajesDegradados: 'mensajes_degradados',
 } as const;

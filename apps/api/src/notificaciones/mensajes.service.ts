@@ -49,6 +49,8 @@ export class MensajesService {
         .select({
           id: mensaje.id,
           canal: mensaje.canal,
+          canalPreferido: mensaje.canalPreferido,
+          motivoFallback: mensaje.motivoFallback,
           tipo: mensaje.tipo,
           estado: mensaje.estado,
           destino: mensaje.destino,

@@ -45,6 +45,14 @@ export class RemitenteResolver {
       smsFrom: g('TWILIO_FROM_NUMBER'),
       whatsappFrom: g('TWILIO_WHATSAPP_FROM'),
       verifyServiceSid: g('TWILIO_VERIFY_SERVICE_SID'),
+      waTemplates: {
+        confirmacion: g('TWILIO_WA_TPL_CONFIRMACION'),
+        recordatorio: g('TWILIO_WA_TPL_RECORDATORIO'),
+        aviso: g('TWILIO_WA_TPL_AVISO'),
+        aviso_especialista: g('TWILIO_WA_TPL_AVISO_ESPECIALISTA'),
+        marketing: g('TWILIO_WA_TPL_MARKETING'),
+        otp: g('TWILIO_WA_TPL_OTP'),
+      },
     };
   }
 }

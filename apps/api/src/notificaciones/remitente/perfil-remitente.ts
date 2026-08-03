@@ -1,3 +1,8 @@
+import type { EventoPlantilla } from '@orkalis/shared';
+
+/** Eventos con plantilla WhatsApp en el perfil: los del panel + el OTP de reserva. */
+export type EventoWhatsapp = EventoPlantilla | 'otp';
+
 /**
  * Perfil de remitente por negocio (D6, costura ISV-ready). Los adaptadores
  * reciben este perfil y de aquí sacan credenciales y remitentes; **nunca leen
@@ -24,4 +29,10 @@ export interface PerfilRemitente {
   wabaId?: string;
   /** Service de Twilio Verify para OTP del especialista (FASE-06). */
   verifyServiceSid?: string;
+  /**
+   * Content SIDs de las plantillas WhatsApp aprobadas del remitente, por evento
+   * (AM-3). Son el **default de plataforma**: la fila de `plantilla_mensaje` del
+   * negocio, si existe, prevalece sobre esto.
+   */
+  waTemplates?: Partial<Record<EventoWhatsapp, string>>;
 }

@@ -293,6 +293,11 @@ const ESTADO_LABEL: Record<string, string> = {
   fallido: 'Falló',
   sin_cupo: 'Sin cupo',
 };
+const CANAL_MSG: Record<string, { label: string; icon: string }> = {
+  sms: { label: 'SMS', icon: 'smartphone' },
+  whatsapp: { label: 'WhatsApp', icon: 'message-circle' },
+  email: { label: 'Email', icon: 'mail' },
+};
 
 export function RegistroMensajes() {
   const [canal, setCanal] = useState('');
@@ -361,6 +366,7 @@ export function RegistroMensajes() {
                 <tr style={{ textAlign: 'left', color: 'var(--text-tertiary)' }}>
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Fecha</th>
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Tipo</th>
+                  <th style={{ padding: '8px 10px', fontWeight: 600 }}>Canal</th>
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Destino</th>
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Mensaje</th>
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Estado</th>
@@ -371,6 +377,21 @@ export function RegistroMensajes() {
                   <tr key={m.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
                     <td className="data" style={{ padding: '10px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{fechaHora(m.creadoEn)}</td>
                     <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{m.tipo.replace(/_/g, ' ')}</td>
+                    <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>
+                        <Icon name={CANAL_MSG[m.canal]?.icon ?? 'send'} size={13} />
+                        {CANAL_MSG[m.canal]?.label ?? m.canal}
+                      </span>
+                      {m.canalPreferido && m.canalPreferido !== m.canal && (
+                        // Hubo degradación de canal: se quería el preferido y salió por el actual.
+                        <span
+                          title={m.motivoFallback ?? undefined}
+                          style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', cursor: m.motivoFallback ? 'help' : undefined }}
+                        >
+                          {CANAL_MSG[m.canalPreferido]?.label ?? m.canalPreferido} → {CANAL_MSG[m.canal]?.label ?? m.canal}
+                        </span>
+                      )}
+                    </td>
                     <td className="data" style={{ padding: '10px', whiteSpace: 'nowrap' }}>{m.destino}</td>
                     <td style={{ padding: '10px', color: 'var(--text-secondary)', maxWidth: 340 }}>
                       <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.cuerpo}</span>

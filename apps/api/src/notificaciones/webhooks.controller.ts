@@ -69,7 +69,10 @@ export class TwilioWebhooksController {
     }
 
     const error = body.ErrorCode ? `Twilio ${body.ErrorCode}: ${body.ErrorMessage ?? ''}`.trim() : undefined;
-    const res = await this.outbox.aplicarEstadoProveedor(sid, nuevo, error);
+    // El código numérico viaja aparte: el worker decide con él (p. ej. degradar
+    // un WhatsApp a SMS) sin tener que parsear el texto.
+    const errorCode = body.ErrorCode ? Number(body.ErrorCode) : undefined;
+    const res = await this.outbox.aplicarEstadoProveedor(sid, nuevo, error, Number.isFinite(errorCode) ? errorCode : undefined);
     if (res === 'desconocido') this.logger.warn(`Callback de un mensaje no registrado (${sid}).`);
   }
 

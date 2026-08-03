@@ -62,10 +62,18 @@ export class NotificacionesService implements OnModuleInit {
 
   // ── API de encolado (la usa el dominio) ─────────────────────────────────────
   async encolarOtp(negocioId: string, telefono: string, codigo: string, ctx: Contexto = {}): Promise<void> {
+    // El OTP también se enruta (WhatsApp-first): su plantilla es de categoría
+    // AUTHENTICATION, cuyas variables son POSICIONALES por exigencia de Meta
+    // ({"1": código}), a diferencia de las nombradas del resto de eventos.
+    const ruta = await this.router.resolver(negocioId, ctx.sucursalId ?? null, 'otp', true);
     await this.encolar(negocioId, {
       tipo: 'otp',
-      canal: 'sms',
-      cupoCanal: 'sms',
+      canal: ruta.canal,
+      cupoCanal: ruta.cupoCanal,
+      plantillaClave: ruta.plantillaContentSid,
+      variables: ruta.canal === 'whatsapp' ? { '1': codigo } : undefined,
+      canalPreferido: ruta.canalPreferido,
+      motivoFallback: ruta.motivoFallback,
       destino: telefono,
       cuerpo: plantillas.otp(codigo),
       ...ctx,

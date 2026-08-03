@@ -57,6 +57,27 @@ Enrutar cada evento de negocio al **canal correcto** (SMS / WhatsApp / Email) se
 
 **Lo que falta de AM-3** (y solo eso): dar de alta el sender de WhatsApp (`TWILIO_WHATSAPP_FROM`) y cargar el **Content SID** de cada plantilla aprobada en `plantilla_mensaje` (`canal='whatsapp'`). En cuanto existan, el routing empieza a usarlos solo.
 
+## Ampliación 2026-08-03 (Plan-WhatsApp: WhatsApp principal, SMS de respaldo)
+
+Motivado por el filtrado silencioso de los SMS internacionales por los operadores
+colombianos (Twilio reportaba `delivered` y no llegaban), se completó AM-3 y se
+invirtió la prioridad: **todo sale por WhatsApp** (sender `+573155909339`) y el
+SMS queda de respaldo automático.
+
+- **Content SIDs de plataforma por env**: las `TWILIO_WA_TPL_*` (antes muertas)
+  ahora pueblan `PerfilRemitente.waTemplates` y son el default cuando el negocio
+  no personalizó `plantilla_mensaje` (que sigue prevaleciendo).
+- **OTP por el router** (evento `otp`, config `mensajeria.canal_otp`): plantilla
+  AUTHENTICATION con variables posicionales `{"1": código}`; el Verify del
+  especialista intenta `whatsapp` y cae a `sms` en el acto.
+- **Fallback en tiempo de envío** (antes solo existía al encolar): un fallo
+  63xxx de Meta/Twilio — por excepción al enviar o por webhook `undelivered` —
+  degrada la fila a SMS (`degradarASms` en el outbox): `canal='sms'`,
+  `cupo_canal='sms'`, `canal_preferido='whatsapp'`, `motivo_fallback` con el
+  código. Un 63xxx nunca pausa la plataforma (no es un error de saldo).
+- **Registro de mensajes** del admin: columna de canal + indicador
+  «WhatsApp → SMS» con el motivo.
+
 ## Trazabilidad
 ADR-009 (canales/cupos), RF-047/048, Parte II/V del plan.
 

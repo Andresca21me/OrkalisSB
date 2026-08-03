@@ -6,7 +6,7 @@ import { adminDb } from '../db/admin-client';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 import { AlertasService } from './alertas.service';
 import { CuposService, type CanalCupo } from './cupos.service';
-import { canalDePago, esErrorDeSaldo, MensajeriaEstadoService } from './mensajeria-estado.service';
+import { canalDePago, esErrorDeSaldo, esErrorDeWhatsapp, MensajeriaEstadoService } from './mensajeria-estado.service';
 import { NOTIFICATION_ADAPTERS, type Canal, type MensajeSalida, type NotificationSender } from './notification-sender.port';
 import { RemitenteResolver } from './remitente/remitente.resolver';
 
@@ -234,6 +234,15 @@ export class OutboxWorker {
   /** Transitorio y con intentos disponibles → backoff; si no → fallido. */
   private async tratarError(fila: FilaMensaje, e: Error): Promise<void> {
     const motivo = e.message ?? String(e);
+    // Fallo propio del canal WhatsApp (63xxx: sin cuenta de WhatsApp, fuera de
+    // ventana, plantilla inválida…): reintentar por el mismo canal no sirve y
+    // NO es un problema de saldo — se degrada a SMS en el acto. El cuerpo de
+    // texto ya viaja en la fila, así que el reenvío no re-renderiza nada.
+    // Va ANTES del chequeo de saldo para que un 63xxx jamás pause la plataforma.
+    if (fila.canal === 'whatsapp' && esErrorDeWhatsapp(e)) {
+      await this.degradarASms(fila, `WhatsApp rechazado: ${motivo}`);
+      return;
+    }
     // Sin crédito no hay reintento que valga: se apaga el interruptor para que
     // el resto de la cola no siga estrellándose contra el mismo muro, y la
     // plataforma pasa a mostrar los códigos en pantalla. Solo aplica a los
@@ -257,6 +266,26 @@ export class OutboxWorker {
       return;
     }
     await this.marcarFallido(fila, motivo);
+  }
+
+  /**
+   * Degrada una fila WhatsApp a SMS y la devuelve a `pendiente` para que el
+   * worker la reenvíe. Es el **fallback de canal en tiempo de envío**: el de
+   * tiempo de encolado (sin sender/plantilla/cupo) vive en `RouterCanalService`.
+   * `cupo_canal` pasa a 'sms' para que el consumo se impute al canal real; la
+   * plantilla y sus variables se limpian (el adapter de SMS usa `cuerpo`, que
+   * toda fila WhatsApp lleva renderizado desde el encolado).
+   */
+  private async degradarASms(fila: { id: string }, motivo: string): Promise<void> {
+    await adminDb.execute(sql`
+      UPDATE "mensaje"
+      SET "canal" = 'sms', "cupo_canal" = 'sms', "plantilla_clave" = NULL, "variables" = NULL,
+          "canal_preferido" = 'whatsapp', "motivo_fallback" = ${motivo}, "error" = ${motivo},
+          "estado" = 'pendiente', "actualizado_en" = now(), "proximo_intento_en" = now()
+      WHERE "id" = ${fila.id}
+    `);
+    this.metrics.incPor(METRICAS.mensajesDegradados, 'whatsapp');
+    this.logger.warn(`Mensaje ${fila.id} degradado a SMS: ${motivo}`);
   }
 
   private async marcarFallido(fila: FilaMensaje, motivo: string): Promise<void> {
@@ -290,12 +319,15 @@ export class OutboxWorker {
    * cliente se quedaba sin su confirmación "a veces sí, a veces no". Ahora un
    * mensaje transaccional con intentos disponibles vuelve a `pendiente` y el
    * worker lo reenvía; el tope de `MAX_INTENTOS` (que crece en cada reclamo)
-   * acota el gasto si el operador lo rechaza siempre.
+   * acota el gasto si el operador lo rechaza siempre. Si el rechazado era un
+   * **WhatsApp**, el reenvío es directamente **por SMS** (degradar de canal):
+   * repetir contra Meta el mismo rechazo solo quema intentos.
    */
   async aplicarEstadoProveedor(
     proveedorId: string,
     nuevo: EstadoProveedor,
     error?: string,
+    errorCode?: number,
   ): Promise<'aplicado' | 'ignorado' | 'desconocido'> {
     const [fila] = await adminDb.execute<{ id: string; estado: string; canal: Canal; transaccional: boolean; intento: number }>(sql`
       SELECT "id", "estado", "canal", "transaccional", "intento" FROM "mensaje" WHERE "proveedor_id" = ${proveedorId} LIMIT 1
@@ -305,6 +337,14 @@ export class OutboxWorker {
 
     if (nuevo === 'fallido' && fila.transaccional && fila.intento < OutboxWorker.MAX_INTENTOS) {
       const motivo = error ?? 'el operador no entregó el mensaje';
+      // WhatsApp rechazado tras la aceptación (la mayoría de los fallos de Meta
+      // llegan por aquí, no como excepción): reintentarlo por WhatsApp repite
+      // el mismo rechazo — se degrada a SMS. El código (63016, 63024…) queda en
+      // el motivo para el registro del admin.
+      if (fila.canal === 'whatsapp') {
+        await this.degradarASms(fila, errorCode ? `WhatsApp no entregado (código ${errorCode}): ${motivo}` : `WhatsApp no entregado: ${motivo}`);
+        return 'aplicado';
+      }
       await adminDb.execute(sql`
         UPDATE "mensaje"
         SET "estado" = 'pendiente', "error" = ${motivo}, "actualizado_en" = now(),

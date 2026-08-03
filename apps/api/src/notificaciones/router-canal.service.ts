@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
-import { PlanSuscripcion, type EventoPlantilla } from '@orkalis/shared';
+import { PlanSuscripcion } from '@orkalis/shared';
 import { runInTenantTx } from '../db/tx';
 import { plantillaMensaje, suscripcion } from '../db/schema';
 import { ConfigResolverService } from '../config-module/config-resolver.service';
 import { PLANES } from '../plans/plan-registry';
 import { RemitenteResolver } from './remitente/remitente.resolver';
+import type { EventoWhatsapp, PerfilRemitente } from './remitente/perfil-remitente';
 import { CuposService, type CanalCupo } from './cupos.service';
 import type { Canal } from './notification-sender.port';
 
@@ -59,7 +60,7 @@ export class RouterCanalService {
   async resolver(
     negocioId: string,
     sucursalId: string | null,
-    evento: EventoPlantilla,
+    evento: EventoWhatsapp,
     transaccional: boolean,
   ): Promise<Ruta> {
     try {
@@ -82,7 +83,7 @@ export class RouterCanalService {
 
       // 3) Y una plantilla APROBADA por Meta: fuera de la ventana de 24 h no se
       //    puede mandar texto libre, así que sin Content SID no hay envío válido.
-      const contentSid = await this.contentSid(negocioId, evento);
+      const contentSid = await this.contentSid(negocioId, evento, perfil);
       if (!contentSid) {
         return this.rutaSms('Sin plantilla de WhatsApp aprobada para este evento.', 'whatsapp');
       }
@@ -102,8 +103,19 @@ export class RouterCanalService {
     }
   }
 
-  /** Content SID de la plantilla WhatsApp del negocio para ese evento. */
-  private async contentSid(negocioId: string, evento: EventoPlantilla): Promise<string | undefined> {
+  /**
+   * Content SID de la plantilla WhatsApp para ese evento: la fila del negocio
+   * (si la personalizó) prevalece; sin ella, el default de plataforma del
+   * perfil (`TWILIO_WA_TPL_*`, AM-3). El `otp` no es personalizable por negocio
+   * (no existe en el enum del panel): solo tiene default de plataforma.
+   */
+  private async contentSid(
+    negocioId: string,
+    evento: EventoWhatsapp,
+    perfil: PerfilRemitente,
+  ): Promise<string | undefined> {
+    const porDefecto = perfil.waTemplates?.[evento];
+    if (evento === 'otp') return porDefecto;
     const [fila] = await runInTenantTx({ negocioId, sucursalIds: null, rol: 'sistema' }, (tx) =>
       tx
         .select({ sid: plantillaMensaje.whatsappContentSid, activo: plantillaMensaje.activo })
@@ -117,7 +129,7 @@ export class RouterCanalService {
         )
         .limit(1),
     );
-    return fila?.activo && fila.sid ? fila.sid : undefined;
+    return (fila?.activo && fila.sid ? fila.sid : undefined) ?? porDefecto;
   }
 
   private async planPermiteMarketing(negocioId: string): Promise<boolean> {

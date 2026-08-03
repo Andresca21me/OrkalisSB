@@ -229,7 +229,17 @@ export class InvitacionEspecialistaService {
     await runInTenantTx(ctx, (tx) =>
       tx.update(especialista).set({ telefono, telefonoVerificadoEn: null, actualizadoEn: new Date() }).where(eq(especialista.id, id)),
     );
-    await this.verify.start(telefono, 'sms', this.remitente.resolver(ctx.negocioId));
+    // WhatsApp-first: el código llega por WhatsApp y, si el canal no está
+    // disponible para ese destino (sin cuenta de WhatsApp, canal no habilitado
+    // en el Verify Service…), se reintenta por SMS en el acto — es un flujo
+    // interactivo, el especialista está esperando el código en pantalla.
+    const perfil = this.remitente.resolver(ctx.negocioId);
+    try {
+      await this.verify.start(telefono, 'whatsapp', perfil);
+    } catch (e) {
+      this.logger.warn(`Verify por WhatsApp falló (${(e as Error).message}); se reintenta por SMS.`);
+      await this.verify.start(telefono, 'sms', perfil);
+    }
     return { ok: true };
   }
 
@@ -241,7 +251,7 @@ export class InvitacionEspecialistaService {
     if (esp.telefonoVerificadoEn) return { ok: true };
 
     const ok = await this.verify.check(esp.telefono, codigo.trim(), this.remitente.resolver(ctx.negocioId));
-    if (!ok) throw new BadRequestException('Código incorrecto. Revisa el SMS e intenta de nuevo.');
+    if (!ok) throw new BadRequestException('Código incorrecto. Revisa el mensaje recibido e intenta de nuevo.');
 
     await runInTenantTx(ctx, (tx) =>
       tx.update(especialista).set({ telefonoVerificadoEn: new Date(), actualizadoEn: new Date() }).where(eq(especialista.id, id)),
