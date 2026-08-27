@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { runInTenantTx } from '../db/tx';
-import { cita, cliente, especialista, sucursal } from '../db/schema';
+import { cita, citaServicio, cliente, especialista, servicio, sucursal } from '../db/schema';
 import type { TenantContext } from '../db/tenant-context';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 
@@ -27,8 +27,8 @@ export class AvisosEspecialistaService {
    */
   async avisar(ctx: TenantContext, citaId: string, motivo: string): Promise<void> {
     try {
-      const [d] = await runInTenantTx(ctx, (tx) =>
-        tx
+      const { d, servicios } = await runInTenantTx(ctx, async (tx) => {
+        const [fila] = await tx
           .select({
             inicio: cita.inicio,
             sucursalId: cita.sucursalId,
@@ -42,8 +42,15 @@ export class AvisosEspecialistaService {
           .innerJoin(sucursal, eq(sucursal.id, cita.sucursalId))
           .leftJoin(cliente, eq(cliente.id, cita.clienteId))
           .where(eq(cita.id, citaId))
-          .limit(1),
-      );
+          .limit(1);
+        if (!fila) return { d: undefined, servicios: [] as string[] };
+        const svs = await tx
+          .select({ nombre: servicio.nombre })
+          .from(citaServicio)
+          .innerJoin(servicio, eq(servicio.id, citaServicio.servicioId))
+          .where(eq(citaServicio.citaId, citaId));
+        return { d: fila, servicios: svs.map((s) => s.nombre) };
+      });
       if (!d) return;
       if (!d.telefono) {
         this.logger.log(`Cita ${citaId}: especialista sin celular registrado, no se avisa.`);
@@ -56,6 +63,8 @@ export class AvisosEspecialistaService {
           sucursalNombre: d.sucursalNombre,
           especialistaNombre: d.especialistaNombre,
           clienteNombre: d.clienteNombre ?? undefined,
+          // Con varios servicios se listan juntos (la plantilla tiene una sola variable).
+          servicioNombre: servicios.length ? servicios.join(' + ') : undefined,
           motivo,
           inicio: d.inicio,
         },
