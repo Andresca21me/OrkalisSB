@@ -106,9 +106,6 @@ export class MiTelefonoIniciarDto {
   celular!: string;
 }
 
-export class MiTelefonoConfirmarDto {
-  @IsString() @Matches(/^\d{4,8}$/, { message: 'El código son solo dígitos.' }) codigo!: string;
-}
 
 /**
  * Foto de perfil en formato data URL. El tope de 600 000 caracteres es un freno

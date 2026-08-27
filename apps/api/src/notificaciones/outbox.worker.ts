@@ -159,7 +159,7 @@ export class OutboxWorker {
       // envía. Pasa con los que esperaron una pausa de saldo — confirmar o
       // recordar una cita pasada solo confunde al cliente y quema crédito. El
       // margen de 15 min protege a los walk-ins registrados sobre la hora.
-      if (fila.cita_id && fila.tipo !== 'otp') {
+      if (fila.cita_id) {
         const [caducada] = await adminDb.execute<{ id: string }>(sql`
           SELECT "id" FROM "cita" WHERE "id" = ${fila.cita_id} AND "inicio" < now() - interval '15 minutes'
         `);

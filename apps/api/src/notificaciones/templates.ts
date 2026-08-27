@@ -49,9 +49,9 @@ export function formatHora(d: Date): string {
 }
 
 export const plantillas = {
-  // Código primero: los teclados de iOS/Android lo autocompletan desde el SMS.
-  otp: (codigo: string): string =>
-    `${codigo} es tu clave para confirmar la reserva. Vence en 5 min. No la compartas.`,
+  /** Prueba de canal al registrar el celular de un especialista (sin códigos). */
+  bienvenidaEspecialista: (negocioNombre: string): string =>
+    `${negocioNombre}: tu número quedó registrado para recibir avisos de tu agenda. Si no esperabas este mensaje, ignóralo.`,
 
   confirmacion: (d: DatosCita): string =>
     `¡Reserva confirmada! ${d.servicioNombre ? d.servicioNombre + ' ' : ''}con ${d.especialistaNombre} en ${d.sucursalNombre} el ${formatFechaHora(d.inicio)}.`,

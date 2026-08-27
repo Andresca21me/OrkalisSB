@@ -16,7 +16,7 @@ async function contexto(request: import('@playwright/test').APIRequestContext) {
 }
 
 test.describe('Reserva del cliente por la UI', () => {
-  test('flujo completo: servicios → especialista → franja → OTP → confirmación', async ({ page, request }) => {
+  test('flujo completo: servicios → especialista → franja → datos → confirmación', async ({ page, request }) => {
     const { sucursalId, servicioId } = await contexto(request);
     // El día con cupo para el primer servicio + "cualquiera" (mismo query que la UI).
     const { fecha } = await franjaLibre(request, sucursalId, servicioId, 'any');
@@ -28,32 +28,11 @@ test.describe('Reserva del cliente por la UI', () => {
     await booking.elegirCualquiera();
     await booking.elegirDiaYPrimeraFranja(fecha);
     await booking.ingresarDatos(nombreUnico('Cliente'), telefonoUnico());
-    const code = await booking.leerDevCode();
-    await booking.escribirOtp(code);
-    await booking.verificar();
 
     await expect(booking.confirmacionHeading).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Total')).toBeVisible();
   });
 
-  test('OTP incorrecto → mensaje de error y permanece en el paso', async ({ page, request }) => {
-    const { sucursalId, servicioId } = await contexto(request);
-    const { fecha } = await franjaLibre(request, sucursalId, servicioId, 'any');
-
-    const booking = new BookingPage(page);
-    await booking.ir(sucursalId);
-    await booking.comenzarReserva();
-    await booking.elegirPrimerServicio();
-    await booking.elegirCualquiera();
-    await booking.elegirDiaYPrimeraFranja(fecha);
-    await booking.ingresarDatos(nombreUnico('Cliente'), telefonoUnico());
-    await booking.leerDevCode();
-    await booking.escribirOtp('000000'); // código equivocado
-    await booking.verificar();
-
-    await expect(page.getByText('Código incorrecto. Inténtalo de nuevo.')).toBeVisible({ timeout: 10_000 });
-    await expect(booking.confirmacionHeading).toHaveCount(0);
-  });
 
   test('error al abrir la sucursal → estado de error con reintento', async ({ page, request }) => {
     const { sucursalId } = await contexto(request);
@@ -87,8 +66,6 @@ test.describe('Reserva del cliente por la UI', () => {
     await booking.elegirCualquiera();
     await booking.elegirDiaYPrimeraFranja(fecha);
     await booking.ingresarDatos(nombreUnico('Cliente'), telefonoUnico());
-    await booking.escribirOtp(await booking.leerDevCode());
-    await booking.verificar();
     await expect(booking.confirmacionHeading).toBeVisible({ timeout: 15_000 });
 
     await booking.irAVerMiCita();
@@ -113,8 +90,6 @@ test.describe('Reserva del cliente por la UI', () => {
     await booking.elegirCualquiera();
     await booking.elegirDiaYPrimeraFranja(fechaMasDias(0)); // primera franja de hoy (la más cercana)
     await booking.ingresarDatos(nombreUnico('Cliente'), telefonoUnico());
-    await booking.escribirOtp(await booking.leerDevCode());
-    await booking.verificar();
     await expect(booking.confirmacionHeading).toBeVisible({ timeout: 15_000 });
 
     await booking.irAVerMiCita();

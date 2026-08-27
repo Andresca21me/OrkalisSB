@@ -23,7 +23,6 @@ import { ModuloGate } from '../operacion/modulo-gate.service';
 import { ConfigWriteService } from '../config-module/config-write.service';
 import { DisponibilidadService } from './disponibilidad.service';
 import { HorarioService } from './horario.service';
-import { OtpService } from './otp.service';
 import { ValidadorFactory } from './validators/validador.factory';
 import { ValidadorPublico } from './validators/validador-publico';
 import { PublicAgendamientoService } from './public-agendamiento.service';
@@ -45,7 +44,7 @@ function instante(fechaIso: string, minutos: number): Date {
   return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) + (minutos + 5 * 60) * 60000);
 }
 
-describe('Agendamiento (concurrencia, OTP, origen)', () => {
+describe('Agendamiento (concurrencia, origen)', () => {
   const NOMBRE = 'Negocio AGENDA TEST';
   // Fecha local Bogotá 7 días en el futuro (formato YYYY-MM-DD).
   const FECHA = new Date(Date.now() + 7 * 86400_000 - 5 * 3600_000).toISOString().slice(0, 10);
@@ -106,14 +105,12 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     const avisos = new AvisosEspecialistaService(notificaciones);
     pub = new PublicAgendamientoService(
       new DisponibilidadService(horario, resolver),
-      new OtpService(estadoMensajeria),
       resolver,
       validadores,
       notificaciones,
       metrics,
       horario,
       avisos,
-      estadoMensajeria,
     );
     // AtencionService real: el walk-in retroactivo ahora CIERRA la atención (D7).
     const atencionSvc = new AtencionService(resolver, metrics, new ModuloGate(resolver, new PlanService()));
@@ -150,34 +147,26 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     expect(franjas[0].especialistaId).toBe(espId);
   });
 
-  it('reserva pública con auto-confirmación entra como CONFIRMADA', async () => {
+  it('reserva pública con auto-confirmación entra como CONFIRMADA (sin OTP)', async () => {
     const ini = instante(FECHA, 14 * 60);
     const fin = instante(FECHA, 14 * 60 + 30);
     const tel = '3001110001';
     const { retencionId } = await pub.retener(sucursalId, espId, ini, fin);
-    const { devCode } = await pub.enviarOtp(sucursalId, tel);
     const res = await pub.confirmar(sucursalId, {
       retencionId,
       telefono: tel,
-      codigoOtp: devCode!,
       servicioIds: [servId],
     });
     expect(res.estado).toBe(EstadoCita.Confirmada);
   });
 
-  it('reserva repetida: sin código la 2ª vez, y ACTUALIZA el nombre del cliente', async () => {
+  it('reserva repetida con el mismo teléfono ACTUALIZA el nombre del cliente', async () => {
     const tel = '3001110009';
-    // 1ª reserva a nombre de Camilo (franja libre 09:00): teléfono nuevo → pide código.
+    // 1ª reserva a nombre de Camilo (franja libre 09:00).
     const a = await pub.retener(sucursalId, espId, instante(FECHA, 9 * 60), instante(FECHA, 9 * 60 + 30));
-    const otpA = await pub.enviarOtp(sucursalId, tel);
-    expect(otpA.requerido).toBe(true);
-    await pub.confirmar(sucursalId, { retencionId: a.retencionId, telefono: tel, nombre: 'Camilo', codigoOtp: otpA.devCode!, servicioIds: [servId] });
-    // 2ª reserva mismo teléfono, ahora a nombre de Pedro (franja libre 10:00):
-    // el número ya es cliente → ni se genera código ni hace falta enviarlo.
+    await pub.confirmar(sucursalId, { retencionId: a.retencionId, telefono: tel, nombre: 'Camilo', servicioIds: [servId] });
+    // 2ª reserva mismo teléfono, ahora a nombre de Pedro (franja libre 10:00).
     const b = await pub.retener(sucursalId, espId, instante(FECHA, 10 * 60), instante(FECHA, 10 * 60 + 30));
-    const otpB = await pub.enviarOtp(sucursalId, tel);
-    expect(otpB.requerido).toBe(false);
-    expect(otpB.devCode).toBeUndefined();
     await pub.confirmar(sucursalId, { retencionId: b.retencionId, telefono: tel, nombre: 'Pedro', servicioIds: [servId] });
 
     const [c] = await adminDb
@@ -187,41 +176,20 @@ describe('Agendamiento (concurrencia, OTP, origen)', () => {
     expect(c.nombre).toBe('Pedro'); // antes se quedaba en 'Camilo'
   });
 
-  it('un teléfono DESCONOCIDO no puede confirmar sin código', async () => {
-    const tel = '3001110019';
-    const r = await pub.retener(sucursalId, espId, instante(FECHA, 16 * 60), instante(FECHA, 16 * 60 + 30));
-    await expect(
-      pub.confirmar(sucursalId, { retencionId: r.retencionId, telefono: tel, servicioIds: [servId] }),
-    ).rejects.toThrow(/código/);
-  });
-
   it('con aprobación manual ON la reserva entra como SOLICITADA', async () => {
     await writer.upsert(ctxAdmin, NivelConfig.Negocio, negocioId, 'agendamiento.aprobacion_manual', true);
     const ini = instante(FECHA, 15 * 60);
     const fin = instante(FECHA, 15 * 60 + 30);
     const tel = '3001110002';
     const { retencionId } = await pub.retener(sucursalId, espId, ini, fin);
-    const { devCode } = await pub.enviarOtp(sucursalId, tel);
     const res = await pub.confirmar(sucursalId, {
       retencionId,
       telefono: tel,
-      codigoOtp: devCode!,
       servicioIds: [servId],
     });
     expect(res.estado).toBe(EstadoCita.Solicitada);
     // Restablece para no afectar otras pruebas.
     await writer.remove(ctxAdmin, NivelConfig.Negocio, negocioId, 'agendamiento.aprobacion_manual');
-  });
-
-  it('OTP incorrecto rechaza la confirmación', async () => {
-    const ini = instante(FECHA, 11 * 60);
-    const fin = instante(FECHA, 11 * 60 + 30);
-    const tel = '3001110003';
-    const { retencionId } = await pub.retener(sucursalId, espId, ini, fin);
-    await pub.enviarOtp(sucursalId, tel);
-    await expect(
-      pub.confirmar(sucursalId, { retencionId, telefono: tel, codigoOtp: '000000x', servicioIds: [servId] }),
-    ).rejects.toThrow();
   });
 
   it('reserva pública con hora PASADA es rechazada', async () => {

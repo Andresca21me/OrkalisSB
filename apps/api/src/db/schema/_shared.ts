@@ -68,13 +68,6 @@ export const estadoMensajeEnum = pgEnum('estado_mensaje', [
 export const estadoCobroEnum = pgEnum('estado_cobro', ['pendiente', 'pagado', 'fallido']);
 /** Ventanas de recordatorio de cita (FASE-08). */
 export const ventanaRecordatorioEnum = pgEnum('ventana_recordatorio', ['h24', 'h2', 'config']);
-/** Ciclo de vida de una verificación de teléfono de especialista (FASE-06, D3). */
-export const estadoVerificacionEnum = pgEnum('estado_verificacion', [
-  'pendiente',
-  'verificado',
-  'expirado',
-  'cancelado',
-]);
 
 /**
  * Tipo de columna `tstzrange` (Postgres). Drizzle no lo trae nativo; se usa

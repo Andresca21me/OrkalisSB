@@ -19,7 +19,6 @@ import {
   InvitarEspecialistaDto,
   InvitarExistenteDto,
   MiFichaDto,
-  MiTelefonoConfirmarDto,
   MiTelefonoIniciarDto,
 } from './dto/negocio.dto';
 
@@ -79,23 +78,17 @@ export class EquipoController {
     await this.invitacion.vincularMiCuenta(ctx, id);
   }
 
-  // ── El propio especialista verifica su celular ──────────────────────────────
-  // (Paso 2 de la invitación, o después desde su panel si la mensajería estaba
-  // pausada.) Admin incluido: con "Yo también atiendo" (E8) él también tiene
-  // ficha propia. Throttle estricto: cada intento cuesta un SMS de Verify.
+  // ── El propio especialista registra su celular ──────────────────────────────
+  // (Paso 2 de la invitación, o después desde su panel.) Admin incluido: con
+  // "Yo también atiendo" (E8) él también tiene ficha propia. Sin códigos: se
+  // guarda el número y llega un mensaje de prueba; si no llega, se corrige y se
+  // reenvía desde aquí mismo. Throttle: cada intento cuesta un SMS.
 
   @Post('mi/telefono/iniciar')
   @Roles(RolUsuario.Especialista, RolUsuario.Admin)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   miTelefonoIniciar(@CurrentTenant() ctx: TenantContext, @Body() dto: MiTelefonoIniciarDto) {
     return this.invitacion.miTelefonoIniciar(ctx, dto.celular);
-  }
-
-  @Post('mi/telefono/confirmar')
-  @Roles(RolUsuario.Especialista, RolUsuario.Admin)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  miTelefonoConfirmar(@CurrentTenant() ctx: TenantContext, @Body() dto: MiTelefonoConfirmarDto) {
-    return this.invitacion.miTelefonoConfirmar(ctx, dto.codigo);
   }
 
   @Get()

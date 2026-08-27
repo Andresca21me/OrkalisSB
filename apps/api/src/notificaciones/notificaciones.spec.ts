@@ -533,6 +533,29 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       expect(m.motivoFallback).toBeTruthy();
     });
 
+    it('WhatsApp que el proveedor reporta fallido cae a SMS (respaldo de canal)', async () => {
+      // El destinatario no tiene WhatsApp (p. ej. error 63024): el mismo
+      // mensaje se reencola por SMS con el cuerpo ya renderizado, no se pierde.
+      const [fila] = await adminDb
+        .insert(mensaje)
+        .values({ negocioId, sucursalId, canal: 'whatsapp', cupoCanal: 'whatsapp_utility', tipo: 'confirmacion', destino: '3007770001', cuerpo: 'Cuerpo SMS listo', plantillaClave: 'HX_X', estado: 'enviado', proveedorId: 'WA-fallido-1', enviadoEn: new Date() })
+        .returning({ id: mensaje.id });
+
+      expect(await outbox.aplicarEstadoProveedor('WA-fallido-1', 'fallido', 'no es usuario de WhatsApp')).toBe('aplicado');
+      let [m] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
+      expect(m.estado).toBe('pendiente');
+      expect(m.canal).toBe('sms');
+      expect(m.cupoCanal).toBe('sms');
+      expect(m.canalPreferido).toBe('whatsapp');
+      expect(m.motivoFallback).toMatch(/WhatsApp no entregado/);
+
+      // Y el worker lo envía de verdad por SMS.
+      await outbox.drain();
+      [m] = await adminDb.select().from(mensaje).where(eq(mensaje.id, fila.id));
+      expect(m.estado).toBe('enviado');
+      expect(mock.enviados.some((e) => e.contenido === 'Cuerpo SMS listo')).toBe(true);
+    });
+
     it('con el canal forzado a SMS no se anota fallback (no se intentó WhatsApp)', async () => {
       const resolver = new ConfigResolverService();
       // Igual que en producción: al guardar config se emite CONFIG_UPDATED y el
@@ -620,14 +643,6 @@ describe('Notificaciones · outbox y cupos por ciclo (FASE-02/03)', () => {
       }
     });
 
-    it('el OTP se enruta por WhatsApp con variables POSICIONALES ({"1": código})', async () => {
-      await notifWa.encolarOtp(negocioId, '3117770001', '482913', { sucursalId });
-      const m = await ultimoMensajeDe('otp');
-      expect(m.canal).toBe('whatsapp');
-      expect(m.plantillaClave).toBe('HXotp');
-      expect(m.variables).toEqual({ '1': '482913' });
-      expect(m.cuerpo).toContain('482913'); // el cuerpo SMS viaja como respaldo
-    });
 
     it('63016 al enviar → degrada a SMS en el acto, se entrega y NO pausa la plataforma', async () => {
       const adapter = new RechazaWhatsappAdapter();

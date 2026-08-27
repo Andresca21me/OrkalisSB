@@ -320,8 +320,8 @@ export function RegistroMensajes() {
       {estadoMsj.data?.pausada && (
         <div style={{ marginBottom: 16 }}>
           <ConfigBanner tone="warning" title="Los envíos están pausados">
-            No se están enviando recordatorios ni confirmaciones. Mientras dure, los códigos de verificación
-            aparecen en pantalla, así que tus clientes pueden seguir reservando con normalidad.
+            No se están enviando recordatorios. Tus clientes pueden seguir reservando con normalidad y las
+            confirmaciones quedan en cola: saldrán en cuanto se reanude la mensajería.
             {estadoMsj.data.motivo ? ` Motivo: ${estadoMsj.data.motivo}` : ''}
           </ConfigBanner>
         </div>

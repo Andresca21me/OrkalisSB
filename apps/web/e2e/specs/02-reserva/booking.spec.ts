@@ -7,7 +7,7 @@ import { telefonoUnico } from '../../fixtures/data';
 /**
  * Reserva pública (FASE-02 v3, HU-CLI-001..004). Migrado de la v2. El flujo UI
  * paso a paso se amplía en la FASE-02; aquí se conserva: carga de la página +
- * reserva completa con OTP por API + concurrencia (no doble reserva).
+ * reserva completa por API (sin OTP) + concurrencia (no doble reserva).
  */
 
 async function contexto(request: import('@playwright/test').APIRequestContext) {
@@ -17,7 +17,7 @@ async function contexto(request: import('@playwright/test').APIRequestContext) {
   return { sucursalId, servicioId: servicios[0].id };
 }
 
-test.describe('Reserva pública con OTP (cliente)', () => {
+test.describe('Reserva pública (cliente)', () => {
   test('la página pública de reserva carga el negocio y sus servicios', async ({ page, request }) => {
     const { sucursalId } = await contexto(request);
     const booking = new BookingPage(page);
@@ -25,7 +25,7 @@ test.describe('Reserva pública con OTP (cliente)', () => {
     await expect(booking.servicioTexto(/corte/i)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('reserva completa con OTP → cita creada', async ({ request }) => {
+  test('reserva completa → cita creada', async ({ request }) => {
     const { sucursalId, servicioId } = await contexto(request);
     const reserva = await sembrarReserva(request, sucursalId, servicioId);
     expect(reserva.citaId).toBeTruthy();
@@ -42,10 +42,8 @@ test.describe('Reserva pública con OTP (cliente)', () => {
       });
       if (!ret.ok()) return { citaId: undefined as string | undefined };
       const { retencionId } = await ret.json();
-      const otp = await request.post(`/api/public/${sucursalId}/otp/enviar`, { data: { telefono } });
-      const { devCode } = await otp.json();
       const conf = await request.post(`/api/public/${sucursalId}/confirmar`, {
-        data: { retencionId, telefono, nombre: `Race ${sufijo}`, codigoOtp: devCode, servicioIds: [servicioId] },
+        data: { retencionId, telefono, nombre: `Race ${sufijo}`, servicioIds: [servicioId] },
       });
       const body = conf.status() === 201 ? await conf.json() : null;
       return { citaId: body?.citaId as string | undefined };

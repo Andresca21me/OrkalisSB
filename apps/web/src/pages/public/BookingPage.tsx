@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type {
   CitaPublica,
   ConfirmarResp,
   FranjaPublica,
-  OtpResp,
   PublicEspecialista,
   PublicInfo,
   PublicServicio,
@@ -67,8 +66,6 @@ export function BookingPage() {
   const [fecha, setFecha] = useState<string | null>(null);
   const [slot, setSlot] = useState<FranjaPublica | null>(null);
   const [contacto, setContacto] = useState({ nombre: '', telefono: '' });
-  const [retencionId, setRetencionId] = useState<string | null>(null);
-  const [devCode, setDevCode] = useState<string | undefined>();
   const [appointment, setAppointment] = useState<CitaPublica | null>(null);
   const [reagendando, setReagendando] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -117,78 +114,42 @@ export function BookingPage() {
     setFecha(null);
     setSlot(null);
     setContacto({ nombre: '', telefono: '' });
-    setRetencionId(null);
     setAppointment(null);
     setReagendando(false);
   }
 
-  // Retiene la franja y decide si hace falta código. Recibe los datos por
-  // parámetro: el estado `contacto` puede no estar actualizado aún en el mismo
-  // tick del envío (setContacto es asíncrono).
-  //
-  // Devuelve 'otp' si se envió un código (primera reserva de ese número),
-  // 'directo' si el teléfono ya es cliente y la reserva quedó confirmada aquí
-  // mismo sin código, o null si algo falló.
-  async function retenerYEnviar(datos: { nombre: string; telefono: string }): Promise<'otp' | 'directo' | null> {
-    if (!slot) return null;
-    try {
-      const r = await api.post<RetencionResp>(`/public/${sucursalId}/retener`, { especialistaId: slot.especialistaId, inicio: slot.inicio, fin: slot.fin }, false);
-      setRetencionId(r.retencionId);
-      const otp = await api.post<OtpResp>(`/public/${sucursalId}/otp/enviar`, { telefono: datos.telefono }, false);
-      setDevCode(otp.devCode);
-      if (otp.requerido === false) {
-        // Cliente conocido: confirmación directa (el servidor lo revalida).
-        await confirmarCon('', { retencionId: r.retencionId, ...datos });
-        return 'directo';
-      }
-      return 'otp';
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        toast('Esa hora la acaban de reservar. Elige otra.', 'error');
-        setSlot(null);
-        setStep('horario');
-      } else {
-        toast((e as Error).message, 'error');
-      }
-      return null;
-    }
-  }
-
-  function confirmar(codigoOtp: string) {
-    return confirmarCon(codigoOtp, { retencionId, telefono: contacto.telefono, nombre: contacto.nombre });
-  }
-
-  // La variante con datos explícitos existe para la confirmación directa (sin
-  // código), que ocurre en el mismo tick en que `retencionId`/`contacto` acaban
-  // de fijarse y el estado de React aún no se refrescó.
-  async function confirmarCon(codigoOtp: string, d: { retencionId: string | null; telefono: string; nombre: string }) {
-    if (!d.retencionId) return;
+  // Retiene la franja y confirma en un solo paso (ya no hay códigos OTP).
+  // Recibe los datos por parámetro: el estado `contacto` puede no estar
+  // actualizado aún en el mismo tick (setContacto es asíncrono).
+  // Devuelve true si la reserva quedó hecha.
+  async function retenerYConfirmar(datos: { nombre: string; telefono: string }): Promise<boolean> {
+    if (!slot) return false;
     setEnviando(true);
     try {
+      const r = await api.post<RetencionResp>(`/public/${sucursalId}/retener`, { especialistaId: slot.especialistaId, inicio: slot.inicio, fin: slot.fin }, false);
       // Reagendar = cancelar la anterior antes de crear la nueva.
       if (reagendando && appointment) {
         await api.post(`/public/${sucursalId}/cita/${appointment.id}/cancelar`, undefined, false);
       }
-      const r = await api.post<ConfirmarResp>(
+      const conf = await api.post<ConfirmarResp>(
         `/public/${sucursalId}/confirmar`,
-        // Sin código (cliente conocido) no se manda el campo: el DTO lo valida solo si viene.
-        { retencionId: d.retencionId, telefono: d.telefono, nombre: d.nombre, ...(codigoOtp ? { codigoOtp } : {}), servicioIds: servicios },
+        { retencionId: r.retencionId, telefono: datos.telefono, nombre: datos.nombre, servicioIds: servicios },
         false,
       );
-      const detalle = await api.get<CitaPublica>(`/public/${sucursalId}/cita/${r.citaId}`, false);
+      const detalle = await api.get<CitaPublica>(`/public/${sucursalId}/cita/${conf.citaId}`, false);
       setAppointment(detalle);
       setReagendando(false);
       setStep('confirmacion');
+      return true;
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         toast('Esa hora la acaban de reservar. Elige otra.', 'error');
         setSlot(null);
         setStep('horario');
-      } else if (codigoOtp && e instanceof ApiError && (e.status === 400 || e.status === 401)) {
-        toast('Código incorrecto. Inténtalo de nuevo.', 'error');
       } else {
         toast((e as Error).message, 'error');
       }
+      return false;
     } finally {
       setEnviando(false);
     }
@@ -299,9 +260,7 @@ export function BookingPage() {
           negocio={negocio}
           contacto={contacto}
           onChange={setContacto}
-          devCode={devCode}
-          onEnviar={retenerYEnviar}
-          onVerificar={(code) => confirmar(code)}
+          onConfirmar={retenerYConfirmar}
           enviando={enviando}
           onBack={() => setStep('horario')}
         />
@@ -681,124 +640,57 @@ function SlotGroup({ label, slots, slot, onPick }: { label: string; slots: Franj
   );
 }
 
-// ════════════════════ Identificación + OTP ════════════════════
-function Identificacion({ negocio, contacto, onChange, devCode, onEnviar, onVerificar, enviando, onBack }: { negocio: string; contacto: { nombre: string; telefono: string }; onChange: (c: { nombre: string; telefono: string }) => void; devCode?: string; onEnviar: (datos: { nombre: string; telefono: string }) => Promise<'otp' | 'directo' | null>; onVerificar: (code: string) => void; enviando: boolean; onBack: () => void }) {
-  const [fase, setFase] = useState<'datos' | 'otp'>('datos');
+// ════════════════════ Identificación ════════════════════
+// Sin códigos OTP: nombre + celular y la reserva se confirma directo. El SMS o
+// WhatsApp de confirmación que llega después hace de comprobante del número.
+function Identificacion({ negocio, contacto, onChange, onConfirmar, enviando, onBack }: { negocio: string; contacto: { nombre: string; telefono: string }; onChange: (c: { nombre: string; telefono: string }) => void; onConfirmar: (datos: { nombre: string; telefono: string }) => Promise<boolean>; enviando: boolean; onBack: () => void }) {
   const [nombre, setNombre] = useState(contacto.nombre);
   const [telefono, setTelefono] = useState(contacto.telefono);
   const [tocado, setTocado] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [secs, setSecs] = useState(0);
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
 
   const digits = telefono.replace(/\D/g, '');
   const telOk = digits.length === 10;
   const nombreOk = nombre.trim().length >= 3;
 
-  useEffect(() => {
-    if (secs <= 0) return;
-    const t = setTimeout(() => setSecs((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [secs]);
-
-  async function enviar() {
+  function confirmar() {
     setTocado(true);
     if (!nombreOk || !telOk) return;
-    setSending(true);
     onChange({ nombre: nombre.trim(), telefono: digits });
-    const r = await onEnviar({ nombre: nombre.trim(), telefono: digits });
-    setSending(false);
-    // 'directo' = cliente conocido: la reserva ya quedó confirmada sin código.
-    if (r === 'otp') {
-      setFase('otp');
-      setSecs(30);
-      setTimeout(() => refs.current[0]?.focus(), 60);
-    }
+    void onConfirmar({ nombre: nombre.trim(), telefono: digits });
   }
-
-  function setDigit(i: number, v: string) {
-    const d = v.replace(/\D/g, '').slice(-1);
-    const next = [...code];
-    next[i] = d;
-    setCode(next);
-    if (d && i < 5) refs.current[i + 1]?.focus();
-  }
-  function onKey(i: number, e: React.KeyboardEvent) {
-    if (e.key === 'Backspace' && !code[i] && i > 0) refs.current[i - 1]?.focus();
-  }
-
-  const full = code.join('');
 
   return (
     <>
-      <AppHeader title={fase === 'datos' ? 'Tus datos' : 'Verifica tu número'} sub={negocio} onBack={fase === 'otp' ? () => setFase('datos') : onBack} />
+      <AppHeader title="Tus datos" sub={negocio} onBack={onBack} />
       <ProgressBar steps={PASOS} current="identificacion" />
 
       <ScrollArea>
-        {fase === 'datos' ? (
-          <div style={{ padding: 20 }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 0, marginBottom: 22, lineHeight: '20px' }}>
-              Necesitamos tu nombre y celular para confirmar la cita y avisarte de cualquier cambio.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              <Campo label="Nombre completo" error={tocado && !nombreOk ? 'Escribe tu nombre (mín. 3 letras)' : undefined}>
-                <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Daniel Ríos" style={inputCss(tocado && !nombreOk)} />
-              </Campo>
-              <Campo label="Celular" hint="Si es tu primera reserva, te enviaremos un código por SMS." error={tocado && !telOk ? 'Debe tener 10 dígitos' : undefined}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ ...inputCss(false), width: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontWeight: 600, flex: 'none' }}>+57</div>
-                  <input value={telefono} onChange={(e) => setTelefono(e.target.value.replace(/[^\d ]/g, '').slice(0, 12))} inputMode="numeric" placeholder="311 845 2210" className="data" style={{ ...inputCss(tocado && !telOk), flex: 1 }} />
-                </div>
-              </Campo>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 22, padding: 12, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
-              <Icon name="shield" size={16} color="var(--text-tertiary)" style={{ marginTop: 1 }} />
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: '17px' }}>Usamos tu número solo para esta reserva.</span>
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: 20 }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 0, marginBottom: 24, lineHeight: '20px' }}>
-              Escribe el código de 6 dígitos que enviamos al <strong className="data" style={{ color: 'var(--text-primary)' }}>+57 {digits}</strong>.
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 16 }}>
-              {code.map((d, i) => (
-                <input key={i} ref={(el) => (refs.current[i] = el)} value={d} onChange={(e) => setDigit(i, e.target.value)} onKeyDown={(e) => onKey(i, e)} inputMode="numeric" maxLength={1} className="data" style={{ width: 46, height: 58, textAlign: 'center', fontSize: 'var(--text-xl)', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', border: `1.5px solid ${d ? 'var(--brand)' : 'var(--border-default)'}`, borderRadius: 'var(--radius-md)', outline: 'none', background: 'var(--surface-card)' }} />
-              ))}
-            </div>
-            <div style={{ textAlign: 'center', marginTop: 8 }}>
-              {secs > 0 ? (
-                <span className="data" style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>Reenviar código en {secs}s</span>
-              ) : (
-                <button type="button" onClick={() => { void enviar(); }} style={{ border: 'none', background: 'transparent', color: 'var(--text-link)', fontWeight: 600, fontSize: 'var(--text-sm)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>Reenviar código</button>
-              )}
-            </div>
-            {devCode && (
-              // Sale cuando no hay envío posible (sin proveedor o saldo
-              // pausado). Se muestra el código para que la reserva no se quede
-              // bloqueada esperando un SMS que no va a llegar.
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 6, marginTop: 24, padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--info-tint)', color: 'var(--text-secondary)', fontSize: 'var(--text-xs)', lineHeight: '17px' }}>
-                <Icon name="info" size={13} color="var(--info)" style={{ marginTop: 1 }} />
-                <span>
-                  No pudimos enviarte el SMS. Tu código es <strong className="data" style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{devCode}</strong>
-                </span>
+        <div style={{ padding: 20 }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 0, marginBottom: 22, lineHeight: '20px' }}>
+            Necesitamos tu nombre y celular para confirmar la cita y avisarte de cualquier cambio.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <Campo label="Nombre completo" error={tocado && !nombreOk ? 'Escribe tu nombre (mín. 3 letras)' : undefined}>
+              <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Daniel Ríos" style={inputCss(tocado && !nombreOk)} />
+            </Campo>
+            <Campo label="Celular" hint="Te llegará la confirmación de tu cita a este número." error={tocado && !telOk ? 'Debe tener 10 dígitos' : undefined}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ ...inputCss(false), width: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontWeight: 600, flex: 'none' }}>+57</div>
+                <input value={telefono} onChange={(e) => setTelefono(e.target.value.replace(/[^\d ]/g, '').slice(0, 12))} inputMode="numeric" placeholder="311 845 2210" className="data" style={{ ...inputCss(tocado && !telOk), flex: 1 }} />
               </div>
-            )}
+            </Campo>
           </div>
-        )}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 22, padding: 12, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
+            <Icon name="shield" size={16} color="var(--text-tertiary)" style={{ marginTop: 1 }} />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: '17px' }}>Usamos tu número solo para esta reserva.</span>
+          </div>
+        </div>
       </ScrollArea>
 
       <FooterBar>
-        {fase === 'datos' ? (
-          <Button fullWidth iconRight="arrow-right" disabled={sending || enviando} onClick={() => void enviar()}>
-            {sending || enviando ? 'Un momento…' : 'Continuar'}
-          </Button>
-        ) : (
-          <Button fullWidth disabled={full.length !== 6 || enviando} onClick={() => onVerificar(full)}>
-            {enviando ? 'Confirmando…' : 'Verificar y confirmar'}
-          </Button>
-        )}
+        <Button fullWidth iconRight="arrow-right" disabled={enviando} onClick={confirmar}>
+          {enviando ? 'Confirmando…' : 'Confirmar reserva'}
+        </Button>
       </FooterBar>
     </>
   );

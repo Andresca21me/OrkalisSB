@@ -15,8 +15,6 @@ import { TokenAccionService } from '../correo/token-accion.service';
 import { tokenAccion } from '../db/schema';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import type { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
-import { RemitenteResolver } from '../notificaciones/remitente/remitente.resolver';
-import { CODIGO_VERIFY_MOCK, MockVerifyAdapter } from '../notificaciones/verify/mock-verify.adapter';
 import { PlanService } from '../plans/plan.service';
 import { EquipoService } from './equipo.service';
 import { InvitacionEspecialistaService } from './invitacion-especialista.service';
@@ -24,14 +22,6 @@ import { InvitacionEspecialistaService } from './invitacion-especialista.service
 /** Doble del estado de mensajería: decide la ruta del celular (D5). */
 const estadoFalso = (sinMensajes: boolean) => ({ sinMensajes: () => sinMensajes }) as unknown as MensajeriaEstadoService;
 
-/** Verify mock que cuenta los envíos. */
-class VerifySpy extends MockVerifyAdapter {
-  envios: string[] = [];
-  override async start(to: string, canal: 'sms' | 'whatsapp'): Promise<void> {
-    this.envios.push(to);
-    await super.start(to, canal);
-  }
-}
 
 /**
  * Doble MÍNIMO del encolado de correos: escribe la fila del outbox igual que el
@@ -40,7 +30,13 @@ class VerifySpy extends MockVerifyAdapter {
  * una fila `pendiente` la reclamaría el worker de otra suite corriendo en
  * paralelo y le descuadraría los conteos de su mock.
  */
+/** Celulares a los que salió el mensaje de prueba (sin OTP). */
+const bienvenidas: string[] = [];
+
 const notificacionesFalsas = {
+  encolarBienvenidaEspecialista: async (_negocioId: string, telefono: string) => {
+    bienvenidas.push(telefono);
+  },
   encolarEmailAcceso: async (opts: { negocioId?: string | null; email: string; asunto: string; cuerpo: string; html?: string; tipo: string }) => {
     await adminDb.insert(mensaje).values({
       negocioId: opts.negocioId ?? null,
@@ -63,7 +59,6 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
   let sucursalId: string;
   let ctx: TenantContext;
   let servicio: InvitacionEspecialistaService;
-  let verify: VerifySpy;
   let tokens: TokenAccionService;
   let n = 0;
   const email = () => `invit-spec-${++n}@orkalis-test.local`;
@@ -72,7 +67,7 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     const config = { get: (k: string) => (k === 'CORS_ORIGIN' ? 'http://localhost:5173' : undefined) } as unknown as ConfigService<Env, true>;
     const correo = new CorreoAuthService(tokens, notificacionesFalsas, config);
     const equipo = new EquipoService(new PlanService(), notificacionesFalsas);
-    return new InvitacionEspecialistaService(equipo, correo, tokens, new RemitenteResolver({ get: () => undefined } as never), verify, estadoFalso(sinMensajes));
+    return new InvitacionEspecialistaService(equipo, correo, tokens, notificacionesFalsas, estadoFalso(sinMensajes));
   }
 
   beforeAll(async () => {
@@ -85,7 +80,6 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     const [suc] = await adminDb.insert(sucursal).values({ negocioId, nombre: 'Sede' }).returning();
     sucursalId = suc.id;
     ctx = { negocioId, sucursalIds: null, rol: RolUsuario.Admin };
-    verify = new VerifySpy();
     tokens = new TokenAccionService();
     servicio = construir(false);
   });
@@ -183,7 +177,7 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     await expect(servicio.activar(token, 'Password123')).rejects.toMatchObject({ status: 400 });
   });
 
-  it('el especialista verifica SU celular: iniciar guarda sin verificar, confirmar estampa', async () => {
+  it('el especialista registra SU celular: se guarda normalizado, queda habilitado y recibe el mensaje de prueba (sin OTP)', async () => {
     const destino = email();
     const esp = await invitar({ email: destino });
     await servicio.activar(await tokenDelCorreo(destino), 'Password123');
@@ -191,15 +185,10 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     const ctxEsp: TenantContext = { negocioId, sucursalIds: [sucursalId], rol: RolUsuario.Especialista, usuarioId: u.id };
 
     await servicio.miTelefonoIniciar(ctxEsp, '300 111 2233');
-    let [fila] = await adminDb.select().from(especialista).where(eq(especialista.id, esp.id));
+    const [fila] = await adminDb.select().from(especialista).where(eq(especialista.id, esp.id));
     expect(fila.telefono).toBe('+573001112233'); // normalizado a E.164
-    expect(fila.telefonoVerificadoEn).toBeNull();
-    expect(verify.envios).toContain('+573001112233');
-
-    await expect(servicio.miTelefonoConfirmar(ctxEsp, '000000')).rejects.toMatchObject({ status: 400 });
-    await servicio.miTelefonoConfirmar(ctxEsp, CODIGO_VERIFY_MOCK);
-    [fila] = await adminDb.select().from(especialista).where(eq(especialista.id, esp.id));
-    expect(fila.telefonoVerificadoEn).toBeInstanceOf(Date);
+    expect(fila.telefonoVerificadoEn).toBeInstanceOf(Date); // habilitado desde ya, sin código
+    expect(bienvenidas).toContain('+573001112233'); // le llegó el mensaje de prueba
   });
 
   it('con la mensajería pausada, iniciar el celular responde SIN_MENSAJERIA y no gasta SMS (D5)', async () => {
@@ -210,12 +199,12 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     const ctxEsp: TenantContext = { negocioId, sucursalIds: [sucursalId], rol: RolUsuario.Especialista, usuarioId: u.id };
 
     const pausado = construir(true);
-    const enviosAntes = verify.envios.length;
+    const enviosAntes = bienvenidas.length;
     await expect(pausado.miTelefonoIniciar(ctxEsp, '3009998877')).rejects.toMatchObject({
       status: 409,
       response: expect.objectContaining({ codigo: 'SIN_MENSAJERIA' }),
     });
-    expect(verify.envios.length).toBe(enviosAntes);
+    expect(bienvenidas.length).toBe(enviosAntes);
   });
 
   it('reenviar respeta el cooldown y regenera el enlace (el viejo muere)', async () => {
@@ -264,9 +253,8 @@ describe('Invitación de especialistas por correo (Plan-Correo E5, D4)', () => {
     // Una segunda ficha para el mismo usuario no tiene sentido → 409.
     await expect(equipo.crearMiFicha(ctxAdmin, { sucursalIds: [sucursalId] })).rejects.toMatchObject({ status: 409 });
 
-    // Y puede verificar SU celular con los endpoints `mi/*` siendo admin.
+    // Y puede registrar SU celular con el endpoint `mi/*` siendo admin.
     await servicio.miTelefonoIniciar(ctxAdmin, '3015556677');
-    await servicio.miTelefonoConfirmar(ctxAdmin, CODIGO_VERIFY_MOCK);
     const [conTel] = await adminDb.select().from(especialista).where(eq(especialista.id, ficha.id));
     expect(conTel.telefono).toBe('+573015556677');
     expect(conTel.telefonoVerificadoEn).toBeInstanceOf(Date);

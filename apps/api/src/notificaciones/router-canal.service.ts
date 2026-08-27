@@ -106,8 +106,7 @@ export class RouterCanalService {
   /**
    * Content SID de la plantilla WhatsApp para ese evento: la fila del negocio
    * (si la personalizó) prevalece; sin ella, el default de plataforma del
-   * perfil (`TWILIO_WA_TPL_*`, AM-3). El `otp` no es personalizable por negocio
-   * (no existe en el enum del panel): solo tiene default de plataforma.
+   * perfil (`TWILIO_WA_TPL_*`, AM-3).
    */
   private async contentSid(
     negocioId: string,
@@ -115,7 +114,6 @@ export class RouterCanalService {
     perfil: PerfilRemitente,
   ): Promise<string | undefined> {
     const porDefecto = perfil.waTemplates?.[evento];
-    if (evento === 'otp') return porDefecto;
     const [fila] = await runInTenantTx({ negocioId, sucursalIds: null, rol: 'sistema' }, (tx) =>
       tx
         .select({ sid: plantillaMensaje.whatsappContentSid, activo: plantillaMensaje.activo })

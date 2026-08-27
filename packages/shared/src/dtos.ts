@@ -113,23 +113,6 @@ export interface RetencionResp {
   expiraEn: string;
 }
 
-/** Respuesta de `otp/enviar` (devCode solo en desarrollo). */
-export interface OtpResp {
-  /** false = no salió ningún SMS; el código viaja en `devCode` para mostrarlo. */
-  enviado: boolean;
-  /**
-   * false = el teléfono ya es cliente del negocio: no hace falta código y la
-   * reserva puede confirmarse directamente. El código solo se pide la primera
-   * vez que un número reserva en el negocio.
-   */
-  requerido: boolean;
-  /**
-   * Código en claro. Solo llega cuando la mensajería no está operativa (sin
-   * proveedor configurado o con el saldo pausado): sin esto nadie podría
-   * completar una reserva. Con la mensajería en marcha va siempre `undefined`.
-   */
-  devCode?: string;
-}
 
 /** Respuesta de `confirmar`. */
 export interface ConfirmarResp {
@@ -251,8 +234,9 @@ export interface EspecialistaEquipo {
   fotoVersion: string | null;
   /** Login enlazado (Plan-Correo E5): null = aún sin acceso al panel. */
   usuarioId: string | null;
-  /** Celular en E.164 o null; verificado solo si `telefonoVerificadoEn` existe. */
+  /** Celular en E.164 o null. Sin OTP: registrado = habilitado para avisos. */
   telefono: string | null;
+  /** Fecha de registro del celular (histórico; ya no hay verificación por código). */
   telefonoVerificadoEn: string | null;
 }
 

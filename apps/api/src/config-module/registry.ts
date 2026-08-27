@@ -163,14 +163,6 @@ export const REGISTRY: Record<string, DefinicionClave> = {
     defaults: { [PerfilNegocio.Salon]: 'auto', [PerfilNegocio.Barberia]: 'auto' },
     descripcion: 'Canal preferido para las campañas de marketing.',
   }),
-  'mensajeria.canal_otp': def({
-    clave: 'mensajeria.canal_otp',
-    tipo: 'enum',
-    enumValores: ['auto', 'sms', 'whatsapp'],
-    nivelMinimoEdicion: NivelConfig.Negocio,
-    defaults: { [PerfilNegocio.Salon]: 'auto', [PerfilNegocio.Barberia]: 'auto' },
-    descripcion: 'Canal preferido para el código de verificación de la reserva.',
-  }),
   // Las claves 'agendamiento.recordatorio_24h' y 'agendamiento.ventana_recordatorio_horas'
   // se retiraron: el único recordatorio del sistema es el de 2 horas. Las filas
   // que algún negocio hubiera guardado para ellas quedan huérfanas e inocuas.

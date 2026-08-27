@@ -38,7 +38,6 @@ export const envSchema = z.object({
   TWILIO_MESSAGING_SERVICE_SID: z.string().optional(),
   // WhatsApp Business sender ('whatsapp:+…') y verificación OTP (Verify).
   TWILIO_WHATSAPP_FROM: z.string().optional(),
-  TWILIO_VERIFY_SERVICE_SID: z.string().optional(),
   // Callback de estado de entrega (delivered/failed) → outbox/auditoría FASE-02.
   TWILIO_STATUS_CALLBACK_URL: z.string().optional(),
   // Content SIDs de plantillas WhatsApp aprobadas (Twilio Content Builder).
@@ -47,7 +46,6 @@ export const envSchema = z.object({
   TWILIO_WA_TPL_AVISO: z.string().optional(),
   TWILIO_WA_TPL_AVISO_ESPECIALISTA: z.string().optional(),
   TWILIO_WA_TPL_MARKETING: z.string().optional(),
-  TWILIO_WA_TPL_OTP: z.string().optional(),
 
   // Email (FASE-11 / Plan-Correo) — SendGrid (opcional).
   SENDGRID_API_KEY: z.string().optional(),

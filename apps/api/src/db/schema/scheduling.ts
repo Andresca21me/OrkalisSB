@@ -116,15 +116,3 @@ export const servicioDia = pgTable(
   }),
 );
 
-/** Código OTP para identificar al cliente final sin cuenta (FASE-08). */
-export const otpCodigo = pgTable('otp_codigo', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  // Nullable hasta resolver el negocio/sucursal del flujo público.
-  negocioId: uuid('negocio_id').references(() => negocio.id, { onDelete: 'cascade' }),
-  telefono: text('telefono').notNull(),
-  codigoHash: text('codigo_hash').notNull(),
-  expiraEn: timestamp('expira_en', { withTimezone: true }).notNull(),
-  intentos: integer('intentos').notNull().default(0),
-  consumido: boolean('consumido').notNull().default(false),
-  creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
-});

@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { FinanzasModule } from '../finanzas/finanzas.module';
 import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 import { DisponibilidadService } from './disponibilidad.service';
-import { OtpService } from './otp.service';
 import { PublicAgendamientoService } from './public-agendamiento.service';
 import { AgendamientoService } from './agendamiento.service';
 import { AvisosEspecialistaService } from './avisos-especialista.service';
@@ -14,13 +13,12 @@ import { PublicAgendamientoController } from './public-agendamiento.controller';
 import { AgendamientoController } from './agendamiento.controller';
 import { HorarioController } from './horario.controller';
 
-/** Agendamiento (FASE-08, ADR-005): disponibilidad, reserva pública+OTP, walk-ins. */
+/** Agendamiento (FASE-08, ADR-005): disponibilidad, reserva pública, walk-ins. */
 @Module({
   imports: [FinanzasModule, NotificacionesModule, NegocioModule],
   controllers: [PublicAgendamientoController, AgendamientoController, HorarioController, OgController],
   providers: [
     DisponibilidadService,
-    OtpService,
     PublicAgendamientoService,
     AvisosEspecialistaService,
     AgendamientoService,

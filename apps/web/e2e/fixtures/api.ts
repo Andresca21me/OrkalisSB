@@ -72,7 +72,7 @@ export interface ReservaSembrada {
 }
 
 /**
- * Siembra una reserva confirmada por API (retener → OTP → confirmar). Útil
+ * Siembra una reserva confirmada por API (retener → confirmar (sin OTP)). Útil
  * cuando la prueba quiere OBSERVAR el reflejo de una cita en una vista sin
  * agendar por UI (el agendado por UI se prueba en FASE-02). Devuelve datos
  * únicos para localizar la cita en las vistas observadoras.
@@ -100,13 +100,8 @@ export async function sembrarReserva(
   expect(ret.ok(), 'POST /retener').toBeTruthy();
   const { retencionId } = await ret.json();
 
-  const otp = await request.post(`/api/public/${sucursalId}/otp/enviar`, { data: { telefono } });
-  const { requerido, devCode } = await otp.json();
-  // Un teléfono ya conocido por el negocio confirma sin código (requerido=false).
-  if (requerido !== false) expect(devCode, 'devCode de OTP en dev').toBeTruthy();
-
   const conf = await request.post(`/api/public/${sucursalId}/confirmar`, {
-    data: { retencionId, telefono, nombre, ...(requerido !== false ? { codigoOtp: devCode } : {}), servicioIds: [servicioId] },
+    data: { retencionId, telefono, nombre, servicioIds: [servicioId] },
   });
   expect(conf.status(), await conf.text()).toBe(201);
   const { citaId } = await conf.json();

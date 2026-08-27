@@ -23,7 +23,7 @@ export class AvisosEspecialistaService {
    *
    * Se llama SIEMPRE **post-commit** y **nunca lanza**: la cita ya es un hecho,
    * así que un problema al notificar no puede deshacerla. Si el especialista no
-   * tiene celular verificado (altas anteriores a FASE-06) se omite y se registra.
+   * tiene celular registrado se omite y se registra en el log.
    */
   async avisar(ctx: TenantContext, citaId: string, motivo: string): Promise<void> {
     try {
@@ -33,7 +33,6 @@ export class AvisosEspecialistaService {
             inicio: cita.inicio,
             sucursalId: cita.sucursalId,
             telefono: especialista.telefono,
-            verificadoEn: especialista.telefonoVerificadoEn,
             especialistaNombre: especialista.nombre,
             sucursalNombre: sucursal.nombre,
             clienteNombre: cliente.nombre,
@@ -46,8 +45,8 @@ export class AvisosEspecialistaService {
           .limit(1),
       );
       if (!d) return;
-      if (!d.telefono || !d.verificadoEn) {
-        this.logger.log(`Cita ${citaId}: especialista sin celular verificado, no se avisa.`);
+      if (!d.telefono) {
+        this.logger.log(`Cita ${citaId}: especialista sin celular registrado, no se avisa.`);
         return;
       }
       await this.notificaciones.encolarAvisoEspecialista(

@@ -298,7 +298,7 @@ function MensajeriaCard() {
           </div>
           <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '20px' }}>
             {pausada
-              ? `${estado.motivo ?? 'Pausada.'} Mientras tanto los códigos se muestran en pantalla y no se envían recordatorios.`
+              ? `${estado.motivo ?? 'Pausada.'} Las confirmaciones quedan en cola y los recordatorios no se programan hasta reanudar.`
               : estado.presupuesto > 0
                 ? `${num(estado.consumidos)} de ${num(estado.presupuesto)} segmentos usados · quedan ${num(estado.restantes ?? 0)}.`
                 : 'Sin tope declarado: no se cortará sola. Fija los segmentos comprados para que se pause al agotarse.'}

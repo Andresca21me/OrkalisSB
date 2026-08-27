@@ -4,7 +4,7 @@ import { RolUsuario, type EspecialistaEquipo } from '@orkalis/shared';
 import { api, ApiError } from '../../lib/api';
 import { hora, hoyISO, money, sumarDiasISO } from '../../lib/format';
 import { useAuth, useMiFoto } from '../../lib/auth';
-import { borrarMiFoto, miTelefonoConfirmar, miTelefonoIniciar, subirMiFoto } from '../../lib/useEquipo';
+import { borrarMiFoto, miTelefonoIniciar, subirMiFoto } from '../../lib/useEquipo';
 import { EditorFoto } from '../../ui/EditorFoto';
 import { rangoDiaBogota } from '../../lib/useCitas';
 import { useGananciasDetalle } from '../../lib/useEspecialista';
@@ -330,19 +330,18 @@ export function PerfilSpec({ disponible, onToggleDisp, sucursales, sucActivaId, 
 }
 
 /**
- * Verificación del celular del propio especialista (Plan-Correo E5, D5).
- * Aparece solo mientras el celular no esté verificado — el caso típico es
- * haber pulsado «Lo haré después» en la invitación, o que la mensajería
- * estuviera pausada ese día. Sin celular verificado no llegan los avisos de
- * citas nuevas/canceladas.
+ * Registro del celular del propio especialista, SIN códigos (los OTP se
+ * retiraron): se guarda el número y llega un mensaje de prueba — si llega, el
+ * número quedó bien; si no, se corrige aquí mismo y se reenvía. Aparece
+ * mientras no haya celular registrado; tras enviarlo queda un paso de
+ * comprobación con opción de corregir el número.
  */
 function VerificarCelularCard() {
   const { usuario } = useAuth();
   const toast = useToast();
   const [esp, setEsp] = useState<EspecialistaEquipo | null>(null);
-  const [paso, setPaso] = useState<'aviso' | 'celular' | 'codigo' | 'listo'>('aviso');
+  const [paso, setPaso] = useState<'aviso' | 'celular' | 'enviado' | 'listo'>('aviso');
   const [celular, setCelular] = useState('');
-  const [codigo, setCodigo] = useState('');
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
@@ -352,7 +351,7 @@ function VerificarCelularCard() {
       .catch(() => { /* sin datos no se muestra nada */ });
   }, [usuario?.especialistaId]);
 
-  if (!esp || esp.telefonoVerificadoEn || paso === 'listo') return null;
+  if (!esp || (esp.telefono && paso === 'aviso') || paso === 'listo') return null;
 
   async function enviar() {
     const digitos = celular.replace(/\D/g, '').replace(/^57/, '');
@@ -360,22 +359,10 @@ function VerificarCelularCard() {
     setOcupado(true);
     try {
       await miTelefonoIniciar(digitos);
-      setPaso('codigo');
+      setPaso('enviado');
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) toast('La mensajería está pausada; inténtalo más tarde.', 'warning');
       else toast((e as Error).message, 'error');
-    } finally { setOcupado(false); }
-  }
-
-  async function confirmar() {
-    if (codigo.trim().length < 4) return;
-    setOcupado(true);
-    try {
-      await miTelefonoConfirmar(codigo.trim());
-      toast('¡Celular verificado! Ya te llegarán los avisos de tu agenda.', 'success');
-      setPaso('listo');
-    } catch (e) {
-      toast((e as Error).message, 'error');
     } finally { setOcupado(false); }
   }
 
@@ -384,26 +371,27 @@ function VerificarCelularCard() {
       <div style={{ display: 'flex', gap: 10 }}>
         <Icon name="smartphone" size={18} color="#B45309" style={{ flex: 'none', marginTop: 2 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>Verifica tu celular</div>
+          <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>Registra tu celular</div>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 2 }}>
-            Sin él no podemos avisarte cuando te agenden, cancelen o muevan una cita.
+            {paso === 'enviado'
+              ? 'Te enviamos un mensaje de prueba. Si te llegó, tu número quedó listo; si no, corrígelo y vuelve a enviarlo.'
+              : 'Sin él no podemos avisarte cuando te agenden, cancelen o muevan una cita.'}
           </div>
 
           {paso === 'aviso' && (
-            <Button size="sm" variant="secondary" style={{ marginTop: 10 }} onClick={() => setPaso('celular')}>Verificar ahora</Button>
+            <Button size="sm" variant="secondary" style={{ marginTop: 10 }} onClick={() => setPaso('celular')}>Registrar ahora</Button>
           )}
           {paso === 'celular' && (
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
               <input value={celular} onChange={(e) => setCelular(e.target.value)} placeholder="300 123 4567" inputMode="tel"
                 style={{ flex: 1, minWidth: 150, height: 36, padding: '0 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }} />
-              <Button size="sm" loading={ocupado} onClick={() => void enviar()}>Enviar código</Button>
+              <Button size="sm" loading={ocupado} onClick={() => void enviar()}>Guardar y probar</Button>
             </div>
           )}
-          {paso === 'codigo' && (
+          {paso === 'enviado' && (
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              <input value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="Código SMS" inputMode="numeric"
-                style={{ flex: 1, minWidth: 120, height: 36, padding: '0 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--surface-card)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', letterSpacing: '0.15em', color: 'var(--text-primary)' }} />
-              <Button size="sm" loading={ocupado} disabled={codigo.trim().length < 4} onClick={() => void confirmar()}>Confirmar</Button>
+              <Button size="sm" onClick={() => setPaso('listo')}>Me llegó, todo bien</Button>
+              <Button size="sm" variant="secondary" onClick={() => setPaso('celular')}>No llegó · corregir número</Button>
             </div>
           )}
         </div>

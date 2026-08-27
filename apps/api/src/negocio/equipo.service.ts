@@ -44,10 +44,9 @@ import { filtrarPorServicios } from '../agendamiento/validators/capacidades';
 export type AccionBaja = 'reasignar' | 'cancelar';
 
 /** Credenciales opcionales del login del especialista (Gestión, Plan-Pagos). */
-/** Opciones del alta (FASE-06 añade teléfono verificado y apellidos). */
+/** Opciones del alta. */
 export interface OpcionesCrearEspecialista {
   telefono?: string;
-  telefonoVerificadoEn?: Date;
   apellidos?: string;
   credenciales?: CredencialesEspecialista;
   /** Servicios que realiza. Vacío/ausente = todos (sin restricción). */
@@ -139,7 +138,6 @@ export class EquipoService {
           especialidad,
           apellidos: opciones.apellidos,
           telefono: opciones.telefono,
-          telefonoVerificadoEn: opciones.telefonoVerificadoEn,
         })
         .returning();
       if (sucursalIds.length) {

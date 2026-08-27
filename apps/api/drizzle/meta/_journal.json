@@ -176,6 +176,13 @@
       "when": 1785547567852,
       "tag": "0024_equal_black_cat",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787845776446,
+      "tag": "0025_shocking_zodiak",
+      "breakpoints": true
     }
   ]
 }

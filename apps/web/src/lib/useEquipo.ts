@@ -124,10 +124,6 @@ export function miTelefonoIniciar(celular: string): Promise<{ ok: true }> {
   return api.post('/especialistas/mi/telefono/iniciar', { celular });
 }
 
-/** Comprueba el código y deja el celular verificado (habilita avisos de agenda). */
-export function miTelefonoConfirmar(codigo: string): Promise<{ ok: true }> {
-  return api.post('/especialistas/mi/telefono/confirmar', { codigo });
-}
 
 /** Sube o reemplaza la foto del especialista (data URL ya reducido). */
 export function subirFotoEspecialista(id: string, dataUrl: string): Promise<{ fotoVersion: string }> {

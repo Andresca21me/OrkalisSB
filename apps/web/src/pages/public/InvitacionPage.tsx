@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { miTelefonoConfirmar, miTelefonoIniciar } from '../../lib/useEquipo';
+import { miTelefonoIniciar } from '../../lib/useEquipo';
 import { Button, Icon } from '../../ui';
 import { GField, GInput } from '../onboarding/onboarding-ui';
 import { CargandoEnlace, EstadoEnlace, TarjetaEnlace } from './correo-ui';
@@ -12,7 +12,7 @@ type Info =
   | { estado: 'usada' }
   | { estado: 'invalida' };
 
-type Paso = 'cargando' | 'password' | 'celular' | 'codigo' | 'listo' | 'usada' | 'invalida';
+type Paso = 'cargando' | 'password' | 'celular' | 'enviado' | 'listo' | 'usada' | 'invalida';
 
 /**
  * Activación de la cuenta del especialista (Plan-Correo E5, D4): desde el
@@ -31,7 +31,6 @@ export function InvitacionPage() {
   const [pass, setPass] = useState('');
   const [confirmar, setConfirmar] = useState('');
   const [celular, setCelular] = useState('');
-  const [codigo, setCodigo] = useState('');
   const [error, setError] = useState<string>();
   const [aviso, setAviso] = useState<string>();
   const [ocupado, setOcupado] = useState(false);
@@ -76,7 +75,7 @@ export function InvitacionPage() {
     }
   }
 
-  async function enviarCodigo() {
+  async function guardarCelular() {
     if (ocupado) return;
     const digitos = celular.replace(/\D/g, '').replace(/^57/, '');
     if (!/^3\d{9}$/.test(digitos)) { setError('Celular de 10 dígitos que empiece por 3.'); return; }
@@ -84,36 +83,21 @@ export function InvitacionPage() {
     setOcupado(true);
     try {
       await miTelefonoIniciar(digitos);
-      setPaso('codigo');
+      setPaso('enviado');
       setAviso(undefined);
     } catch (e) {
-      // Mensajería pausada (D5): se entra igual y se verifica después.
+      // Mensajería pausada (D5): se entra igual y se registra después.
       if (e instanceof ApiError && e.status === 409 && (e.body as { codigo?: string } | null)?.codigo === 'SIN_MENSAJERIA') {
-        setAviso('Ahora mismo no podemos enviar SMS. Podrás verificar tu celular más tarde desde tu panel.');
+        setAviso('Ahora mismo no podemos enviar mensajes. Podrás registrar tu celular más tarde desde tu panel.');
         setPaso('listo');
       } else if (e instanceof ApiError && e.status === 429) setError('Demasiados intentos. Espera un minuto.');
-      else setError(e instanceof Error ? e.message : 'No pudimos enviar el código.');
+      else setError(e instanceof Error ? e.message : 'No pudimos guardar el número.');
     } finally {
       setOcupado(false);
     }
   }
 
-  async function confirmarCodigo() {
-    if (ocupado || codigo.trim().length < 4) return;
-    setError(undefined);
-    setOcupado(true);
-    try {
-      await miTelefonoConfirmar(codigo.trim());
-      setAviso(undefined);
-      setPaso('listo');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Código incorrecto.');
-    } finally {
-      setOcupado(false);
-    }
-  }
-
-  const indicador = paso === 'password' ? 1 : paso === 'celular' || paso === 'codigo' ? 2 : paso === 'listo' ? 3 : 0;
+  const indicador = paso === 'password' ? 1 : paso === 'celular' || paso === 'enviado' ? 2 : paso === 'listo' ? 3 : 0;
 
   return (
     <TarjetaEnlace>
@@ -150,35 +134,30 @@ export function InvitacionPage() {
         <div>
           <h1 style={{ margin: '0 0 6px', fontSize: 'var(--text-lg)', color: 'var(--text-primary)' }}>Tu celular</h1>
           <p style={{ margin: '0 0 22px', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
-            Con él te avisamos de tus citas nuevas, canceladas o reagendadas. Te enviaremos un código por SMS para confirmarlo.
+            Con él te avisamos de tus citas nuevas, canceladas o reagendadas. Te llegará un mensaje de prueba para comprobar que quedó bien.
           </p>
-          <form onSubmit={(e) => { e.preventDefault(); void enviarCodigo(); }} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <form onSubmit={(e) => { e.preventDefault(); void guardarCelular(); }} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <GField label="Celular" error={error}>
-              <GInput value={celular} onChange={setCelular} type="tel" placeholder="300 123 4567" invalid={!!error} autoComplete="tel" onEnter={() => void enviarCodigo()} />
+              <GInput value={celular} onChange={setCelular} type="tel" placeholder="300 123 4567" invalid={!!error} autoComplete="tel" onEnter={() => void guardarCelular()} />
             </GField>
-            <Button type="submit" variant="primary" size="lg" fullWidth loading={ocupado} disabled={ocupado}>Enviarme el código</Button>
-            <button type="button" onClick={() => { setAviso('Puedes verificar tu celular cuando quieras desde tu panel.'); setPaso('listo'); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-tertiary)' }}>
+            <Button type="submit" variant="primary" size="lg" fullWidth loading={ocupado} disabled={ocupado}>Guardar y probar</Button>
+            <button type="button" onClick={() => { setAviso('Puedes registrar tu celular cuando quieras desde tu panel.'); setPaso('listo'); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-tertiary)' }}>
               Lo haré después
             </button>
           </form>
         </div>
       )}
 
-      {paso === 'codigo' && (
+      {paso === 'enviado' && (
         <div>
-          <h1 style={{ margin: '0 0 6px', fontSize: 'var(--text-lg)', color: 'var(--text-primary)' }}>Revisa tus SMS</h1>
+          <h1 style={{ margin: '0 0 6px', fontSize: 'var(--text-lg)', color: 'var(--text-primary)' }}>Revisa tus mensajes</h1>
           <p style={{ margin: '0 0 22px', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
-            Te enviamos un código de 6 dígitos al <strong>{celular}</strong>.
+            Enviamos un mensaje de prueba al <strong>{celular}</strong>. Si te llegó, tu número quedó listo; si no, corrígelo y vuelve a intentarlo.
           </p>
-          <form onSubmit={(e) => { e.preventDefault(); void confirmarCodigo(); }} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <GField label="Código" error={error}>
-              <GInput value={codigo} onChange={(v) => setCodigo(v.replace(/\D/g, '').slice(0, 8))} placeholder="123456" invalid={!!error} onEnter={() => void confirmarCodigo()} />
-            </GField>
-            <Button type="submit" variant="primary" size="lg" fullWidth loading={ocupado} disabled={ocupado || codigo.trim().length < 4}>Confirmar</Button>
-            <button type="button" onClick={() => { setAviso('Puedes verificar tu celular cuando quieras desde tu panel.'); setPaso('listo'); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-tertiary)' }}>
-              Lo haré después
-            </button>
-          </form>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Button variant="primary" size="lg" fullWidth onClick={() => setPaso('listo')}>Me llegó, continuar</Button>
+            <Button variant="secondary" size="lg" fullWidth onClick={() => setPaso('celular')}>No llegó · corregir número</Button>
+          </div>
         </div>
       )}
 

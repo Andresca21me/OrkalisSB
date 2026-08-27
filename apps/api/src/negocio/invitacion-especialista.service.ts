@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { and, eq } from 'drizzle-orm';
 import { RolUsuario } from '@orkalis/shared';
@@ -10,8 +10,7 @@ import { CorreoAuthService } from '../correo/correo-auth.service';
 import { TokenAccionService } from '../correo/token-accion.service';
 import { aE164Colombia } from '../notificaciones/phone';
 import { MensajeriaEstadoService } from '../notificaciones/mensajeria-estado.service';
-import { RemitenteResolver } from '../notificaciones/remitente/remitente.resolver';
-import { VERIFY_PORT, type VerifyPort } from '../notificaciones/verify/verify.port';
+import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { EquipoService } from './equipo.service';
 
 type Especialista = typeof especialista.$inferSelect;
@@ -49,8 +48,7 @@ export class InvitacionEspecialistaService {
     private readonly equipo: EquipoService,
     private readonly correo: CorreoAuthService,
     private readonly tokens: TokenAccionService,
-    private readonly remitente: RemitenteResolver,
-    @Inject(VERIFY_PORT) private readonly verify: VerifyPort,
+    private readonly notificaciones: NotificacionesService,
     private readonly estadoMensajeria: MensajeriaEstadoService,
   ) {}
 
@@ -210,52 +208,32 @@ export class InvitacionEspecialistaService {
     return { ok: true, email: fila.email };
   }
 
-  // ── El propio especialista verifica su celular (paso 2 de la invitación) ────
+  // ── El propio especialista registra su celular (paso 2 de la invitación) ────
 
   /**
-   * Guarda el celular (sin verificar aún) y dispara el código por Twilio
-   * Verify. Con la mensajería pausada responde 409 `SIN_MENSAJERIA` (D5): el
-   * especialista entra igual y lo verifica después desde su panel.
+   * Guarda el celular y le envía un **mensaje de prueba, sin códigos** (los OTP
+   * se retiraron del sistema): si el mensaje llega, el número quedó bien; si
+   * no, el especialista lo corrige aquí mismo y reenvía. El número queda
+   * habilitado para avisos desde ya (`telefonoVerificadoEn` = fecha de
+   * registro, conservado por compatibilidad con datos históricos).
+   *
+   * Con la mensajería pausada responde 409 `SIN_MENSAJERIA` (D5): sin envío no
+   * hay forma de comprobar el número, mejor intentarlo más tarde.
    */
   async miTelefonoIniciar(ctx: TenantContext, celular: string): Promise<{ ok: true }> {
     const telefono = this.normalizarCelular(celular);
     if (this.estadoMensajeria.sinMensajes()) {
       throw new ConflictException({
         codigo: 'SIN_MENSAJERIA',
-        message: 'La mensajería está pausada; verifica tu celular más tarde desde tu panel.',
+        message: 'La mensajería está pausada; registra tu celular más tarde desde tu panel.',
       });
     }
     const id = await this.equipo.miEspecialistaId(ctx);
     await runInTenantTx(ctx, (tx) =>
-      tx.update(especialista).set({ telefono, telefonoVerificadoEn: null, actualizadoEn: new Date() }).where(eq(especialista.id, id)),
+      tx.update(especialista).set({ telefono, telefonoVerificadoEn: new Date(), actualizadoEn: new Date() }).where(eq(especialista.id, id)),
     );
-    // WhatsApp-first: el código llega por WhatsApp y, si el canal no está
-    // disponible para ese destino (sin cuenta de WhatsApp, canal no habilitado
-    // en el Verify Service…), se reintenta por SMS en el acto — es un flujo
-    // interactivo, el especialista está esperando el código en pantalla.
-    const perfil = this.remitente.resolver(ctx.negocioId);
-    try {
-      await this.verify.start(telefono, 'whatsapp', perfil);
-    } catch (e) {
-      this.logger.warn(`Verify por WhatsApp falló (${(e as Error).message}); se reintenta por SMS.`);
-      await this.verify.start(telefono, 'sms', perfil);
-    }
-    return { ok: true };
-  }
-
-  /** Comprueba el código y estampa la verificación (habilita los avisos de agenda). */
-  async miTelefonoConfirmar(ctx: TenantContext, codigo: string): Promise<{ ok: true }> {
-    const id = await this.equipo.miEspecialistaId(ctx);
-    const [esp] = await runInTenantTx(ctx, (tx) => tx.select().from(especialista).where(eq(especialista.id, id)).limit(1));
-    if (!esp?.telefono) throw new BadRequestException('Primero registra tu celular.');
-    if (esp.telefonoVerificadoEn) return { ok: true };
-
-    const ok = await this.verify.check(esp.telefono, codigo.trim(), this.remitente.resolver(ctx.negocioId));
-    if (!ok) throw new BadRequestException('Código incorrecto. Revisa el mensaje recibido e intenta de nuevo.');
-
-    await runInTenantTx(ctx, (tx) =>
-      tx.update(especialista).set({ telefonoVerificadoEn: new Date(), actualizadoEn: new Date() }).where(eq(especialista.id, id)),
-    );
+    const [neg] = await adminDb.select({ nombre: negocio.nombre }).from(negocio).where(eq(negocio.id, ctx.negocioId)).limit(1);
+    await this.notificaciones.encolarBienvenidaEspecialista(ctx.negocioId, telefono, neg?.nombre ?? 'Orkalis');
     return { ok: true };
   }
 

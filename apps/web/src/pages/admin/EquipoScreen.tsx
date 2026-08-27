@@ -320,9 +320,9 @@ function SpecialistCard({ s, sucNombre, servNombre, invitacion, onToggle, onEdit
   const { usuario } = useAuth();
   const esMia = !!usuario && s.usuarioId === usuario.id;
   const acceso = esMia
-    ? ({ tone: 'brand', icon: 'user', label: s.telefonoVerificadoEn ? 'Tú' : 'Tú · celular sin verificar' } as const)
+    ? ({ tone: 'brand', icon: 'user', label: s.telefono ? 'Tú' : 'Tú · sin celular registrado' } as const)
     : s.usuarioId
-      ? ({ tone: 'success', icon: 'check-circle', label: s.telefonoVerificadoEn ? 'Con acceso' : 'Con acceso · celular sin verificar' } as const)
+      ? ({ tone: 'success', icon: 'check-circle', label: s.telefono ? 'Con acceso' : 'Con acceso · sin celular registrado' } as const)
       : invitacion
         ? ({ tone: 'info', icon: 'mail', label: 'Invitación enviada' } as const)
         : ({ tone: 'neutral', icon: 'user-x', label: 'Sin acceso al panel' } as const);

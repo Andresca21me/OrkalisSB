@@ -26,7 +26,7 @@ export class BookingPage {
 
   async elegirPrimerServicio() {
     await this.page.getByTestId('booking-servicio').first().click();
-    await this.page.getByRole('button', { name: 'Continuar' }).click();
+    await this.page.getByRole('button', { name: 'Confirmar reserva' }).click();
   }
 
   async elegirCualquiera() {
@@ -63,28 +63,9 @@ export class BookingPage {
   async ingresarDatos(nombre: string, telefono: string) {
     await this.page.getByPlaceholder('Ej. Daniel Ríos').fill(nombre);
     await this.page.getByPlaceholder('311 845 2210').fill(telefono);
-    await this.page.getByRole('button', { name: 'Continuar' }).click();
+    await this.page.getByRole('button', { name: 'Confirmar reserva' }).click();
   }
 
-  /** Lee el código que la UI muestra en el paso OTP cuando no hay SMS real. */
-  async leerDevCode(): Promise<string> {
-    const demo = this.page.getByText(/Tu código es/);
-    await expect(demo).toBeVisible({ timeout: 15_000 });
-    const txt = (await demo.textContent()) ?? '';
-    const m = txt.match(/(\d{6})/);
-    expect(m, `devCode en "${txt}"`).toBeTruthy();
-    return m![1];
-  }
-
-  async escribirOtp(codigo: string) {
-    const casillas = this.page.locator('input[maxlength="1"]');
-    await expect(casillas).toHaveCount(6);
-    for (let i = 0; i < 6; i++) await casillas.nth(i).fill(codigo[i]);
-  }
-
-  async verificar() {
-    await this.page.getByRole('button', { name: 'Verificar y confirmar' }).click();
-  }
 
   get confirmacionHeading() {
     return this.page.getByRole('heading', { name: /¡Cita confirmada!|Solicitud enviada/ });

@@ -2,7 +2,6 @@ import { sql } from 'drizzle-orm';
 import { boolean, customType, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { negocio, sucursal, usuario } from './tenant';
 import { servicio } from './catalog';
-import { estadoVerificacionEnum } from './_shared';
 
 /**
  * Grupo B — Equipo (FASE-03, ADR-001).
@@ -94,35 +93,3 @@ export const especialistaFoto = pgTable('especialista_foto', {
   actualizadoEn: timestamp('actualizado_en', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/**
- * Alta de especialista en curso, pendiente de verificar el celular (FASE-06, D3).
- *
- * El especialista **no existe** hasta que el código es correcto: aquí se guarda
- * el borrador de sus datos. Así un alta abandonada no deja registros a medias ni
- * consume cupo del plan.
- *
- * `datos_borrador` NUNCA guarda la contraseña en claro: si el alta incluye
- * acceso al panel, se guarda ya el hash argon2.
- */
-export const verificacionEspecialista = pgTable('verificacion_especialista', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  negocioId: uuid('negocio_id')
-    .notNull()
-    .references(() => negocio.id, { onDelete: 'cascade' }),
-  telefono: text('telefono').notNull(),
-  datosBorrador: jsonb('datos_borrador').$type<Record<string, unknown>>().notNull(),
-  estado: estadoVerificacionEnum('estado').notNull().default('pendiente'),
-  intentos: integer('intentos').notNull().default(0),
-  reenvios: integer('reenvios').notNull().default(0),
-  /**
-   * Código generado por NOSOTROS, hasheado, cuando la mensajería está en modo
-   * sin mensajes. Normalmente el código lo gestiona Twilio Verify y nunca lo
-   * conocemos; si no hay envíos, se genera aquí y se le enseña al admin en
-   * pantalla para que pueda terminar el alta. `null` = verificación por Verify.
-   */
-  codigoLocalHash: text('codigo_local_hash'),
-  /** Para el cooldown entre reenvíos. */
-  ultimoEnvioEn: timestamp('ultimo_envio_en', { withTimezone: true }).notNull().defaultNow(),
-  expiraEn: timestamp('expira_en', { withTimezone: true }).notNull(),
-  creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
-});

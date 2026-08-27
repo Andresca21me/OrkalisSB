@@ -19,9 +19,6 @@ import { TwilioSmsAdapter } from './adapters/twilio-sms.adapter';
 import { TwilioWhatsappAdapter } from './adapters/twilio-whatsapp.adapter';
 import { SendgridEmailAdapter } from './adapters/sendgrid-email.adapter';
 import { MockAdapter } from './adapters/mock.adapter';
-import { VERIFY_PORT, type VerifyPort } from './verify/verify.port';
-import { TwilioVerifyAdapter } from './verify/twilio-verify.adapter';
-import { MockVerifyAdapter } from './verify/mock-verify.adapter';
 
 /**
  * Notificaciones multicanal (Plan-Mensajeria FASE-01, ADR-007). Los adaptadores
@@ -71,16 +68,7 @@ import { MockVerifyAdapter } from './verify/mock-verify.adapter';
       },
       inject: [ConfigService],
     },
-    {
-      provide: VERIFY_PORT,
-      useFactory: (config: ConfigService<Env, true>): VerifyPort => {
-        const g = <K extends keyof Env>(k: K): Env[K] => config.get(k, { infer: true });
-        const ok = Boolean(g('TWILIO_ACCOUNT_SID') && g('TWILIO_AUTH_TOKEN') && g('TWILIO_VERIFY_SERVICE_SID'));
-        return ok ? new TwilioVerifyAdapter() : new MockVerifyAdapter();
-      },
-      inject: [ConfigService],
-    },
   ],
-  exports: [NotificacionesService, OutboxWorker, AlertasService, PlantillasService, JobQueue, CuposService, MensajeriaEstadoService, RemitenteResolver, VERIFY_PORT],
+  exports: [NotificacionesService, OutboxWorker, AlertasService, PlantillasService, JobQueue, CuposService, MensajeriaEstadoService, RemitenteResolver],
 })
 export class NotificacionesModule {}

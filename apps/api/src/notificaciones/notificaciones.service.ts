@@ -12,9 +12,8 @@ import { plantillas, type DatosCita } from './templates';
 import { valoresDe } from './plantillas.render';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 
-/** Tipos de mensaje que emite el dominio (crece por fase). */
+/** Tipos de mensaje que emite el dominio (crece por fase). El viejo 'otp' se retiró; sus filas históricas siguen en `mensaje`. */
 export type TipoMensaje =
-  | 'otp'
   | 'confirmacion'
   | 'recordatorio'
   | 'aviso'
@@ -61,21 +60,19 @@ export class NotificacionesService implements OnModuleInit {
   }
 
   // ── API de encolado (la usa el dominio) ─────────────────────────────────────
-  async encolarOtp(negocioId: string, telefono: string, codigo: string, ctx: Contexto = {}): Promise<void> {
-    // El OTP también se enruta (WhatsApp-first): su plantilla es de categoría
-    // AUTHENTICATION, cuyas variables son POSICIONALES por exigencia de Meta
-    // ({"1": código}), a diferencia de las nombradas del resto de eventos.
-    const ruta = await this.router.resolver(negocioId, ctx.sucursalId ?? null, 'otp', true);
+  /**
+   * Mensaje de prueba al registrar el celular de un especialista (sin OTP): si
+   * llega, el número quedó bien; si no, hay que corregirlo y reenviar. Va por
+   * SMS directo — es un texto libre sin plantilla aprobada de WhatsApp, y
+   * además prueba el canal de respaldo, que es el que nunca puede fallar.
+   */
+  async encolarBienvenidaEspecialista(negocioId: string, telefono: string, negocioNombre: string, ctx: Contexto = {}): Promise<void> {
     await this.encolar(negocioId, {
-      tipo: 'otp',
-      canal: ruta.canal,
-      cupoCanal: ruta.cupoCanal,
-      plantillaClave: ruta.plantillaContentSid,
-      variables: ruta.canal === 'whatsapp' ? { '1': codigo } : undefined,
-      canalPreferido: ruta.canalPreferido,
-      motivoFallback: ruta.motivoFallback,
+      tipo: 'aviso_especialista',
+      canal: 'sms',
+      cupoCanal: 'sms',
       destino: telefono,
-      cuerpo: plantillas.otp(codigo),
+      cuerpo: plantillas.bienvenidaEspecialista(negocioNombre),
       ...ctx,
     });
   }

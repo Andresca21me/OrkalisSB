@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
 import { PublicAgendamientoService } from './public-agendamiento.service';
-import { BuscarCitaDto, ConfirmarDto, EnviarOtpDto, RetenerDto } from './dto/agendamiento.dto';
+import { BuscarCitaDto, ConfirmarDto, RetenerDto } from './dto/agendamiento.dto';
 
 /**
  * Endpoints PÚBLICOS de reserva sin sesión (FASE-08). `:sucursalId` es el slug.
@@ -49,10 +49,15 @@ export class PublicAgendamientoController {
     );
   }
 
+  /**
+   * COMPAT transitoria: el OTP de reserva se eliminó (ya no se piden códigos).
+   * Este stub responde `requerido:false` para que un navegador con el bundle
+   * anterior en caché confirme directo en vez de romperse con un 404.
+   */
   @Post('otp/enviar')
   @HttpCode(200)
-  enviarOtp(@Param('sucursalId') sucursalId: string, @Body() dto: EnviarOtpDto) {
-    return this.service.enviarOtp(sucursalId, dto.telefono);
+  enviarOtp() {
+    return { enviado: false, requerido: false };
   }
 
   @Post('confirmar')
