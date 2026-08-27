@@ -383,12 +383,15 @@ export function RegistroMensajes() {
                         {CANAL_MSG[m.canal]?.label ?? m.canal}
                       </span>
                       {m.canalPreferido && m.canalPreferido !== m.canal && (
-                        // Hubo degradación de canal: se quería el preferido y salió por el actual.
+                        // Hubo degradación de canal: se quería el preferido y salió por el
+                        // actual. El motivo va visible (no solo en tooltip): es el dato que
+                        // responde "¿por qué me llegó por SMS?" sin tener que adivinar.
                         <span
                           title={m.motivoFallback ?? undefined}
-                          style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', cursor: m.motivoFallback ? 'help' : undefined }}
+                          style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', maxWidth: 220, whiteSpace: 'normal' }}
                         >
                           {CANAL_MSG[m.canalPreferido]?.label ?? m.canalPreferido} → {CANAL_MSG[m.canal]?.label ?? m.canal}
+                          {m.motivoFallback ? ` · ${m.motivoFallback}` : ''}
                         </span>
                       )}
                     </td>
