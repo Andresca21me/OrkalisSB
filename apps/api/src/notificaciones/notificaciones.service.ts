@@ -9,7 +9,7 @@ import { PlantillasService } from './plantillas.service';
 import { RouterCanalService } from './router-canal.service';
 import { canalDePago, MensajeriaEstadoService } from './mensajeria-estado.service';
 import { plantillas, type DatosCita } from './templates';
-import { valoresDe } from './plantillas.render';
+import { variablesWa } from './plantillas.render';
 import { METRICAS, MetricsService } from '../observability/metrics.service';
 
 /** Tipos de mensaje que emite el dominio (crece por fase). El viejo 'otp' se retiró; sus filas históricas siguen en `mensaje`. */
@@ -190,7 +190,7 @@ export class NotificacionesService implements OnModuleInit {
       canal: ruta.canal,
       cupoCanal: ruta.cupoCanal,
       plantillaClave: ruta.plantillaContentSid,
-      variables: ruta.canal === 'whatsapp' ? valoresDe(datos) : undefined,
+      variables: ruta.canal === 'whatsapp' ? variablesWa(tipo, datos) : undefined,
       canalPreferido: ruta.canalPreferido,
       motivoFallback: ruta.motivoFallback,
       destino: telefono,

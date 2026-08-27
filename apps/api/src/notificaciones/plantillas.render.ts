@@ -35,6 +35,41 @@ export function valoresDe(d: DatosCita): Record<string, string> {
 }
 
 /**
+ * Variables que declara la plantilla de WhatsApp de cada evento (las
+ * `orkalis_*` aprobadas por Meta vía Content API). Twilio rechaza el envío
+ * ("Content Variables parameter is invalid") si `ContentVariables` trae claves
+ * que la plantilla no declara O valores vacíos — por eso NO se puede mandar
+ * `valoresDe` tal cual: hay que recortar al conjunto exacto y sin huecos.
+ */
+const VARIABLES_WA: Record<EventoPlantilla, string[]> = {
+  confirmacion: ['cliente', 'servicio', 'especialista', 'sucursal', 'fecha'],
+  recordatorio: ['cliente', 'fecha', 'sucursal', 'especialista'],
+  aviso: ['cliente', 'fecha', 'sucursal'],
+  aviso_especialista: ['motivo', 'cliente', 'servicio', 'fecha', 'sucursal'],
+  marketing: ['cliente', 'sucursal'],
+};
+
+/** Relleno neutro cuando el dato falta: Meta no admite variables vacías. */
+const RELLENO_WA: Record<string, string> = {
+  cliente: 'cliente',
+  servicio: 'tu servicio',
+  motivo: 'Novedad en tu agenda',
+};
+
+/**
+ * `ContentVariables` para la plantilla WhatsApp de un evento: exactamente las
+ * claves que la plantilla declara, siempre con valor no vacío.
+ */
+export function variablesWa(evento: EventoPlantilla, datos: DatosCita): Record<string, string> {
+  const valores = valoresDe(datos);
+  const out: Record<string, string> = {};
+  for (const k of VARIABLES_WA[evento] ?? []) {
+    out[k] = valores[k]?.trim() || RELLENO_WA[k] || '-';
+  }
+  return out;
+}
+
+/**
  * Sustituye `{{variable}}` por su valor. Una variable sin valor se sustituye por
  * cadena vacía: nunca se envía el literal `{{…}}` a un cliente real.
  */

@@ -1,5 +1,5 @@
 import { medirSms } from '@orkalis/shared';
-import { renderizar, valoresDe, variablesDe } from './plantillas.render';
+import { renderizar, valoresDe, variablesDe, variablesWa } from './plantillas.render';
 import type { DatosCita } from './templates';
 
 const DATOS: DatosCita = {
@@ -37,6 +37,25 @@ describe('Plantillas de mensaje (FASE-04, D5)', () => {
 
     it('detecta las variables usadas, sin repetir', () => {
       expect(variablesDe('{{cliente}} y {{cliente}} con {{fecha}}')).toEqual(['cliente', 'fecha']);
+    });
+  });
+
+  describe('ContentVariables de WhatsApp (variablesWa)', () => {
+    const DATOS: DatosCita = { clienteNombre: 'Ana', sucursalNombre: 'Sede Centro', especialistaNombre: 'Carlos', servicioNombre: 'Corte', inicio: new Date('2030-03-10T19:00:00Z') };
+
+    it('manda EXACTAMENTE las claves que declara la plantilla del evento', () => {
+      // Twilio rechaza claves de más ("Content Variables parameter is invalid").
+      expect(Object.keys(variablesWa('confirmacion', DATOS)).sort()).toEqual(['cliente', 'especialista', 'fecha', 'servicio', 'sucursal']);
+      expect(Object.keys(variablesWa('aviso', DATOS)).sort()).toEqual(['cliente', 'fecha', 'sucursal']);
+      expect(Object.keys(variablesWa('aviso_especialista', DATOS)).sort()).toEqual(['cliente', 'fecha', 'motivo', 'servicio', 'sucursal']);
+    });
+
+    it('nunca manda valores vacíos (Meta los rechaza): usa relleno neutro', () => {
+      const sinDatos: DatosCita = { sucursalNombre: 'Sede', especialistaNombre: 'Carlos', inicio: new Date('2030-03-10T19:00:00Z') };
+      const v = variablesWa('confirmacion', sinDatos);
+      for (const val of Object.values(v)) expect(val.trim().length).toBeGreaterThan(0);
+      expect(v.cliente).toBe('cliente');
+      expect(v.servicio).toBe('tu servicio');
     });
   });
 

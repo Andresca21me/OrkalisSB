@@ -265,6 +265,14 @@ export class OutboxWorker {
       this.logger.warn(`Mensaje ${fila.id} reintenta en ${segundos}s (intento ${fila.intento}): ${motivo}`);
       return;
     }
+    // Red de seguridad del canal: CUALQUIER fallo terminal de WhatsApp en un
+    // transaccional degrada a SMS, no solo los 63xxx reconocidos (un 21656 por
+    // variables que no cuadran con la plantilla, p. ej., también dejaba al
+    // cliente sin su mensaje). El SMS con el cuerpo ya renderizado siempre vale.
+    if (fila.canal === 'whatsapp' && fila.transaccional && fila.cuerpo) {
+      await this.degradarASms(fila, `WhatsApp falló sin remedio: ${motivo}`);
+      return;
+    }
     await this.marcarFallido(fila, motivo);
   }
 

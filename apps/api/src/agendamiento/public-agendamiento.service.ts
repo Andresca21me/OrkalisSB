@@ -418,7 +418,7 @@ export class PublicAgendamientoService {
 
       // precio estimado = suma de los servicios elegidos.
       const servicios = await tx
-        .select({ id: servicio.id, precio: servicio.precio })
+        .select({ id: servicio.id, nombre: servicio.nombre, precio: servicio.precio })
         .from(servicio)
         .where(inArray(servicio.id, input.servicioIds));
       if (servicios.length !== new Set(input.servicioIds).size) {
@@ -481,6 +481,8 @@ export class PublicAgendamientoService {
           sucursalNombre: suc?.nombre ?? '',
           especialistaNombre: esp?.nombre ?? '',
           clienteNombre: nombreCliente,
+          // Con varios servicios se listan juntos; la plantilla tiene una sola variable.
+          servicioNombre: servicios.map((s) => s.nombre).join(' + '),
           inicio,
         },
       };
