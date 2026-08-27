@@ -109,7 +109,7 @@ multi-tenant **siempre** aplique. Las migraciones/seed usan el rol **dueño**.
    | `THROTTLE_TTL_MS` / `THROTTLE_LIMIT` | opcionales (120 req/min por IP por defecto) |
    | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | SMS real (ver §7). Sin ellas → mock (no envía) |
    | `TWILIO_WHATSAPP_FROM` | Sender de WhatsApp en E.164 **sin** prefijo `whatsapp:` (`+573155909339`). Sin él, todo sale por SMS |
-   | `TWILIO_WA_TPL_CONFIRMACION` / `_RECORDATORIO` / `_AVISO` / `_AVISO_ESPECIALISTA` / `_MARKETING` / `_OTP` | Content SIDs (`HX…`) de las plantillas WhatsApp **aprobadas por Meta**. Son el default de plataforma; sin el SID de un evento, ese evento cae a SMS |
+   | `TWILIO_WA_TPL_CONFIRMACION` / `_RECORDATORIO` / `_AVISO` / `_AVISO_ESPECIALISTA` / `_MARKETING` | Content SIDs (`HX…`) de las plantillas WhatsApp **aprobadas por Meta**. Son el default de plataforma; sin el SID de un evento, ese evento cae a SMS |
    | `SENDGRID_API_KEY` | Correo transaccional real (Plan-Correo). Sin ella → mock (no envía) |
    | `FROM_EMAIL` (o `MAIL_FROM`) | Remitente verificado en SendGrid, p. ej. `orkalis.corporation@orkalis.com`. El código acepta cualquiera de los dos nombres |
    | `APP_URL` | Base pública del frontend para los enlaces de los correos (verificar correo, restablecer contraseña, invitación), p. ej. `https://orkalis.com`. Sin ella se usa `CORS_ORIGIN` |

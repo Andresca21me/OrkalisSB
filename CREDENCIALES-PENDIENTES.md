@@ -30,18 +30,17 @@
 - [x] `TWILIO_AUTH_TOKEN`
 - [x] `TWILIO_FROM_NUMBER` (`+1669…`, long code US trial)
 - [x] `TWILIO_MESSAGING_SERVICE_SID` (se cablea en FASE-01)
-- [x] `TWILIO_VERIFY_SERVICE_SID` (se usa en FASE-06)
+- [x] ~~`TWILIO_VERIFY_SERVICE_SID`~~ — ya NO se usa: los OTP se eliminaron del sistema (2026-08-27); se puede borrar de Railway
 - [x] `TWILIO_WHATSAPP_FROM` — sender `+573155909339` registrado y ONLINE en Twilio
   (perfil «Orkalis», WABA propia). ⚠️ En Railway existía como `TWILIO_WHATSAPP_NUMBER`
   (nombre que el código no lee): la variable correcta es `TWILIO_WHATSAPP_FROM`,
   en E.164 SIN el prefijo `whatsapp:`.
-- [~] `TWILIO_WA_TPL_*` (AM-3) — las 6 plantillas creadas por Content API y **enviadas a
-  aprobación de Meta el 2026-08-03** (`orkalis_confirmacion`, `orkalis_recordatorio`,
-  `orkalis_aviso`, `orkalis_aviso_especialista`, `orkalis_marketing`, `orkalis_otp`
-  — esta última de categoría AUTHENTICATION: Meta genera su texto, no admite cuerpo
-  propio). Los Content SID (no son secretos) se cargan en Railway al aprobarse.
-  Nota: `orkalis_otp_v2` (texto libre creada a mano en la consola) no sirve para
-  OTP — Meta rechaza códigos en plantillas de texto; se dejó sin enviar.
+- [~] `TWILIO_WA_TPL_*` (AM-3) — plantillas por Content API: `orkalis_confirmacion`,
+  `orkalis_recordatorio`, `orkalis_aviso`, `orkalis_aviso_especialista` y
+  `orkalis_marketing` APROBADAS por Meta. La de OTP nunca se aprobó y **ya no hace
+  falta**: los OTP se eliminaron del sistema (2026-08-27). Cargar en Railway los 5
+  Content SID (`TWILIO_WA_TPL_CONFIRMACION/_RECORDATORIO/_AVISO/_AVISO_ESPECIALISTA/_MARKETING`)
+  — sin el SID de un evento, ese evento cae a SMS.
 - [x] `TWILIO_STATUS_CALLBACK_URL` (AM-4) — puesta en Railway:
   `https://api.orkalis.com/api/webhooks/twilio/status`. El endpoint existe y valida la
   firma (responde 403 sin `X-Twilio-Signature` válida). **Falta el lado de Twilio:**
