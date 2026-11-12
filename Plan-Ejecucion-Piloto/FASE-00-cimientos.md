@@ -48,7 +48,33 @@ el lint sin warnings. Esta fase **no cambia comportamiento** del producto.
 - `02-reserva/*` en verde: el flujo completo de reserva vuelve a estar protegido.
 
 ## Qué quedó hecho
-_(Claude lo completa al cerrar la fase: línea base, cambios, resultado del gate.)_
+**Cerrada el 11-nov-2026.**
+
+- **Línea base** (`main` @ `2b69f78`, corrida de la auditoría del mismo día): Jest 415/415;
+  lint con 6 warnings; E2E 133 ✓ / 6 ✘ / 3 omitidas / 1 sin correr.
+- **Rama** `piloto/endurecimiento` creada; el repo quedó conectado con permiso de escritura
+  (Claude puede subir la rama y abrir el Pull Request).
+- **Entorno:** Postgres 16 local desde cero → `db:migrate` → `db:seed`; `apps/api/.env`
+  local (ignorado por git). Para correr Playwright con el Chrome del sistema se usó una
+  config local no versionada (`playwright.local.config.ts`, excluida en `.git/info/exclude`),
+  porque el entorno no puede descargar el navegador de Playwright. En el CI no cambia nada.
+- **Page object** (`booking.page.ts`): el paso 1 pulsa `/^Continuar$/`. Con esto vuelven a
+  verde los 4 specs de `02-reserva` que fallaban.
+- **Intermitente del seed** (`cuenta-suspendida.spec.ts`): 5 de 5 corridas en verde con
+  `--retries=0`. **No reproducible.** El fallo de la auditoría coincidió con una corrida sin
+  `apps/api/.env`, que el fixture necesita.
+- **Lint:** 0 warnings. Se quitaron los imports sin uso en `scheduling.ts`, `team.ts`,
+  `seed.ts` e `inventario.service.ts`, y **un sexto que el plan no listaba**
+  (`correo/correo-auth.service.ts`, `FilaTokenAccion`). Mismo tipo de cambio, sin efecto en
+  el comportamiento.
+- **Gate:** typecheck ✓ · lint 0 warnings ✓ · Jest **415/415** ✓ · build web ✓.
+- **E2E completa:** **139 ✓ / 1 ✘ / 3 omitidas**. El único rojo es
+  `09-finanzas/analisis.spec.ts › exporta el análisis a CSV`, que queda para la FASE-05.
 
 ## Hallazgos para fases futuras
-_(Claude anota aquí lo que vea fuera de alcance.)_
+- Dos E2E marcadas `test.fixme` desde antes de este plan, es decir, funciones que el
+  equipo dejó sin terminar o sin probar:
+  - `05-recepcion/agenda-dia.spec.ts` › exportar el resumen diario (PDF/descarga).
+  - `07-clientes/baja-logica.spec.ts` › reactivar un cliente dado de baja.
+  
+  No bloquean el piloto. Si la barbería pide alguna de las dos, revisar antes de prometerla.

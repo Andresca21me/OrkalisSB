@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, customType, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, customType, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { negocio, sucursal, usuario } from './tenant';
 import { servicio } from './catalog';
 

@@ -84,7 +84,7 @@ locks para crons con varias réplicas, plantilla de WhatsApp con enlace de gesti
 
 ## 5. Tablero
 
-- ⬜ FASE-00 Cimientos
+- ✅ FASE-00 Cimientos (11-nov · gate verde, lint 0 warnings, E2E 139 ✓ / 1 ✘ previsto para FASE-05)
 - ⬜ FASE-01 Reserva pública
 - ⬜ FASE-02 Inicio de sesión
 - ⬜ FASE-03 API pública y observabilidad

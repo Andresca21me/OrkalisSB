@@ -4,7 +4,7 @@ import type { Env } from '../config/env.validation';
 import type { TipoTokenAccion } from '../db/schema';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { correos, type CorreoRenderizado } from './templates-email';
-import { TokenAccionService, type FilaTokenAccion } from './token-accion.service';
+import { TokenAccionService } from './token-accion.service';
 
 /** Ruta pública del frontend que atiende cada tipo de enlace (Plan-Correo §2.6). */
 const RUTA: Record<TipoTokenAccion, string> = {

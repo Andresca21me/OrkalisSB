@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, lte, sql } from 'drizzle-orm';
 import type { MovimientoInventarioItem, HistorialVentasResp, VentaProductoHistorial } from '@orkalis/shared';
 import { TipoGasto, TipoProducto } from '@orkalis/shared';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';

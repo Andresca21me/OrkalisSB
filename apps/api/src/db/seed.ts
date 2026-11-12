@@ -24,7 +24,6 @@ import {
   especialista,
   especialistaSucursal,
   gasto,
-  liquidacion,
   movimientoInventario,
   negocio,
   producto,

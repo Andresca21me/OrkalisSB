@@ -26,7 +26,7 @@ export class BookingPage {
 
   async elegirPrimerServicio() {
     await this.page.getByTestId('booking-servicio').first().click();
-    await this.page.getByRole('button', { name: 'Confirmar reserva' }).click();
+    await this.page.getByRole('button', { name: /^Continuar$/ }).click();
   }
 
   async elegirCualquiera() {

@@ -4,7 +4,6 @@ import {
   date,
   integer,
   pgTable,
-  text,
   time,
   timestamp,
   unique,
