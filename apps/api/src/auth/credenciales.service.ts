@@ -209,6 +209,9 @@ export class CredencialesService {
           passwordHash,
           actualizadoEn: new Date(),
           emailVerificadoEn: sql`COALESCE(${usuario.emailVerificadoEn}, now())`,
+          // Quien prueba que controla el correo sale del bloqueo por intentos (FASE-02 piloto).
+          intentosFallidos: 0,
+          bloqueadoHasta: null,
         })
         .where(eq(usuario.id, fila.usuarioId!));
       await tx

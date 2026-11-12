@@ -118,6 +118,14 @@ export const usuario = pgTable(
      */
     emailVerificadoEn: timestamp('email_verificado_en', { withTimezone: true }),
     activo: boolean('activo').notNull().default(true),
+    /**
+     * Bloqueo por fuerza bruta (FASE-02 piloto): contraseñas malas SEGUIDAS.
+     * Al llegar al tope se fija `bloqueado_hasta` y el contador vuelve a 0. Un
+     * login correcto o un restablecimiento de contraseña lo reinician.
+     */
+    intentosFallidos: integer('intentos_fallidos').notNull().default(0),
+    /** Mientras sea futuro, el login responde 429 sin mirar la contraseña. */
+    bloqueadoHasta: timestamp('bloqueado_hasta', { withTimezone: true }),
     creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
     actualizadoEn: timestamp('actualizado_en', { withTimezone: true }),
   },

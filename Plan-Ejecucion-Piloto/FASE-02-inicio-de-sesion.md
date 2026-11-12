@@ -64,7 +64,48 @@ contraseñas al día contra la cuenta del dueño de la barbería, y con varias I
 - Con la API local: 6 logins seguidos con contraseña mala → el 6.º responde 429.
 
 ## Qué quedó hecho
-_(Claude lo completa.)_
+**Cerrada el 12-nov-2026 (ORK-67).**
+
+**API**
+- `usuario.intentos_fallidos` (int, default 0) y `usuario.bloqueado_hasta` (timestamptz).
+  Migración `0027_tired_mysterio.sql`, **aditiva**.
+- **Login:** si `bloqueado_hasta` es futuro, responde 429 **antes** de verificar la
+  contraseña. Cada contraseña mala hace **un solo UPDATE atómico** con `CASE`: al llegar a 5
+  fija 15 minutos de bloqueo y pone el contador en 0. Un login correcto lo limpia todo.
+- **Desvío menor del plan:** el plan decía "el 6.º intento da 429". Quedó **el 5.º intento
+  fallido ya responde 429**, para que el dueño de la cuenta se entere en ese momento. El
+  criterio ("al 6.º no entra") se sigue cumpliendo. Con `curl`: intentos 1–4 → 401,
+  5 y 6 → 429.
+- El mensaje del 429 no revela si la contraseña era correcta. Los correos inexistentes
+  siempre dan 401.
+- **Restablecer la contraseña** (`credenciales.service.ts`) pone el contador en 0 y quita
+  el bloqueo.
+- Métrica nueva `login_bloqueados`.
+- `@Throttle` del login: **10/min por IP** con `limitePublico`, importado de
+  `agendamiento/public-agendamiento.controller.ts` (FASE-01). Hereda `THROTTLE_LIMIT` si se
+  subió.
+- **Paso 6 (revisión):** cambiar y restablecer la contraseña ya revocaban **todas** las
+  sesiones, y ya había pruebas que lo cubren (`auth.e2e.spec.ts`: "olvido → enlace → nueva
+  contraseña → sesiones viejas revocadas" y "cambiar contraseña exige la actual y revoca
+  las sesiones"). Sin cambios.
+
+**Web**
+- La pantalla "Acceso bloqueado temporalmente" ya existía, pero contaba 4:54. Ahora cuenta
+  **15:00**, igual que la API, y tiene el botón **"Restablecer contraseña"**, que desbloquea
+  de inmediato.
+
+**Fuera del alcance listado (mínimo):** `observability/metrics.service.ts`, solo para
+registrar `login_bloqueados`, como pedía el paso 3.
+
+**Pruebas**
+- Spec nuevo `auth/bloqueo.spec.ts` con **6 pruebas** HTTP. Se escribió primero y falló
+  antes de implementar. Cubre: bloqueo, expiración, reinicio por login correcto,
+  desbloqueo por restablecimiento, correo inexistente y 5 intentos en paralelo.
+- **Gate:** typecheck ✓ · lint 0 warnings ✓ · Jest **433/433** ✓ · build web ✓.
+- **E2E `01-auth`:** 17/17 ✓.
 
 ## Hallazgos para fases futuras
-_(Claude anota aquí.)_
+- `limitePublico` vive en el controlador público de agendamiento y ahora lo usa también
+  auth. Conviene moverlo a `common/` (refactor post-piloto, sin cambiar comportamiento).
+- La prueba del bloqueo de la guía (Parte E, E7) debe hacerse con un usuario de prueba,
+  nunca con el del dueño: lo deja 15 minutos fuera, salvo que restablezca la contraseña.

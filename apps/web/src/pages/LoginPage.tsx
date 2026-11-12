@@ -111,7 +111,7 @@ export function LoginPage() {
           {vista === 'suspendida' ? (
             <SuspendedNotice motivo={motivoBloqueo} onVolver={() => window.location.reload()} />
           ) : vista === 'bloqueo' ? (
-            <LockedNotice />
+            <LockedNotice onOlvido={() => setEstado('olvido')} />
           ) : vista === 'olvido' ? (
             <OlvidoNotice emailInicial={email} onVolver={() => setEstado('normal')} />
           ) : (
@@ -363,9 +363,11 @@ function OlvidoNotice({ emailInicial, onVolver }: { emailInicial: string; onVolv
   );
 }
 
-// Bloqueo por intentos (cuenta regresiva).
-function LockedNotice() {
-  const [secs, setSecs] = useState(294);
+// Bloqueo por intentos (cuenta regresiva). La API bloquea 15 min tras 5
+// contraseñas malas seguidas (FASE-02 piloto); restablecer la contraseña desbloquea.
+const SEGUNDOS_BLOQUEO = 15 * 60;
+function LockedNotice({ onOlvido }: { onOlvido: () => void }) {
+  const [secs, setSecs] = useState(SEGUNDOS_BLOQUEO);
   useEffect(() => {
     const id = setInterval(() => setSecs((s) => (s > 0 ? s - 1 : 0)), 1000);
     return () => clearInterval(id);
@@ -390,6 +392,10 @@ function LockedNotice() {
           </div>
         </div>
       </div>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', margin: '18px 0 10px' }}>
+        ¿No recuerdas tu contraseña? Restablecerla desbloquea tu cuenta de inmediato.
+      </p>
+      <Button variant="secondary" fullWidth onClick={onOlvido}>Restablecer contraseña</Button>
     </div>
   );
 }

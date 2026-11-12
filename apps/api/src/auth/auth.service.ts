@@ -3,13 +3,15 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { EstadoSuscripcion, PerfilNegocio, RolUsuario, tieneAcceso, type SesionUsuario } from '@orkalis/shared';
 import { adminDb } from '../db/admin-client';
 import {
@@ -77,6 +79,19 @@ export interface RegistroResult extends TokenPair {
  * tokens ocurre antes de tener `TenantContext`. El resto del dominio NUNCA usa
  * adminDb: opera con la conexión de app + `runInTenantTx` (FASE-04).
  */
+/** Contraseñas malas seguidas antes de bloquear la cuenta (FASE-02 piloto). */
+export const MAX_INTENTOS_LOGIN = 5;
+/** Duración del bloqueo por intentos fallidos. */
+export const MINUTOS_BLOQUEO_LOGIN = 15;
+
+/** 429 del login bloqueado: no revela si la contraseña era correcta. */
+function cuentaBloqueada(): HttpException {
+  return new HttpException(
+    `Demasiados intentos. Espera ${MINUTOS_BLOQUEO_LOGIN} minutos o restablece tu contraseña.`,
+    HttpStatus.TOO_MANY_REQUESTS,
+  );
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -203,8 +218,34 @@ export class AuthService {
     const credsInvalidas = new UnauthorizedException('Credenciales inválidas.');
     if (!u || !u.activo) throw credsInvalidas;
 
+    // Bloqueo por fuerza bruta (FASE-02 piloto): ANTES de verificar la
+    // contraseña, así durante el bloqueo no se puede seguir probando claves
+    // (ni siquiera la correcta sirve hasta que pase la ventana).
+    if (u.bloqueadoHasta && u.bloqueadoHasta.getTime() > Date.now()) throw cuentaBloqueada();
+
     const ok = await argon2.verify(u.passwordHash, password);
-    if (!ok) throw credsInvalidas;
+    if (!ok) {
+      // Un solo UPDATE atómico: dos intentos simultáneos no se pisan el contador.
+      // Al llegar al tope se bloquea y el contador vuelve a 0 para la próxima
+      // ventana. El intento que bloquea ya responde 429: el dueño se entera
+      // en ese momento, no en el siguiente.
+      const [r] = await adminDb
+        .update(usuario)
+        .set({
+          intentosFallidos: sql`CASE WHEN ${usuario.intentosFallidos} + 1 >= ${sql.raw(String(MAX_INTENTOS_LOGIN))} THEN 0 ELSE ${usuario.intentosFallidos} + 1 END`,
+          bloqueadoHasta: sql`CASE WHEN ${usuario.intentosFallidos} + 1 >= ${sql.raw(String(MAX_INTENTOS_LOGIN))} THEN now() + interval '${sql.raw(String(MINUTOS_BLOQUEO_LOGIN))} minutes' ELSE ${usuario.bloqueadoHasta} END`,
+        })
+        .where(eq(usuario.id, u.id))
+        .returning({ bloqueadoHasta: usuario.bloqueadoHasta });
+      if (r?.bloqueadoHasta && r.bloqueadoHasta.getTime() > Date.now()) {
+        this.metrics.inc(METRICAS.loginBloqueados);
+        throw cuentaBloqueada();
+      }
+      throw credsInvalidas;
+    }
+    if (u.intentosFallidos > 0 || u.bloqueadoHasta) {
+      await adminDb.update(usuario).set({ intentosFallidos: 0, bloqueadoHasta: null }).where(eq(usuario.id, u.id));
+    }
 
     // NO se bloquea aquí: una cuenta sin acceso obtiene una sesión LIMITADA para
     // poder pagar en la pantalla de facturación (FASE-11). El bloqueo de los

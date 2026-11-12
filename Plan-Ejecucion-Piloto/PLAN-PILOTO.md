@@ -86,7 +86,7 @@ por SMS directo; llevarlo a WhatsApp requiere código y una plantilla de Meta).
 
 - ✅ FASE-00 Cimientos (11-nov · gate verde, lint 0 warnings, E2E 139 ✓ / 1 ✘ previsto para FASE-05)
 - ✅ FASE-01 Reserva pública (12-nov · token de gestión, enlace por SMS, tope 3 citas, límites por ruta · Jest 427/427, E2E 02/03 15 ✓)
-- ⬜ FASE-02 Inicio de sesión
+- ✅ FASE-02 Inicio de sesión (12-nov · bloqueo 5 intentos/15 min, throttle login 10/min, restablecer desbloquea · Jest 433/433, E2E 01-auth 17 ✓)
 - ⬜ FASE-03 API pública y observabilidad
 - ⬜ FASE-04 Web y sitio público
 - ⬜ FASE-05 Finanzas · exportaciones

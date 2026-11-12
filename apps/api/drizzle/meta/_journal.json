@@ -190,6 +190,13 @@
       "when": 1794502248163,
       "tag": "0026_jazzy_slapstick",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794509015830,
+      "tag": "0027_tired_mysterio",
+      "breakpoints": true
     }
   ]
 }

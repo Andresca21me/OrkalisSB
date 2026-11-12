@@ -16,6 +16,7 @@ import {
 } from './dto/credenciales.dto';
 import { RegistroDto } from './dto/registro.dto';
 import { Public } from './decorators/public.decorator';
+import { limitePublico } from '../agendamiento/public-agendamiento.controller';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import type { TenantContext } from '../db/tenant-context';
 import type { RefreshTokenPayload, TokenPair } from './auth.types';
@@ -27,7 +28,14 @@ export class AuthController {
     private readonly credenciales: CredencialesService,
   ) {}
 
+  /**
+   * Login. Además del bloqueo por cuenta (5 malas → 15 min, en el servicio),
+   * límite por IP de 10/min contra el barrido de muchas cuentas (FASE-02
+   * piloto). Hereda `THROTTLE_LIMIT` si se subió (E2E inician sesión cientos
+   * de veces desde una IP).
+   */
   @Public()
+  @Throttle({ default: { limit: limitePublico(10), ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)
   login(@Body() dto: LoginDto): Promise<TokenPair> {

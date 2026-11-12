@@ -65,6 +65,8 @@ export const METRICAS = {
   exclusionViolaciones: 'concurrencia_exclusion_violaciones',
   notificacionesEnviadas: 'notificaciones_enviadas',
   loginExitosos: 'login_exitosos',
+  /** Cuentas que llegaron al tope de intentos fallidos (FASE-02 piloto). */
+  loginBloqueados: 'login_bloqueados',
   // Outbox de mensajería (FASE-02) — se desglosan por canal con `incPor`.
   mensajesEncolados: 'mensajes_encolados',
   mensajesEnviados: 'mensajes_enviados',

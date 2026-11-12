@@ -171,8 +171,9 @@ Si está en rojo, **no** hagas merge: mándale a Claude el nombre del paso que f
 - [ ] Probar "Buscar" con el celular de otra persona (con su permiso) → no ves su cita.
 - [ ] `https://api.orkalis.com/api/metrics` en el navegador → **ya no** muestra datos
       (404/401).
-- [ ] Login con contraseña mala 6 veces (con un usuario de prueba, **no** el del dueño) →
-      el 6.º dice "Demasiados intentos".
+- [ ] Login con contraseña mala 5 veces (con un usuario de prueba, **no** el del dueño) →
+      al 5.º aparece "Acceso bloqueado temporalmente" con una cuenta regresiva de 15:00.
+      El botón **"Restablecer contraseña"** de esa pantalla lo desbloquea al instante.
 
 **Plan de reversa** (solo si E5 o E7 fallan de forma grave):
 Railway → OrkalisSB → **Deployments** → el deploy anterior → **⋯ → Redeploy**. Haz lo mismo
