@@ -276,15 +276,20 @@ WhatsApp hace falta una plantilla nueva aprobada por Meta (tarda de horas a día
 
 ## Anexo 1 · Crear o restablecer el usuario operador
 
-Solo si en la Parte A no pudiste entrar a `/plataforma`. Necesitas la
-[CLI de Railway](https://docs.railway.com/guides/cli):
-```powershell
-railway login
-railway link            # elige el proyecto de Orkalis y el servicio OrkalisSB
-railway ssh
-```
-Ya dentro del contenedor:
-```sh
-OPERADOR_EMAIL=tu-correo@orkalis.com OPERADOR_PASSWORD='una-clave-de-12+-caracteres' node dist/db/operador.js
-```
-Si `railway ssh` no está disponible en tu plan, avísale a Claude y se busca otra vía.
+Solo si en la Parte A no pudiste entrar a `/plataforma`.
+
+**Ruta recomendada (sin terminal):** recuperar el correo del operador que ya existe.
+1. Railway → servicio **Postgres** → pestaña **Data** → tabla **`usuario`**.
+2. Busca la fila con `rol` = `operador_plataforma` y copia su `email`. Si hay un campo de
+   consulta SQL:
+   ```sql
+   SELECT email, activo FROM usuario WHERE rol = 'operador_plataforma';
+   ```
+3. `https://orkalis.com/login` → **"¿Olvidaste tu contraseña?"** con ese correo → abre el
+   enlace que llega → contraseña nueva.
+
+**Solo si no existe ningún operador o está inactivo:** crearlo con el script dentro del
+contenedor de la API (`railway ssh` → `OPERADOR_EMAIL=… OPERADOR_PASSWORD='…' node
+dist/db/operador.js`). Ojo: `railway ssh` necesita que tu PC resuelva `ssh.railway.com`.
+Si falla con "Could not resolve hostname", es el DNS de tu red; avísale a Claude antes de
+seguir.
