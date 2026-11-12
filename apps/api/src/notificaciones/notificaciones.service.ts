@@ -20,6 +20,8 @@ export type TipoMensaje =
   | 'aviso_especialista'
   | 'marketing'
   | 'alerta'
+  // Enlace para ver/cancelar la cita desde otro dispositivo (FASE-01 piloto):
+  | 'enlace_gestion'
   // Correos de acceso/credenciales (Plan-Correo):
   | 'alta_email'
   | 'reset_password'
@@ -73,6 +75,23 @@ export class NotificacionesService implements OnModuleInit {
       cupoCanal: 'sms',
       destino: telefono,
       cuerpo: plantillas.bienvenidaEspecialista(negocioNombre),
+      ...ctx,
+    });
+  }
+
+  /**
+   * Enlace de gestión de una cita (FASE-01 piloto): lo pide el cliente desde
+   * "Buscar mi cita" y llega a SU celular, que es la prueba de que la cita es
+   * suya. Va por SMS directo: no hay plantilla aprobada de WhatsApp para este
+   * evento (pasarlo por el enrutador de canal es trabajo post-piloto).
+   */
+  async encolarEnlaceGestion(negocioId: string, telefono: string, negocioNombre: string, enlace: string, ctx: Contexto = {}): Promise<void> {
+    await this.encolar(negocioId, {
+      tipo: 'enlace_gestion',
+      canal: 'sms',
+      cupoCanal: 'sms',
+      destino: telefono,
+      cuerpo: plantillas.enlaceGestion(negocioNombre, enlace),
       ...ctx,
     });
   }
@@ -233,7 +252,11 @@ export class NotificacionesService implements OnModuleInit {
     // confirmación. Quedan `pendiente`, el worker no los reclama mientras dure
     // la pausa y, al reanudar, descarta los que ya caducaron (cita pasada).
     if (this.estado.pausada() && canalDePago(fila.canal)) {
-      const puntual = fila.tipo === 'confirmacion' || fila.tipo === 'aviso' || fila.tipo === 'aviso_especialista';
+      const puntual =
+        fila.tipo === 'confirmacion' ||
+        fila.tipo === 'aviso' ||
+        fila.tipo === 'aviso_especialista' ||
+        fila.tipo === 'enlace_gestion';
       if (!puntual) {
         this.logger.debug(`Mensajería pausada: '${fila.tipo}' por ${fila.canal} no se encola (negocio ${negocioId}).`);
         return;

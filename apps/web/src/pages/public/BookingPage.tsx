@@ -52,12 +52,44 @@ function etiquetaDia(iso: string) {
 }
 /** Hora del cliente: 12 h con meridiano ("1:05 p. m."). */
 const horaCorta = hora;
+// ── Tokens de gestión guardados en este navegador (FASE-01 piloto) ──
+// Quien reserva recibe el token secreto de su cita; se guarda aquí para que
+// "Ver mi cita" funcione al instante en el mismo dispositivo. Desde otro
+// dispositivo, el enlace llega por SMS al celular. Se envuelve en try/catch:
+// el almacenamiento del navegador puede no estar disponible (modo privado).
+const MAX_TOKENS_GUARDADOS = 5;
+const claveTokens = (sucursalId: string) => `orkalis:citas:${sucursalId}`;
+function tokensGuardados(sucursalId: string): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(claveTokens(sucursalId)) ?? '[]');
+    return Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+function guardarToken(sucursalId: string, token: string) {
+  try {
+    const lista = [token, ...tokensGuardados(sucursalId).filter((t) => t !== token)].slice(0, MAX_TOKENS_GUARDADOS);
+    localStorage.setItem(claveTokens(sucursalId), JSON.stringify(lista));
+  } catch {
+    /* sin almacenamiento: el enlace por SMS sigue funcionando */
+  }
+}
+function olvidarToken(sucursalId: string, token: string) {
+  try {
+    localStorage.setItem(claveTokens(sucursalId), JSON.stringify(tokensGuardados(sucursalId).filter((t) => t !== token)));
+  } catch {
+    /* nada que hacer */
+  }
+}
+
 function horaBogota(iso: string) {
   return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hour12: false }).format(new Date(iso)));
 }
 
 export function BookingPage() {
-  const { sucursalId = '' } = useParams();
+  // `token` viene del enlace que llega por SMS: /reservar/:sucursalId/gestion/:token
+  const { sucursalId = '', token: tokenRuta } = useParams();
   const toast = useToast();
 
   const [step, setStep] = useState<Step>('inicio');
@@ -67,10 +99,33 @@ export function BookingPage() {
   const [slot, setSlot] = useState<FranjaPublica | null>(null);
   const [contacto, setContacto] = useState({ nombre: '', telefono: '' });
   const [appointment, setAppointment] = useState<CitaPublica | null>(null);
+  // Token de gestión de `appointment`: la única forma de verla/cancelarla.
+  const [token, setToken] = useState<string | null>(null);
   const [reagendando, setReagendando] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   const info = useApi<PublicInfo>(() => api.get(`/public/${sucursalId}/info`, false), [sucursalId]);
+
+  // Entrada por el enlace del SMS: abre directo la gestión de esa cita.
+  useEffect(() => {
+    if (!tokenRuta) return;
+    let vigente = true;
+    api
+      .get<CitaPublica>(`/public/${sucursalId}/gestion/${tokenRuta}`, false)
+      .then((c) => {
+        if (!vigente) return;
+        guardarToken(sucursalId, tokenRuta);
+        setAppointment(c);
+        setToken(tokenRuta);
+        setStep('gestion');
+      })
+      .catch(() => {
+        if (vigente) toast('El enlace no es válido. Pide uno nuevo desde "Ver mi cita".', 'error');
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [sucursalId, tokenRuta]);
   // La reserva pública adopta el tema del negocio que se reserva (un salón se
   // ve en rosa aunque el visitante no tenga sesión).
   useEffect(() => {
@@ -115,6 +170,7 @@ export function BookingPage() {
     setSlot(null);
     setContacto({ nombre: '', telefono: '' });
     setAppointment(null);
+    setToken(null);
     setReagendando(false);
   }
 
@@ -127,17 +183,19 @@ export function BookingPage() {
     setEnviando(true);
     try {
       const r = await api.post<RetencionResp>(`/public/${sucursalId}/retener`, { especialistaId: slot.especialistaId, inicio: slot.inicio, fin: slot.fin }, false);
-      // Reagendar = cancelar la anterior antes de crear la nueva.
-      if (reagendando && appointment) {
-        await api.post(`/public/${sucursalId}/cita/${appointment.id}/cancelar`, undefined, false);
+      // Reagendar = cancelar la anterior (con su token) antes de crear la nueva.
+      if (reagendando && appointment && token) {
+        await api.post(`/public/${sucursalId}/gestion/${token}/cancelar`, undefined, false);
       }
       const conf = await api.post<ConfirmarResp>(
         `/public/${sucursalId}/confirmar`,
         { retencionId: r.retencionId, telefono: datos.telefono, nombre: datos.nombre, servicioIds: servicios },
         false,
       );
-      const detalle = await api.get<CitaPublica>(`/public/${sucursalId}/cita/${conf.citaId}`, false);
+      guardarToken(sucursalId, conf.tokenGestion);
+      const detalle = await api.get<CitaPublica>(`/public/${sucursalId}/gestion/${conf.tokenGestion}`, false);
       setAppointment(detalle);
+      setToken(conf.tokenGestion);
       setReagendando(false);
       setStep('confirmacion');
       return true;
@@ -156,10 +214,10 @@ export function BookingPage() {
   }
 
   async function cancelar() {
-    if (!appointment) return;
+    if (!appointment || !token) return;
     try {
-      await api.post(`/public/${sucursalId}/cita/${appointment.id}/cancelar`, undefined, false);
-      const detalle = await api.get<CitaPublica>(`/public/${sucursalId}/cita/${appointment.id}`, false);
+      await api.post(`/public/${sucursalId}/gestion/${token}/cancelar`, undefined, false);
+      const detalle = await api.get<CitaPublica>(`/public/${sucursalId}/gestion/${token}`, false);
       setAppointment(detalle);
       toast('Tu cita fue cancelada', 'success');
     } catch (e) {
@@ -275,7 +333,7 @@ export function BookingPage() {
           sucursalId={sucursalId}
           info={info.data}
           appointment={appointment}
-          setAppointment={setAppointment}
+          onEncontrada={(c, t) => { setAppointment(c); setToken(t); }}
           onBack={() => setStep('inicio')}
           onReagendar={reagendar}
           onCancelar={cancelar}
@@ -773,22 +831,82 @@ function DetalleRow({ icon, label, value }: { icon: string; label: string; value
 }
 
 // ════════════════════ Gestión ════════════════════
-function Gestion({ sucursalId, info, appointment, setAppointment, onBack, onReagendar, onCancelar, onNueva }: { sucursalId: string; info: PublicInfo; appointment: CitaPublica | null; setAppointment: (c: CitaPublica) => void; onBack: () => void; onReagendar: () => void; onCancelar: () => void; onNueva: () => void }) {
+function Gestion({ sucursalId, info, appointment, onEncontrada, onBack, onReagendar, onCancelar, onNueva }: { sucursalId: string; info: PublicInfo; appointment: CitaPublica | null; onEncontrada: (c: CitaPublica, token: string) => void; onBack: () => void; onReagendar: () => void; onCancelar: () => void; onNueva: () => void }) {
   const toast = useToast();
   const [telefono, setTelefono] = useState('');
   const [buscando, setBuscando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [revisandoGuardadas, setRevisandoGuardadas] = useState(!appointment);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
+  // Mismo dispositivo: si este navegador guardó el token de una cita por venir,
+  // se abre directo, sin pedir el celular.
+  useEffect(() => {
+    if (appointment) return;
+    let vigente = true;
+    (async () => {
+      const ahora = Date.now();
+      let mejor: { c: CitaPublica; t: string } | null = null;
+      for (const t of tokensGuardados(sucursalId)) {
+        try {
+          const c = await api.get<CitaPublica>(`/public/${sucursalId}/gestion/${t}`, false);
+          const porVenir = c.estado !== 'cancelada' && new Date(c.inicio).getTime() >= ahora;
+          if (porVenir && (!mejor || c.inicio < mejor.c.inicio)) mejor = { c, t };
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 404) olvidarToken(sucursalId, t);
+        }
+      }
+      if (!vigente) return;
+      if (mejor) onEncontrada(mejor.c, mejor.t);
+      setRevisandoGuardadas(false);
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, [sucursalId]);
+
+  // Otro dispositivo: el celular NO muestra la cita; solo pide que llegue el
+  // enlace por SMS a ese número (así solo su dueño la ve).
   async function buscar() {
     setBuscando(true);
     try {
-      const c = await api.post<CitaPublica>(`/public/${sucursalId}/cita/buscar`, { telefono: telefono.replace(/\D/g, '') }, false);
-      setAppointment(c);
+      await api.post<{ enviado: true }>(`/public/${sucursalId}/cita/buscar`, { telefono: telefono.replace(/\D/g, '') }, false);
+      setEnviado(true);
     } catch (e) {
       toast((e as Error).message, 'error');
     } finally {
       setBuscando(false);
     }
+  }
+
+  if (!appointment && revisandoGuardadas) {
+    return (
+      <>
+        <AppHeader title="Mi cita" sub={info.negocioNombre} onBack={onBack} />
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner /></div>
+      </>
+    );
+  }
+
+  if (!appointment && enviado) {
+    return (
+      <>
+        <AppHeader title="Mi cita" sub={info.negocioNombre} onBack={onBack} />
+        <ScrollArea>
+          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 10, padding: 14, borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)' }}>
+              <Icon name="info" size={18} color="var(--text-secondary)" style={{ marginTop: 1 }} />
+              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: '21px' }}>
+                Si hay una cita con ese número, te enviamos un enlace por mensaje para verla o cancelarla. Puede tardar un par de minutos.
+              </span>
+            </div>
+          </div>
+        </ScrollArea>
+        <FooterBar>
+          <Button fullWidth variant="secondary" onClick={onBack}>Volver al inicio</Button>
+        </FooterBar>
+      </>
+    );
   }
 
   if (!appointment) {
@@ -798,7 +916,7 @@ function Gestion({ sucursalId, info, appointment, setAppointment, onBack, onReag
         <ScrollArea>
           <div style={{ padding: 20 }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 0, marginBottom: 20 }}>
-              Ingresa el celular con el que reservaste para ver tu cita.
+              Ingresa el celular con el que reservaste y te enviaremos un enlace para ver tu cita.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
               <Campo label="Celular">
@@ -809,7 +927,7 @@ function Gestion({ sucursalId, info, appointment, setAppointment, onBack, onReag
         </ScrollArea>
         <FooterBar>
           <Button fullWidth disabled={buscando || telefono.replace(/\D/g, '').length < 7} onClick={() => void buscar()}>
-            {buscando ? 'Buscando…' : 'Ver mi cita'}
+            {buscando ? 'Enviando…' : 'Enviarme el enlace'}
           </Button>
         </FooterBar>
       </>

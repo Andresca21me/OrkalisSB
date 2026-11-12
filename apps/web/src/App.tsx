@@ -72,6 +72,8 @@ export function App() {
 
         {/* Enlace público de reservas — sin sesión. */}
         <Route path="/reservar/:sucursalId" element={<BookingPage />} />
+        {/* Enlace de gestión que llega por SMS (FASE-01 piloto). */}
+        <Route path="/reservar/:sucursalId/gestion/:token" element={<BookingPage />} />
 
         {/* Enlaces que llegan por correo (Plan-Correo): funcionan con o sin
             sesión — pueden abrirse en otro dispositivo. */}

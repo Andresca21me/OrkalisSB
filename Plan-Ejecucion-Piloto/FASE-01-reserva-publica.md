@@ -115,7 +115,62 @@
 - `curl .../cita/<cualquier-id>/cancelar` → 404.
 
 ## Qué quedó hecho
-_(Claude lo completa.)_
+**Cerrada el 12-nov-2026 (ORK-66).**
+
+**API**
+- `cita.token_gestion`: 64 hex, único, con default en la BD. Migración
+  `0026_jazzy_slapstick.sql`, **aditiva**: las citas existentes reciben cada una su token;
+  verificado sobre 23 citas del seed, 23 tokens distintos.
+- `confirmar` devuelve `tokenGestion`. **Nuevas rutas:** `GET gestion/:token` y
+  `POST gestion/:token/cancelar`. **Eliminadas:** `GET cita/:id` y
+  `POST cita/:id/cancelar`; con `curl` ambas dan 404.
+- `cita/buscar` ahora **siempre** responde `{"enviado":true}`. Si el número tiene una cita
+  por venir, encola un SMS `enlace_gestion` con el enlace, como máximo uno cada 10 minutos
+  por número y sucursal.
+- **Tope:** 3 citas futuras activas por teléfono y negocio (`MAX_CITAS_FUTURAS_POR_TELEFONO`).
+  La 4.ª responde 409 con un mensaje claro; las canceladas no cuentan.
+- `telefonoLocal()`: "300 222 0009", "+57 300…" y "57300…" cuentan como el mismo número.
+- **Límites por minuto y por IP:** `retener` 20, `confirmar` 5, `cita/buscar` 5,
+  `gestion/:token/cancelar` 10. Si se sube `THROTTLE_LIMIT` por encima de 120 (pruebas E2E
+  o IP compartida), las rutas heredan ese techo (`limitePublico`). La API ya tenía
+  `trust proxy`, así que en Railway el límite se cuenta por cliente y no por el proxy.
+
+**Web**
+- La reserva guarda el token en el navegador (`orkalis:citas:<sucursal>`, máximo 5, con
+  try/catch). "Ya tengo una cita" lo abre directo en el mismo dispositivo.
+- Desde otro dispositivo, el formulario por celular ahora dice "Enviarme el enlace" y solo
+  muestra el aviso genérico.
+- Ruta nueva `/reservar/:sucursalId/gestion/:token` (el enlace del SMS). Reagendar y
+  cancelar usan el token.
+
+**Desvío del plan (paso 5), decidido en la sesión:** el enlace sale **siempre por SMS
+directo**, por el mismo camino que la bienvenida a especialistas. No se preparó
+`TWILIO_WA_TPL_ENLACE_GESTION`: pasar este evento por el enrutador de WhatsApp obligaba a
+tocar `router-canal`, el registro de configuración por negocio y `remitente.resolver`,
+demasiado riesgo para el día antes del piloto. La Parte J de la guía se actualizó. Ojo con
+el costo: el SMS lleva un enlace de unos 130 caracteres, así que normalmente son **2
+segmentos**.
+
+**Fuera del alcance listado (necesario y mínimo):**
+- `packages/shared/src/dtos.ts`: `ConfirmarResp.tokenGestion`.
+- `apps/web/e2e/fixtures/api.ts`: `sembrarReserva` devuelve `tokenGestion`.
+
+**Pruebas**
+- Spec nuevo `agendamiento/gestion-publica.spec.ts` con **12 pruebas**. Se escribió primero
+  y falló con el código anterior.
+- **Gate:** typecheck ✓ · lint 0 warnings ✓ · Jest **427/427** ✓ · build web ✓.
+- **E2E** `02-reserva` + `03-flujo-cruzado`: **15 ✓ / 1 omitida**. La omitida ya lo estaba:
+  el seed no tiene días sin cupo. Hay 4 E2E nuevas: buscar no muestra la cita, el enlace
+  abre y cancela, un token inventado no abre nada, y en el mismo dispositivo la cita abre
+  sin pedir el celular.
 
 ## Hallazgos para fases futuras
-_(Claude anota aquí.)_
+- **Post-piloto:** llevar `enlace_gestion` por el enrutador de canal, con plantilla de
+  WhatsApp y una entrada `mensajeria.canal_enlace_gestion` en el registro de configuración.
+- **Post-piloto:** la confirmación de la reserva podría incluir el enlace de gestión.
+  Requiere una plantilla de Meta nueva para la confirmación.
+- La web tiene comentarios `eslint-disable react-hooks/exhaustive-deps` sin el plugin
+  configurado (`ProductosVenta.tsx`), así que `pnpm --filter web lint` falla desde antes.
+  No está en el gate.
+- El stub `POST otp/enviar` (compatibilidad con bundles viejos) puede retirarse después
+  del piloto.

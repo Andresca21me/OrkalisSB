@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import { BadRequestException } from '@nestjs/common';
 import { EstadoCita, OrigenCita, PerfilNegocio, type CitaPublica, type PublicServicio } from '@orkalis/shared';
 import { adminDb } from '../db/admin-client';
@@ -15,6 +15,7 @@ import {
   especialista,
   especialistaFoto,
   especialistaSucursal,
+  mensaje,
   negocio,
   negocioLogo,
   retencionFranja,
@@ -36,6 +37,38 @@ import { METRICAS, MetricsService } from '../observability/metrics.service';
 
 /** Código de error Postgres para violación de restricción EXCLUDE. */
 const EXCLUSION_VIOLATION = '23P01';
+
+/**
+ * Tope anti-abuso (FASE-01 piloto): citas FUTURAS activas (solicitada o
+ * confirmada) que un mismo teléfono puede tener en un negocio. Sin OTP,
+ * cualquiera puede reservar con un número ajeno; este tope evita que un bromista
+ * llene la agenda o dispare mensajes pagos a un tercero sin límite.
+ */
+export const MAX_CITAS_FUTURAS_POR_TELEFONO = 3;
+
+/** Ventana en la que no se reenvía el enlace de gestión al mismo teléfono. */
+const VENTANA_REENVIO_ENLACE_MS = 10 * 60_000;
+
+/** Formato del token de gestión: 64 hex (ver `cita.tokenGestion`). */
+const TOKEN_GESTION = /^[0-9a-f]{64}$/;
+
+/**
+ * Teléfono en la forma con que se guarda la identidad del cliente: los 10
+ * dígitos locales (Colombia). Acepta espacios, guiones, `+57` o `57` delante,
+ * para que "300 123 4567" y "+57 3001234567" sean la misma persona al contar
+ * citas o buscar. Un número que no encaja se devuelve solo con sus dígitos.
+ */
+export function telefonoLocal(telefono: string): string {
+  const d = telefono.replace(/\D/g, '');
+  if (d.length === 12 && d.startsWith('57')) return d.slice(2);
+  return d;
+}
+
+/** Base pública de los enlaces que se mandan por mensaje (igual que el correo). */
+function baseEnlaces(): string {
+  const base = process.env.APP_URL || (process.env.CORS_ORIGIN ?? '').split(',')[0] || 'https://orkalis.com';
+  return base.replace(/\/+$/, '');
+}
 
 /**
  * Flujo de reserva PÚBLICA sin sesión (FASE-08, ADR-005). El `slug` es el id de
@@ -129,37 +162,83 @@ export class PublicAgendamientoService {
     });
   }
 
-  /** Detalle público de una cita (gestión por id). */
-  async detalleCita(sucursalId: string, citaId: string): Promise<CitaPublica> {
+  /**
+   * Id de la cita dueña de un token de gestión, acotado a la sucursal de la
+   * ruta. Token mal formado o ajeno → 404 (mismo mensaje: no se revela si existe).
+   */
+  private async citaIdPorToken(tx: DrizzleTx, sucursalId: string, token: string): Promise<string> {
+    if (!TOKEN_GESTION.test(token)) throw new NotFoundException('Cita no encontrada.');
+    const [c] = await tx
+      .select({ id: cita.id })
+      .from(cita)
+      .where(and(eq(cita.tokenGestion, token), eq(cita.sucursalId, sucursalId)))
+      .limit(1);
+    if (!c) throw new NotFoundException('Cita no encontrada.');
+    return c.id;
+  }
+
+  /** Detalle público de una cita a partir de su token de gestión. */
+  async detallePorToken(sucursalId: string, token: string): Promise<CitaPublica> {
     const ctx = await this.ctxDeSucursal(sucursalId);
-    const detalle = await runInTenantTx(ctx, (tx) => this.cargarDetalle(tx, sucursalId, citaId));
+    const detalle = await runInTenantTx(ctx, async (tx) =>
+      this.cargarDetalle(tx, sucursalId, await this.citaIdPorToken(tx, sucursalId, token)),
+    );
     if (!detalle) throw new NotFoundException('Cita no encontrada.');
     return detalle;
   }
 
-  /** Recupera la cita de un cliente por su teléfono: la próxima vigente o, si ya no tiene ninguna por venir, la más reciente. */
-  async buscarCita(sucursalId: string, telefono: string): Promise<CitaPublica> {
+  /**
+   * "Buscar mi cita" por celular (FASE-01 piloto). YA NO devuelve la cita: si el
+   * número tiene una cita por venir, encola un SMS con el enlace de gestión a
+   * ESE número, de modo que solo su dueño entra. Responde siempre lo mismo
+   * (exista o no la cita) para no revelar quién reservó. No reenvía al mismo
+   * número antes de `VENTANA_REENVIO_ENLACE_MS` (cada SMS cuesta saldo).
+   */
+  async enviarEnlaceGestion(sucursalId: string, telefono: string): Promise<{ enviado: true }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
-    const found = await runInTenantTx(ctx, async (tx) => {
-      const filas = await tx
-        .select({ id: cita.id, inicio: cita.inicio, estado: cita.estado })
+    const tel = telefonoLocal(telefono);
+    const datos = await runInTenantTx(ctx, async (tx) => {
+      const [proxima] = await tx
+        .select({ token: cita.tokenGestion })
         .from(cita)
         .innerJoin(cliente, eq(cliente.id, cita.clienteId))
-        .where(and(eq(cita.sucursalId, sucursalId), eq(cliente.telefono, telefono.trim())))
-        .orderBy(desc(cita.inicio))
-        .limit(50);
-      if (filas.length === 0) return null;
-      const ahora = Date.now();
-      // `filas` viene de más reciente a más antigua: la última "por venir" no
-      // cancelada es la más próxima en el tiempo.
-      const porVenir = filas.filter(
-        (f) => f.estado !== EstadoCita.Cancelada && f.inicio.getTime() >= ahora,
-      );
-      const elegida = porVenir.length > 0 ? porVenir[porVenir.length - 1] : filas[0];
-      return this.cargarDetalle(tx, sucursalId, elegida.id);
+        .where(
+          and(
+            eq(cita.sucursalId, sucursalId),
+            eq(cliente.telefono, tel),
+            gte(cita.inicio, new Date()),
+            inArray(cita.estado, [EstadoCita.Solicitada, EstadoCita.Confirmada]),
+          ),
+        )
+        .orderBy(cita.inicio)
+        .limit(1);
+      if (!proxima) return null;
+      const [reciente] = await tx
+        .select({ id: mensaje.id })
+        .from(mensaje)
+        .where(
+          and(
+            eq(mensaje.tipo, 'enlace_gestion'),
+            eq(mensaje.destino, tel),
+            eq(mensaje.sucursalId, sucursalId),
+            gte(mensaje.creadoEn, new Date(Date.now() - VENTANA_REENVIO_ENLACE_MS)),
+          ),
+        )
+        .limit(1);
+      if (reciente) return null;
+      const [neg] = await tx.select({ nombre: negocio.nombre }).from(negocio).where(eq(negocio.id, ctx.negocioId)).limit(1);
+      return { token: proxima.token, negocioNombre: neg?.nombre ?? '' };
     });
-    if (!found) throw new NotFoundException('No encontramos una cita con ese celular.');
-    return found;
+    if (datos) {
+      await this.notificaciones.encolarEnlaceGestion(
+        ctx.negocioId,
+        tel,
+        datos.negocioNombre,
+        `${baseEnlaces()}/reservar/${sucursalId}/gestion/${datos.token}`,
+        { sucursalId },
+      );
+    }
+    return { enviado: true };
   }
 
   /** Arma el detalle de una cita (servicios, especialista, sede, total). */
@@ -352,8 +431,10 @@ export class PublicAgendamientoService {
   async confirmar(
     sucursalId: string,
     input: { retencionId: string; telefono: string; nombre?: string; servicioIds: string[] },
-  ): Promise<{ citaId: string; estado: EstadoCita }> {
+  ): Promise<{ citaId: string; estado: EstadoCita; tokenGestion: string }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
+    // Identidad del cliente = 10 dígitos locales (ver `telefonoLocal`).
+    input = { ...input, telefono: telefonoLocal(input.telefono) };
 
     const resultado = await runInTenantTx(ctx, async (tx) => {
       // Retención: fuente de la franja. Si no existe → ya usada/expirada (idempotencia).
@@ -416,6 +497,23 @@ export class PublicAgendamientoService {
       // Nombre efectivo tras la posible actualización (variable {{cliente}}).
       const nombreCliente = nombreNuevo || cli.nombre;
 
+      // Tope anti-abuso (FASE-01 piloto): citas futuras activas de este cliente.
+      const [{ activas }] = await tx
+        .select({ activas: sql<number>`count(*)::int` })
+        .from(cita)
+        .where(
+          and(
+            eq(cita.clienteId, cli.id),
+            gte(cita.inicio, new Date()),
+            inArray(cita.estado, [EstadoCita.Solicitada, EstadoCita.Confirmada]),
+          ),
+        );
+      if (activas >= MAX_CITAS_FUTURAS_POR_TELEFONO) {
+        throw new ConflictException(
+          `Ya tienes ${MAX_CITAS_FUTURAS_POR_TELEFONO} citas próximas en este negocio. Cancela una para reservar otra.`,
+        );
+      }
+
       // precio estimado = suma de los servicios elegidos.
       const servicios = await tx
         .select({ id: servicio.id, nombre: servicio.nombre, precio: servicio.precio })
@@ -435,6 +533,7 @@ export class PublicAgendamientoService {
       const estado = aprobacionManual ? EstadoCita.Solicitada : EstadoCita.Confirmada;
 
       let citaId: string;
+      let tokenGestion: string;
       try {
         const [c] = await tx
           .insert(cita)
@@ -449,8 +548,9 @@ export class PublicAgendamientoService {
             origen: OrigenCita.AgendamientoPublico,
             precioEst: precioEst.toFixed(2),
           })
-          .returning({ id: cita.id });
+          .returning({ id: cita.id, tokenGestion: cita.tokenGestion });
         citaId = c.id;
+        tokenGestion = c.tokenGestion;
       } catch (e) {
         if ((e as { code?: string }).code === EXCLUSION_VIOLATION) {
           this.metrics.inc(METRICAS.exclusionViolaciones);
@@ -477,6 +577,7 @@ export class PublicAgendamientoService {
       return {
         citaId,
         estado,
+        tokenGestion,
         notif: {
           sucursalNombre: suc?.nombre ?? '',
           especialistaNombre: esp?.nombre ?? '',
@@ -502,12 +603,18 @@ export class PublicAgendamientoService {
     return {
       citaId: resultado.citaId,
       estado: resultado.estado,
+      // Solo lo recibe quien reserva: con él su navegador gestiona la cita.
+      tokenGestion: resultado.tokenGestion,
     };
   }
 
-  /** Cancela una cita desde el enlace público, respetando la antelación mínima. */
-  async cancelarDesdeEnlace(sucursalId: string, citaId: string): Promise<{ estado: EstadoCita }> {
+  /**
+   * Cancela una cita desde la reserva pública con su token de gestión,
+   * respetando la antelación mínima. Token mal formado o ajeno → 404.
+   */
+  async cancelarPorToken(sucursalId: string, token: string): Promise<{ estado: EstadoCita }> {
     const ctx = await this.ctxDeSucursal(sucursalId);
+    const citaId = await runInTenantTx(ctx, (tx) => this.citaIdPorToken(tx, sucursalId, token));
     const horas = await this.config.resolverNumero(
       ctx.negocioId,
       sucursalId,

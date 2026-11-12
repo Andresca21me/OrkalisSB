@@ -91,9 +91,15 @@ export class BookingPage {
     await this.page.getByRole('button', { name: 'Ya tengo una cita' }).click();
   }
 
-  async buscarCita(telefono: string) {
+  /** "Ya tengo una cita" desde otro dispositivo: pide el enlace por SMS (no muestra la cita). */
+  async pedirEnlaceDeCita(telefono: string) {
     await this.page.getByPlaceholder('311 845 2210').fill(telefono);
-    await this.page.getByRole('button', { name: 'Ver mi cita' }).click();
+    await this.page.getByRole('button', { name: 'Enviarme el enlace' }).click();
+  }
+
+  /** Abre el enlace de gestión que llega por SMS (FASE-01 piloto). */
+  async abrirEnlaceGestion(sucursalId: string, tokenGestion: string) {
+    await this.page.goto(`/reservar/${sucursalId}/gestion/${tokenGestion}`);
   }
 
   async cancelarCita() {

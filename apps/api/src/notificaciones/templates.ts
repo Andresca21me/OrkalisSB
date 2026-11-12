@@ -53,6 +53,10 @@ export const plantillas = {
   bienvenidaEspecialista: (negocioNombre: string): string =>
     `${negocioNombre}: tu número quedó registrado para recibir avisos de tu agenda. Si no esperabas este mensaje, ignóralo.`,
 
+  /** Enlace para ver/cancelar la cita (FASE-01 piloto). Corto y en GSM-7: un segmento con el enlace. */
+  enlaceGestion: (negocioNombre: string, enlace: string): string =>
+    `${negocioNombre}: ve o cancela tu cita aqui ${enlace}`,
+
   confirmacion: (d: DatosCita): string =>
     `¡Reserva confirmada! ${d.servicioNombre ? d.servicioNombre + ' ' : ''}con ${d.especialistaNombre} en ${d.sucursalNombre} el ${formatFechaHora(d.inicio)}.`,
 

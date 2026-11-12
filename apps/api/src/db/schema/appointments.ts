@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { negocio, sucursal } from './tenant';
 import { especialista } from './team';
 import { cliente, servicio } from './catalog';
@@ -42,10 +42,21 @@ export const cita = pgTable(
      * contenedor viejo durante el despliegue; se eliminará en una limpieza.
      */
     recordatorioEnviado: boolean('recordatorio_enviado').notNull().default(false),
+    /**
+     * Secreto para gestionar la cita desde la reserva pública (ver, cancelar,
+     * reagendar) — FASE-01 del piloto. 64 hex (~244 bits de azar, dos UUID v4).
+     * Lo pone la BD por default, así que TODA cita lo tiene (también las creadas
+     * por el personal y las que existían antes de la migración). El `id` de la
+     * cita ya no sirve para gestionarla desde fuera: solo este token.
+     */
+    tokenGestion: text('token_gestion')
+      .notNull()
+      .default(sql`replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')`),
     creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
     actualizadoEn: timestamp('actualizado_en', { withTimezone: true }),
   },
   (t) => ({
+    tokenGestionUnico: unique('cita_token_gestion_uq').on(t.tokenGestion),
     negocioSucursalInicioIdx: index('cita_negocio_sucursal_inicio_idx').on(
       t.negocioId,
       t.sucursalId,

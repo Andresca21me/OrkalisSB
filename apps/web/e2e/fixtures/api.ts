@@ -63,6 +63,8 @@ export async function franjaLibre(
 
 export interface ReservaSembrada {
   citaId: string;
+  /** Secreto de gestión de la cita (FASE-01 piloto): lo que llega en el enlace por SMS. */
+  tokenGestion: string;
   telefono: string;
   nombre: string;
   servicioId: string;
@@ -104,9 +106,9 @@ export async function sembrarReserva(
     data: { retencionId, telefono, nombre, servicioIds: [servicioId] },
   });
   expect(conf.status(), await conf.text()).toBe(201);
-  const { citaId } = await conf.json();
+  const { citaId, tokenGestion } = await conf.json();
 
-  return { citaId, telefono, nombre, servicioId, especialistaId: franja.especialistaId, fecha, franja };
+  return { citaId, tokenGestion, telefono, nombre, servicioId, especialistaId: franja.especialistaId, fecha, franja };
 }
 
 /** Crea un especialista (admin) asignado a las sucursales dadas. Devuelve su id. */

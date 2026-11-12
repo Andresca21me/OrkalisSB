@@ -118,6 +118,8 @@ export interface RetencionResp {
 export interface ConfirmarResp {
   citaId: string;
   estado: EstadoCita;
+  /** Secreto para ver/cancelar/reagendar la cita desde la reserva pública (FASE-01 piloto). */
+  tokenGestion: string;
 }
 
 // ── Agenda interna / Panel admin (FASE-05) ───────────────────────────────────

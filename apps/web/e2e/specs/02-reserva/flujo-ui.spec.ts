@@ -42,16 +42,59 @@ test.describe('Reserva del cliente por la UI', () => {
     await expect(page.getByText('No pudimos abrir la reserva')).toBeVisible({ timeout: 15_000 });
   });
 
-  test('gestionar: buscar mi cita por celular', async ({ page, request }) => {
+  test('otro dispositivo: buscar por celular NO muestra la cita, solo avisa del enlace por SMS', async ({ page, request }) => {
     const { sucursalId, servicioId } = await contexto(request);
     const reserva = await sembrarReserva(request, sucursalId, servicioId);
 
+    // Navegador nuevo (sin tokens guardados) = otro dispositivo.
     const booking = new BookingPage(page);
     await booking.ir(sucursalId);
     await booking.abrirGestionDesdeInicio();
-    await booking.buscarCita(reserva.telefono);
-    // La ficha de la cita cargó: se pueden reagendar/cancelar.
+    await booking.pedirEnlaceDeCita(reserva.telefono);
+    await expect(page.getByText(/te enviamos un enlace por mensaje/i)).toBeVisible({ timeout: 15_000 });
+    // La cita NO aparece: ni acciones ni especialista.
+    await expect(page.getByRole('button', { name: 'Reagendar' })).toHaveCount(0);
+    await expect(page.getByText('Especialista')).toHaveCount(0);
+  });
+
+  test('el enlace de gestión (SMS) abre la cita y permite cancelarla', async ({ page, request }) => {
+    const { sucursalId, servicioId } = await contexto(request);
+    // A partir de MAÑANA: supera la antelación mínima de cancelación (2 h).
+    const reserva = await sembrarReserva(request, sucursalId, servicioId, { desdeDia: 1 });
+
+    const booking = new BookingPage(page);
+    await booking.abrirEnlaceGestion(sucursalId, reserva.tokenGestion);
     await expect(page.getByRole('button', { name: 'Reagendar' })).toBeVisible({ timeout: 15_000 });
+    await booking.cancelarCita();
+    await expect(page.getByText('Esta cita fue cancelada. Puedes reservar una nueva cuando quieras.')).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('un enlace de gestión inventado no abre ninguna cita', async ({ page, request }) => {
+    const { sucursalId } = await contexto(request);
+    const booking = new BookingPage(page);
+    await booking.abrirEnlaceGestion(sucursalId, 'f'.repeat(64));
+    await expect(page.getByText(/enlace no es válido/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Reagendar' })).toHaveCount(0);
+  });
+
+  test('mismo dispositivo: tras reservar, "Ya tengo una cita" la abre sin pedir el celular', async ({ page, request }) => {
+    const { sucursalId, servicioId } = await contexto(request);
+    const { fecha } = await franjaLibre(request, sucursalId, servicioId, 'any', 10, 1);
+
+    const booking = new BookingPage(page);
+    await booking.ir(sucursalId);
+    await booking.comenzarReserva();
+    await booking.elegirPrimerServicio();
+    await booking.elegirCualquiera();
+    await booking.elegirDiaYPrimeraFranja(fecha);
+    await booking.ingresarDatos(nombreUnico('Cliente'), telefonoUnico());
+    await expect(booking.confirmacionHeading).toBeVisible({ timeout: 15_000 });
+
+    // Volver a entrar a la reserva en el mismo navegador.
+    await booking.ir(sucursalId);
+    await booking.abrirGestionDesdeInicio();
+    await expect(page.getByRole('button', { name: 'Reagendar' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByPlaceholder('311 845 2210')).toHaveCount(0);
   });
 
   test('cancelar una cita (con antelación suficiente) la deja cancelada', async ({ page, request }) => {

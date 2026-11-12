@@ -262,15 +262,17 @@ Criterios para dar el testeo por **superado**:
 
 ---
 
-## Parte J (opcional) · Enlace de gestión también por WhatsApp
+## Parte J (después del piloto) · Enlace de gestión también por WhatsApp
 
-Hoy, el enlace para ver o cancelar la cita llega por **SMS**. Para que llegue por
-WhatsApp hace falta una plantilla nueva aprobada por Meta (tarda de horas a días):
-1. Twilio → **Messaging → Content Template Builder → Create new** → tipo *Text*, categoría
-   **Utility**, nombre `orkalis_enlace_gestion`, cuerpo:
-   `Hola, aquí puedes ver o cancelar tu cita en {{1}}: {{2}}`.
-2. Envíala a aprobación. Cuando quede **Approved**, copia su `HX…` en Railway como
-   `TWILIO_WA_TPL_ENLACE_GESTION`. No hace falta tocar código.
+Hoy el enlace para ver o cancelar la cita llega **por SMS**. Normalmente son 2 segmentos,
+porque el enlace es largo. Pasarlo a WhatsApp requiere **dos cosas**, y no son para esta
+semana:
+1. **Código** (Claude, post-piloto): llevar el evento `enlace_gestion` por el enrutador de
+   canal.
+2. **Plantilla de Meta** (tú): Twilio → **Messaging → Content Template Builder → Create
+   new** → tipo *Text*, categoría **Utility**, nombre `orkalis_enlace_gestion`, cuerpo:
+   `Hola, aquí puedes ver o cancelar tu cita en {{1}}: {{2}}`. Cuando quede **Approved**,
+   Claude te dirá en qué variable de Railway pegar su `HX…`.
 
 ---
 

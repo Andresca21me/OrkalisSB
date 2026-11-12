@@ -65,8 +65,8 @@ Marcas usadas en las fases:
 
 **Fuera de este plan (después del piloto):** Mercado Pago en producción, facturación
 electrónica DIAN, mover los tokens de sesión de `localStorage` a cookies `httpOnly`,
-locks para crons con varias réplicas, plantilla de WhatsApp con enlace de gestión
-(se prepara el código en FASE-01, la aprobación de Meta es manual y opcional).
+locks para crons con varias réplicas, enlace de gestión por WhatsApp (en FASE-01 sale
+por SMS directo; llevarlo a WhatsApp requiere código y una plantilla de Meta).
 
 ## 4. Calendario
 
@@ -85,7 +85,7 @@ locks para crons con varias réplicas, plantilla de WhatsApp con enlace de gesti
 ## 5. Tablero
 
 - ✅ FASE-00 Cimientos (11-nov · gate verde, lint 0 warnings, E2E 139 ✓ / 1 ✘ previsto para FASE-05)
-- ⬜ FASE-01 Reserva pública
+- ✅ FASE-01 Reserva pública (12-nov · token de gestión, enlace por SMS, tope 3 citas, límites por ruta · Jest 427/427, E2E 02/03 15 ✓)
 - ⬜ FASE-02 Inicio de sesión
 - ⬜ FASE-03 API pública y observabilidad
 - ⬜ FASE-04 Web y sitio público
