@@ -164,7 +164,7 @@ export function PanelScreen({ onNav }: { onNav: (id: string) => void }) {
       </div>
 
       {cobro && <CobroModal cita={cobro} onClose={() => setCobro(null)} onDone={() => { setCobro(null); toast('Turno completado · ganancias calculadas', 'success'); refrescar(); }} />}
-      {nueva && <NuevaCitaModal sucursalId={sucursalActivaId} fechaIso={hoy} onClose={() => setNueva(false)} onDone={() => { setNueva(false); toast('Cita creada', 'success'); refrescar(); }} />}
+      {nueva && <NuevaCitaModal sucursalId={sucursalActivaId} fechaIso={hoy} onClose={() => setNueva(false)} onDone={(msg) => { setNueva(false); toast(msg ?? 'Cita creada', 'success'); refrescar(); }} />}
     </div>
   );
 }

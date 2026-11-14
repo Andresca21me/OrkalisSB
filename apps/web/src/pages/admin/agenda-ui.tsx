@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CitaAgenda } from '@orkalis/shared';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/useApi';
-import { completarCita, crearCita, revertirCita, type EventoCita, type PagoLinea } from '../../lib/useCitas';
+import { completarCita, crearCita, registrarCitaPasada, revertirCita, type EventoCita, type PagoLinea } from '../../lib/useCitas';
 import { hora, hora24, horaSimple, hoyISO, meridiano, money } from '../../lib/format';
 import { PagoSplit, pagoInicial, sumaPagos } from '../../ui/PagoSplit';
-import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, ProductosVenta, Select, Spinner, StatTile, useToast, type LineaProducto } from '../../ui';
+import { Badge, Button, Card, Dialog, EstadoBadge, Icon, IconButton, MenuItem, Popover, ProductosVenta, Segmented, Select, Spinner, StatTile, useToast, type LineaProducto } from '../../ui';
 
 const PALETA = ['#2563EB', '#059669', '#7C3AED', '#EA580C', '#0EA5E9', '#E11D48', '#64748B', '#D97706'];
 export function colorDe(id: string): string {
@@ -299,7 +299,25 @@ interface ServicioOpt { id: string; nombre: string; precio: string; duracionMin:
 
 const soloDigitos = (s: string) => s.replace(/\D/g, '');
 
-export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucursalId: string | null; fechaIso: string; onClose: () => void; onDone: () => void }) {
+/** 'YYYY-MM-DD' + 'HH:MM' (hora de Bogotá) → ISO UTC, o null si la hora es inválida. */
+function isoBogota(fechaIso: string, hhmm: string): string | null {
+  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(`${fechaIso}T${m[1].padStart(2, '0')}:${m[2]}:00-05:00`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * Nueva cita. Dos modos (ORK-110):
+ * - **Agendar** (hoy o futuro): franjas libres reales del especialista.
+ * - **Registrar atendida**: automático si la fecha es PASADA, y opcional para
+ *   HOY. No pide franja (el horario de ese día ya no importa): pide la hora
+ *   (obligatoria en días anteriores, opcional hoy) y el cobro completo como el
+ *   de "Completar y cobrar" (productos + pago dividido). La cita se crea ya
+ *   completada y su cobro entra a finanzas en la fecha real.
+ */
+export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucursalId: string | null; fechaIso: string; onClose: () => void; onDone: (mensaje?: string) => void }) {
+  const toast = useToast();
   const sucursales = useApi<(Opcion & { activa: boolean })[]>(() => api.get('/sucursales'), []);
   const especialistas = useApi<(Opcion & { activo?: boolean; sucursalIds?: string[]; servicioIds?: string[] })[]>(() => api.get('/especialistas'), []);
   const clientes = useApi<ClienteOpt[]>(() => api.get('/clientes'), []);
@@ -314,6 +332,15 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
   const [servSel, setServSel] = useState<string[]>([]);
   const [fecha, setFecha] = useState(fechaIso);
   const [franja, setFranja] = useState(''); // ISO de inicio de la franja elegida
+  // Registro de cita ya atendida (ORK-110).
+  const hoy = hoyISO();
+  const esPasada = Boolean(fecha) && fecha < hoy;
+  const [yaAtendidaHoy, setYaAtendidaHoy] = useState(false);
+  const modoRegistro = esPasada || (fecha === hoy && yaAtendidaHoy);
+  const [horaManual, setHoraManual] = useState(''); // 'HH:MM' de <input type="time">
+  const [productos, setProductos] = useState<LineaProducto[]>([]);
+  const [subtotalProd, setSubtotalProd] = useState(0);
+  const [lineas, setLineas] = useState<PagoLinea[]>(() => pagoInicial(0));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -350,7 +377,8 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
   const total = useMemo(() => (servicios.data ?? []).filter((s) => servSel.includes(s.id)).reduce((a, s) => a + Number(s.precio), 0), [servicios.data, servSel]);
 
   // Franjas libres reales del especialista (mismo cálculo que la reserva pública).
-  const listoParaFranjas = Boolean(sucEfectiva && esp && servSel.length > 0 && fecha);
+  // En modo registro no se consultan franjas: la cita ya ocurrió.
+  const listoParaFranjas = Boolean(sucEfectiva && esp && servSel.length > 0 && fecha) && !modoRegistro;
   const servKey = [...servSel].sort().join(',');
   const disp = useApi<{ inicio: string; fin: string }[]>(
     () =>
@@ -380,7 +408,18 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
   // Cliente nuevo: nombre escrito sin elegir sugerencia → exige celular para registrarlo.
   const clienteNuevo = !cli && nombreCli.length >= 2;
   const clienteOk = !nombreCli || Boolean(cli) || (nombreCli.length >= 2 && telDigitos.length >= 7);
-  const valido = sucEfectiva && esp && servSel.length > 0 && fecha && franja && clienteOk;
+  // Cobro del modo registro: servicios + productos, repartido en 1+ métodos.
+  const totalCobro = total + subtotalProd;
+  useEffect(() => { setLineas(pagoInicial(totalCobro)); }, [totalCobro]);
+  const cuadra = sumaPagos(lineas) === Math.round(totalCobro);
+  const inicioManual = horaManual ? isoBogota(fecha, horaManual) : null;
+  const horaEnFuturo = Boolean(inicioManual) && new Date(inicioManual!).getTime() >= Date.now();
+  // Días anteriores: la hora es obligatoria (ordena la agenda de ese día). Hoy:
+  // opcional; sin hora, la cita queda registrada terminando en este momento.
+  const horaOk = horaManual ? Boolean(inicioManual) && !horaEnFuturo : !esPasada;
+  const valido = modoRegistro
+    ? Boolean(sucEfectiva && esp && servSel.length > 0 && fecha && clienteOk && horaOk && totalCobro > 0 && cuadra)
+    : Boolean(sucEfectiva && esp && servSel.length > 0 && fecha && franja && clienteOk);
 
   function toggle(id: string) {
     setServSel((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
@@ -398,6 +437,20 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
         if (porTel) clienteId = porTel.id;
         else clienteId = (await api.post<ClienteOpt>('/clientes', { nombre: nombreCli, telefono: telDigitos })).id;
       }
+      if (modoRegistro) {
+        const r = await registrarCitaPasada({
+          sucursalId: sucEfectiva,
+          especialistaId: esp,
+          clienteId,
+          servicioIds: servSel,
+          inicio: inicioManual ?? undefined,
+          pagos: lineas,
+          productos: productos.length ? productos : undefined,
+        });
+        if (r?.advertencia) toast(r.advertencia, 'warning');
+        onDone('Cita registrada como completada');
+        return;
+      }
       await crearCita({ sucursalId: sucEfectiva, especialistaId: esp, clienteId, servicioIds: servSel, inicio: franja });
       onDone();
     } catch (e) {
@@ -408,7 +461,23 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
   }
 
   return (
-    <Dialog open onClose={onClose} title="Nueva cita" subtitle="Agenda un turno confirmado." width={560} footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button iconLeft="check" disabled={!valido} loading={guardando} onClick={() => void guardar()}>Crear cita{total ? ` · ${money(total)}` : ''}</Button></>}>
+    <Dialog
+      open
+      onClose={onClose}
+      title={modoRegistro ? 'Registrar cita atendida' : 'Nueva cita'}
+      subtitle={modoRegistro ? 'Queda completada y su cobro entra a finanzas en la fecha de la cita.' : 'Agenda un turno confirmado.'}
+      width={560}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          {modoRegistro ? (
+            <Button iconLeft="check" disabled={!valido} loading={guardando} onClick={() => void guardar()}>Registrar y cobrar{totalCobro ? ` · ${money(totalCobro)}` : ''}</Button>
+          ) : (
+            <Button iconLeft="check" disabled={!valido} loading={guardando} onClick={() => void guardar()}>Crear cita{total ? ` · ${money(total)}` : ''}</Button>
+          )}
+        </>
+      }
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {(sucursales.data?.length ?? 0) > 1 && (
           <Field label="Sucursal">
@@ -494,8 +563,61 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
           </div>
         </div>
         <Field label="Fecha">
-          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={inputCss} />
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={inputCss} data-testid="nueva-cita-fecha" />
         </Field>
+        {fecha === hoy && (
+          <Segmented
+            options={[{ value: 'agendar', label: 'Agendar' }, { value: 'atendida', label: 'Ya fue atendida' }]}
+            value={yaAtendidaHoy ? 'atendida' : 'agendar'}
+            onChange={(v) => setYaAtendidaHoy(v === 'atendida')}
+          />
+        )}
+        {modoRegistro ? (
+          <>
+            <div role="note" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--brand-tint)', border: '1px solid var(--border-subtle)' }}>
+              <Icon name="info" size={15} color="var(--brand)" style={{ flex: 'none', marginTop: 2 }} />
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                {esPasada
+                  ? <>Elegiste un <strong>día anterior</strong>: registrarás una cita que ya ocurrió. Quedará <strong>completada</strong> y su cobro contará en las finanzas de ese día. No se envían mensajes al cliente ni al especialista.</>
+                  : <>Registrarás una cita de hoy que <strong>ya fue atendida</strong>. Quedará <strong>completada</strong> y su cobro entra a las finanzas de hoy. No se envían mensajes.</>}
+              </span>
+            </div>
+            <Field label={esPasada ? 'Hora de inicio' : 'Hora de inicio (opcional)'}>
+              <input type="time" value={horaManual} onChange={(e) => setHoraManual(e.target.value)} style={inputCss} data-testid="nueva-cita-hora" />
+            </Field>
+            {horaEnFuturo ? (
+              <p style={{ margin: '-8px 0 0', fontSize: 'var(--text-xs)', color: 'var(--error)' }}>Esa hora todavía no ha pasado. Para una cita futura usa "Agendar".</p>
+            ) : !esPasada && !horaManual ? (
+              <p style={{ margin: '-8px 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>Sin hora, la cita queda registrada como terminada en este momento.</p>
+            ) : null}
+            <div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {(servicios.data ?? []).filter((x) => servSel.includes(x.id)).map((x) => (
+                  <div key={x.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{x.nombre}</span>
+                    <span className="data" style={{ fontWeight: 600 }}>{money(x.precio)}</span>
+                  </div>
+                ))}
+                {subtotalProd > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Productos</span>
+                    <span className="data" style={{ fontWeight: 600 }}>{money(subtotalProd)}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: 8, marginTop: 4 }}>
+                  <span style={{ fontWeight: 600 }}>Total</span>
+                  <span className="data" style={{ fontWeight: 800, fontFamily: 'var(--font-display)' }}>{money(totalCobro)}</span>
+                </div>
+              </div>
+              <ProductosVenta sucursalId={sucEfectiva || null} lineas={productos} onChange={setProductos} onSubtotalChange={setSubtotalProd} />
+              <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600, display: 'block', marginBottom: 8 }}>Método de pago <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>· puedes dividirlo</span></label>
+              <PagoSplit total={totalCobro} lineas={lineas} onChange={setLineas} sucursalId={sucEfectiva || undefined} />
+              {totalCobro > 0 && !cuadra && (
+                <p style={{ margin: '8px 0 0', fontSize: 'var(--text-xs)', color: 'var(--warning, #D97706)' }}>Los métodos deben sumar {money(totalCobro)}.</p>
+              )}
+            </div>
+          </>
+        ) : (
         <div>
           <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600, display: 'block', marginBottom: 8 }}>
             Hora <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>· disponibilidad real del especialista</span>
@@ -521,6 +643,7 @@ export function NuevaCitaModal({ sucursalId, fechaIso, onClose, onDone }: { sucu
             </div>
           )}
         </div>
+        )}
         {error && <p style={{ color: 'var(--error)', fontSize: 'var(--text-sm)', margin: 0 }}>{error}</p>}
       </div>
     </Dialog>
