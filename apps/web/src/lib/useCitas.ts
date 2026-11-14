@@ -69,3 +69,20 @@ export function reasignarCita(id: string, especialistaId: string): Promise<unkno
 export function walkInVivo(body: { sucursalId: string; especialistaId: string; clienteId?: string; servicioIds: string[] }): Promise<unknown> {
   return api.post('/citas/walk-in', body);
 }
+
+/**
+ * Registra una cita YA ATENDIDA (día anterior, o de hoy con o sin hora) y la deja
+ * completada con su cobro (ORK-110). `advertencia` llega si la fecha cae en un
+ * período que ya tiene cierre.
+ */
+export function registrarCitaPasada(body: {
+  sucursalId: string;
+  especialistaId: string;
+  clienteId?: string;
+  servicioIds: string[];
+  inicio?: string;
+  pagos: PagoLinea[];
+  productos?: { productoId: string; cantidad: number }[];
+}): Promise<{ cita: CitaAgenda; advertencia: string | null }> {
+  return api.post('/citas/pasada', body);
+}

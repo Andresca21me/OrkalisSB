@@ -138,7 +138,7 @@ function Tablero() {
       </div>
 
       {cobro && <CobroModal cita={cobro} onClose={() => setCobro(null)} onDone={() => { setCobro(null); toast('Turno completado · ganancias calculadas', 'success'); refrescar(); }} />}
-      {nueva && <NuevaCitaModal sucursalId={sucursalId} fechaIso={dia} onClose={() => setNueva(false)} onDone={() => { setNueva(false); toast('Cita creada', 'success'); refrescar(); }} />}
+      {nueva && <NuevaCitaModal sucursalId={sucursalId} fechaIso={dia} onClose={() => setNueva(false)} onDone={(msg) => { setNueva(false); toast(msg ?? 'Cita creada', 'success'); refrescar(); }} />}
       {walkin && <WalkinModal sucursalId={sucursalId} especialistas={equipo.data ?? []} onClose={() => setWalkin(false)} onDone={() => { setWalkin(false); toast('Walk-in iniciado', 'success'); refrescar(); }} />}
       {reasignar && <ReasignarDialog cita={reasignar} especialistas={equipo.data ?? []} onClose={() => setReasignar(null)} onDone={() => { setReasignar(null); toast('Cita reasignada', 'success'); refrescar(); }} />}
     </div>

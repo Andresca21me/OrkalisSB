@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { EstadoCita, MetodoPago, OrigenCita, RolUsuario, type CitaAgenda, type CobroCita } from '@orkalis/shared';
 import { runInTenantTx, type DrizzleTx } from '../db/tx';
@@ -334,6 +334,87 @@ export class AgendamientoService {
       throw e;
     }
     return { ...nueva, estado: EstadoCita.Completada };
+  }
+
+  /**
+   * Registro de una cita PASADA (ORK-110): el negocio no alcanzó a agendarla o
+   * a cerrarla y la asienta después — de un día anterior, o de hoy. Sin
+   * `inicio` (cita de hoy sin hora), el turno se registra terminando ahora. Mismo cierre que una cita normal
+   * (servicios, productos con descuento de stock, pago dividido), pero en un
+   * solo paso y sin avisos por WhatsApp/SMS: la cita ya ocurrió.
+   *
+   * - No pide franja libre: el horario de ese día ya no importa.
+   * - Sí choca (409) si el especialista tiene una cita SIN CERRAR en esa franja
+   *   (`cita_no_solape`): en ese caso lo correcto es completar esa cita, no
+   *   duplicarla.
+   * - La atención entra a finanzas con la fecha real del turno (su fin), no la
+   *   del día en que se registra, para que reportes y liquidaciones cuadren.
+   * - Si el cierre falla (stock, candado de tarjeta, pagos que no suman), la
+   *   cita se borra: nunca queda a medias.
+   */
+  async registrarPasada(
+    ctx: TenantContext,
+    input: {
+      sucursalId: string;
+      especialistaId: string;
+      clienteId?: string;
+      servicioIds: string[];
+      inicio?: Date;
+      pagos: { metodo: MetodoPago; monto: number }[];
+      productos?: { productoId: string; cantidad: number }[];
+    },
+  ): Promise<{ cita: Cita; advertencia: string | null }> {
+    const ahora = new Date();
+    let inicio = input.inicio;
+    if (!inicio) {
+      // Sin hora: el turno termina ahora y empieza "duración" minutos antes.
+      const durs = await runInTenantTx(ctx, (tx) =>
+        tx.select({ dur: servicio.duracionMin }).from(servicio).where(inArray(servicio.id, input.servicioIds)),
+      );
+      const duracion = durs.reduce((acc, x) => acc + x.dur, 0);
+      inicio = new Date(ahora.getTime() - Math.max(duracion, 1) * 60_000);
+    } else if (Number.isNaN(inicio.getTime()) || inicio >= ahora) {
+      throw new BadRequestException('Para registrar una cita ya atendida, la hora de inicio debe estar en el pasado.');
+    }
+    let nueva: Cita;
+    try {
+      // `validarServicios: false`, igual que el walk-in retroactivo: la atención
+      // ya ocurrió; si hoy el especialista no tiene el servicio asignado, igual
+      // debe quedar cobrada y liquidada.
+      nueva = await this.crearInterna(ctx, {
+        sucursalId: input.sucursalId,
+        especialistaId: input.especialistaId,
+        clienteId: input.clienteId,
+        servicioIds: input.servicioIds,
+        inicio,
+        estado: EstadoCita.EnProgreso,
+        validarServicios: false,
+      });
+    } catch (e) {
+      if (e instanceof ConflictException) {
+        throw new ConflictException(
+          'El especialista ya tiene una cita sin cerrar en esa franja. Complétala desde la agenda en lugar de registrar otra.',
+        );
+      }
+      throw e;
+    }
+    // El cobro se fecha al fin del turno (o ahora, si el turno terminaría en el futuro).
+    const fechaCobro = nueva.fin < ahora ? nueva.fin : ahora;
+    try {
+      await this.atencionService.completar(
+        ctx,
+        nueva.id,
+        { pagos: input.pagos, productos: input.productos?.length ? input.productos : undefined },
+        { fechaCobro },
+      );
+    } catch (e) {
+      await runInTenantTx(ctx, (tx) => tx.delete(cita).where(eq(cita.id, nueva.id)));
+      throw e;
+    }
+    const advertencia = (await this.atencionService.periodoCerrado(ctx, input.sucursalId, fechaCobro))
+      ? 'Esta cita cae en un período que ya tiene cierre: el archivo del cierre no cambia. Considera regenerar la liquidación de ese período.'
+      : null;
+    return { cita: { ...nueva, estado: EstadoCita.Completada }, advertencia };
   }
 
   private async crearInterna(

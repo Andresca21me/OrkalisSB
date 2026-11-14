@@ -101,3 +101,25 @@ export class WalkInRetroactivoDto {
   @IsISO8601() fin!: string;
   @IsEnum(MetodoPago) metodoPago!: MetodoPago;
 }
+
+/**
+ * Registro de una cita PASADA desde la agenda (ORK-110): el admin asienta un
+ * turno que ya ocurrió y no alcanzó a registrar. Se crea y se cierra en el
+ * mismo paso, con el mismo cobro de una cita normal (pago dividido, productos).
+ */
+export class CrearCitaPasadaDto {
+  @IsUUID('4') sucursalId!: string;
+  @IsUUID('4') especialistaId!: string;
+  @IsOptional() @IsUUID('4') clienteId?: string;
+  @IsArray() @ArrayNotEmpty() @ArrayUnique() @IsUUID('4', { each: true }) servicioIds!: string[];
+  /**
+   * Inicio real del turno; debe estar en el pasado. El fin sale de la duración
+   * de los servicios. Opcional: sin hora (cita de HOY ya atendida), el turno
+   * queda registrado terminando en el momento de guardarlo.
+   */
+  @IsOptional() @IsISO8601() inicio?: string;
+  @IsArray() @ArrayNotEmpty() @ValidateNested({ each: true }) @Type(() => PagoLineaDto)
+  pagos!: PagoLineaDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ProductoRealDto)
+  productos?: ProductoRealDto[];
+}

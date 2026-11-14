@@ -6,7 +6,7 @@ import type { TenantContext } from '../db/tenant-context';
 import { AgendamientoService } from './agendamiento.service';
 import { AtencionService } from '../finanzas/atencion.service';
 import { DisponibilidadService } from './disponibilidad.service';
-import { CompletarDto, CrearCitaDto, ReasignarDto, RevertirDto, WalkInRetroactivoDto, WalkInVivoDto } from './dto/agendamiento.dto';
+import { CompletarDto, CrearCitaDto, CrearCitaPasadaDto, ReasignarDto, RevertirDto, WalkInRetroactivoDto, WalkInVivoDto } from './dto/agendamiento.dto';
 
 /** Agenda interna y operación del turno (FASE-08/09). Roles internos. */
 @Controller('citas')
@@ -60,6 +60,26 @@ export class AgendamientoController {
       clienteId: dto.clienteId,
       servicioIds: dto.servicioIds,
       inicio: new Date(dto.inicio),
+    });
+  }
+
+  /**
+   * Registra una cita que YA ocurrió (de un día anterior, o de hoy con o sin
+   * hora) y la deja completada, con su cobro en finanzas en la fecha real
+   * (ORK-110). Admin y recepción.
+   */
+  @Post('pasada')
+  @HttpCode(201)
+  @Roles(RolUsuario.Admin, RolUsuario.Recepcionista)
+  registrarPasada(@CurrentTenant() ctx: TenantContext, @Body() dto: CrearCitaPasadaDto) {
+    return this.service.registrarPasada(ctx, {
+      sucursalId: dto.sucursalId,
+      especialistaId: dto.especialistaId,
+      clienteId: dto.clienteId,
+      servicioIds: dto.servicioIds,
+      inicio: dto.inicio ? new Date(dto.inicio) : undefined,
+      pagos: dto.pagos,
+      productos: dto.productos,
     });
   }
 
