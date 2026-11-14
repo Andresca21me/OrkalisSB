@@ -165,7 +165,7 @@ export function AgendaScreen() {
 
       {cobro && <CobroModal cita={cobro} onClose={() => setCobro(null)} onDone={() => { setCobro(null); toast('Turno completado · ganancias calculadas', 'success'); refrescar(); }} />}
       {desglose && <DesgloseDialog citaId={desglose} onClose={() => setDesglose(null)} />}
-      {nueva && <NuevaCitaModal sucursalId={sucursalActivaId} fechaIso={dia} onClose={() => setNueva(false)} onDone={() => { setNueva(false); toast('Cita creada', 'success'); refrescar(); }} />}
+      {nueva && <NuevaCitaModal sucursalId={sucursalActivaId} fechaIso={dia} onClose={() => setNueva(false)} onDone={(msg) => { setNueva(false); toast(msg ?? 'Cita creada', 'success'); refrescar(); }} />}
     </div>
   );
 }

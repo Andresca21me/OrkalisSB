@@ -58,8 +58,15 @@ export class AtencionService {
     private readonly gate: ModuloGate,
   ) {}
 
-  /** Completa el turno: calcula, persiste atención + stock, transiciona. */
-  async completar(ctx: TenantContext, citaId: string, input: CompletarInput): Promise<Atencion> {
+  /**
+   * Completa el turno: calcula, persiste atención + stock, transiciona.
+   *
+   * `opciones.fechaCobro` (registro de cita pasada): fecha con la que la
+   * atención entra a finanzas. Reportes, desglose y liquidaciones filtran por
+   * `atencion.creado_en`; sin esto, una cita del martes registrada el jueves
+   * contaría como ingreso del jueves. Por defecto, ahora.
+   */
+  async completar(ctx: TenantContext, citaId: string, input: CompletarInput, opciones?: { fechaCobro?: Date }): Promise<Atencion> {
     if (!input.pagos?.length && !input.metodoUnico) {
       throw new BadRequestException('No se puede completar sin registrar el pago.');
     }
@@ -177,6 +184,8 @@ export class AtencionService {
           comisionProductos: r.comisionProductos.toFixed(2),
           metodoPago: metodoDominante(pagos), // legacy: método dominante
           snapshotParam: r.snapshot,
+          // undefined → default now() de la columna.
+          creadoEn: opciones?.fechaCobro,
         })
         .returning();
 
@@ -314,6 +323,28 @@ export class AtencionService {
     });
     this.metrics.inc(METRICAS.turnosRevertidos);
     return { advertencia };
+  }
+
+  /**
+   * ¿La fecha cae dentro de un período que ya tiene cierre (D6)? Lo usa el
+   * registro de citas pasadas para avisar que el archivo del cierre quedó
+   * desfasado (se permite, igual que revertir).
+   */
+  async periodoCerrado(ctx: TenantContext, sucursalId: string, fecha: Date): Promise<boolean> {
+    const [cerrado] = await runInTenantTx(ctx, (tx) =>
+      tx
+        .select({ id: cierrePeriodo.id })
+        .from(cierrePeriodo)
+        .where(
+          and(
+            sql`(${cierrePeriodo.sucursalId} IS NULL OR ${cierrePeriodo.sucursalId} = ${sucursalId})`,
+            lte(cierrePeriodo.desde, fecha),
+            gte(cierrePeriodo.hasta, fecha),
+          ),
+        )
+        .limit(1),
+    );
+    return Boolean(cerrado);
   }
 
   private async resolverParametros(ctx: TenantContext, sucursalId: string): Promise<ParametrosFinancieros> {
